@@ -1,22 +1,32 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
-from app.models.room import Room, RoomCreate, RoomRead, RoomUpdate
-from app.models.user import User, UserRole
+from app.models.room import Room, RoomCreate, RoomRead, RoomUpdate, RusunawaSite, make_room_number
+from app.models.user import User
 
 router = APIRouter(prefix="/rooms", tags=["Rooms"])
 
 
 @router.get("/", response_model=List[RoomRead])
 def list_rooms(
+    rusunawa: Optional[RusunawaSite] = None,
+    building: Optional[str] = None,
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 500,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    rooms = session.exec(select(Room).offset(skip).limit(limit)).all()
+    query = select(Room)
+    if rusunawa:
+        query = query.where(Room.rusunawa == rusunawa)
+    if building:
+        query = query.where(Room.building == building)
+    rooms = session.exec(
+        query.order_by(Room.rusunawa, Room.building, Room.floor, Room.unit_number)
+        .offset(skip).limit(limit)
+    ).all()
     return rooms
 
 
@@ -38,10 +48,23 @@ def create_room(
     session: Session = Depends(get_session),
     _: User = Depends(require_admin),
 ):
-    existing = session.exec(select(Room).where(Room.room_number == room_in.room_number)).first()
+    room_number = make_room_number(
+        room_in.rusunawa.value, room_in.building, room_in.floor, room_in.unit_number
+    )
+    existing = session.exec(select(Room).where(Room.room_number == room_number)).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Nomor kamar sudah ada")
-    room = Room(**room_in.model_dump())
+        raise HTTPException(status_code=400, detail=f"Kamar '{room_number}' sudah ada")
+
+    room = Room(
+        rusunawa=room_in.rusunawa,
+        building=room_in.building,
+        floor=room_in.floor,
+        unit_number=room_in.unit_number,
+        room_number=room_number,
+        price=room_in.price,
+        status=room_in.status,
+        description=room_in.description,
+    )
     session.add(room)
     session.commit()
     session.refresh(room)
