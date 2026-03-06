@@ -19,37 +19,44 @@ Sistem manajemen Rumah Susun Sederhana Sewa (Rusunawa) full-stack.
 
 ## Cara Menjalankan
 
-### Backend
+Langkah paling cepat adalah menggunakan Docker. Pastikan Anda sudah menginstal Docker Desktop di komputer Anda.
+
+### 1. Persiapan Environment
+Pindah ke folder backend dan copy file `.env.example` menjadi `.env`:
 ```bash
 cd rusun-backend
-docker compose up -d          # Start PostgreSQL
-pip install -r requirements.txt
-python app/seeder.py          # Buat admin default
-uvicorn app.main:app --reload
+cp .env.example .env
 ```
-API docs: http://localhost:8000/docs
-Admin: `admin@rusunawa.com` / `admin123!`
+*(Catatan: Anda bisa mengubah DATABASE_URL jika perlu, tapi defaultnya sudah saya sesuaikan untuk Docker)*
 
-### Frontend
+### 2. Jalankan dengan Docker (Rekomendasi)
+Kembali ke folder **root** proyek dan jalankan:
 ```bash
-cd rusun-frontend
-npm install
-npm run dev
+docker compose up --build -d
 ```
-App: http://localhost:3000
+Aplikasi akan tersedia di:
+- **Frontend**: http://localhost:3000
+- **Backend (API Docs)**: http://localhost:8000/docs
+- **PgAdmin**: http://localhost:5050 (Login: `admin@rusun.com` / `admin123`)
+
+### 3. Generate Data Awal (Seeding)
+Setelah kontainer berjalan, buat user admin default:
+```bash
+docker exec -it rusunawa_backend python app/seeder.py
+```
+Login Admin: `admin@rusunawa.com` / `admin123!`
+
+---
 
 ## Struktur Project
 ```
 Sistem-Rusunawa/
-├── rusun-backend/     # FastAPI + SQLModel
-│   ├── app/
-│   │   ├── api/       # endpoints
-│   │   ├── core/      # config, db, security
-│   │   └── models/    # SQLModel tables
-│   └── docker-compose.yml
-└── rusun-frontend/    # Next.js 16
-    └── src/
-        ├── app/       # App Router pages
-        ├── components/
-        └── lib/       # api client, auth utils
+├── docker-compose.yml   # Konfigurasi seluruh stack (DB, BE, FE)
+├── rusun-backend/       # FastAPI Backend
+│   ├── app/             # Source code (API, Models, DB)
+│   └── Dockerfile       # Image Backend
+├── rusun-frontend/      # Next.js Frontend
+│   ├── src/             # Source code (Pages, Components)
+│   └── Dockerfile       # Image Frontend
+└── package.json         # Unified runner (npm run dev)
 ```

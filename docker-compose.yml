@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: rusunawa_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rusun_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rusun_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-rusunawa}
+    ports:
+      - "54320:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./rusun-backend
+      dockerfile: Dockerfile
+    container_name: rusunawa_backend
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://rusun_user:rusun_pass@db:5432/rusunawa
+      - JWT_SECRET=ganti-dengan-secret-key-yang-panjang-dan-acak
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  frontend:
+    build:
+      context: ./rusun-frontend
+      dockerfile: Dockerfile
+    container_name: rusunawa_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: rusunawa_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@rusun.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
