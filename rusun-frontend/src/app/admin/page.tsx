@@ -14,9 +14,16 @@ interface Stats {
 export default function AdminDashboard() {
     const [stats, setStats] = useState<Stats | null>(null);
     const [loading, setLoading] = useState(true);
-    const name = typeof window !== "undefined" ? getUserName() : "Admin";
+    const [name, setName] = useState<string>("Admin");
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        setMounted(true);
+        const userName = getUserName();
+        if (userName) {
+            setName(userName);
+        }
+
         const fetchStats = async () => {
             try {
                 const [rooms, tenants, invoices] = await Promise.all([
@@ -63,7 +70,7 @@ export default function AdminDashboard() {
         <div className="p-8">
             {/* Header */}
             <div className="mb-8">
-                <h1 className="text-2xl font-bold text-white">Selamat datang, {name} 👋</h1>
+                <h1 className="text-2xl font-bold text-white">Selamat datang, {mounted ? name : "Admin"} 👋</h1>
                 <p className="text-slate-400 mt-1">Ringkasan kondisi rusunawa hari ini</p>
             </div>
 

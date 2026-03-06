@@ -5,10 +5,11 @@ import { Plus, Pencil, Trash2, Loader2, X } from "lucide-react";
 
 interface Room {
     id: number;
-    room_number: string;
-    floor: number;
+    rusunawa: string;
     building: string;
-    room_type: string;
+    floor: number;
+    unit_number: number;
+    room_number: string;
     price: number;
     status: string;
 }
@@ -19,7 +20,7 @@ const STATUS_BADGE: Record<string, string> = {
     rusak: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
-const EMPTY_FORM = { room_number: "", floor: 1, building: "A", room_type: "studio", price: 0, status: "kosong" };
+const EMPTY_FORM = { rusunawa: "Cigugur Tengah", building: "A", floor: 1, unit_number: 1, price: 750000, status: "kosong" };
 
 export default function RoomsPage() {
     const [rooms, setRooms] = useState<Room[]>([]);
@@ -43,7 +44,7 @@ export default function RoomsPage() {
     useEffect(() => { fetch(); }, []);
 
     const openCreate = () => { setEditing(null); setForm({ ...EMPTY_FORM }); setError(""); setModal(true); };
-    const openEdit = (r: Room) => { setEditing(r); setForm({ room_number: r.room_number, floor: r.floor, building: r.building, room_type: r.room_type, price: r.price, status: r.status }); setError(""); setModal(true); };
+    const openEdit = (r: Room) => { setEditing(r); setForm({ rusunawa: r.rusunawa, building: r.building, floor: r.floor, unit_number: r.unit_number, price: r.price, status: r.status }); setError(""); setModal(true); };
 
     const handleSave = async () => {
         setSaving(true); setError("");
@@ -87,7 +88,7 @@ export default function RoomsPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-white/10 text-slate-400">
-                                {["No. Kamar", "Gedung", "Lantai", "Tipe", "Harga/Bulan", "Status", "Aksi"].map(h => (
+                                {["No. Kamar", "Rusunawa", "Gedung", "Lantai", "Harga/Bulan", "Status", "Aksi"].map(h => (
                                     <th key={h} className="text-left px-6 py-3 font-medium">{h}</th>
                                 ))}
                             </tr>
@@ -96,9 +97,9 @@ export default function RoomsPage() {
                             {rooms.map((r) => (
                                 <tr key={r.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                                     <td className="px-6 py-4 text-white font-medium">{r.room_number}</td>
+                                    <td className="px-6 py-4 text-slate-300">{r.rusunawa}</td>
                                     <td className="px-6 py-4 text-slate-300">Gedung {r.building}</td>
                                     <td className="px-6 py-4 text-slate-300">Lt. {r.floor}</td>
-                                    <td className="px-6 py-4 text-slate-300 capitalize">{r.room_type.replace("_", " ")}</td>
                                     <td className="px-6 py-4 text-slate-300">Rp {Number(r.price).toLocaleString("id-ID")}</td>
                                     <td className="px-6 py-4">
                                         <span className={`px-2.5 py-1 rounded-full text-xs border font-medium capitalize ${STATUS_BADGE[r.status]}`}>{r.status}</span>
@@ -126,29 +127,30 @@ export default function RoomsPage() {
                             <button onClick={() => setModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
+                            <div>
+                                <label className="block text-slate-300 text-sm mb-1.5">Rusunawa</label>
+                                <select value={(form as any).rusunawa} onChange={(e) => setForm(f => ({ ...f, rusunawa: e.target.value }))} disabled={!!editing}
+                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                                    <option value="Cigugur Tengah">Cigugur Tengah</option>
+                                    <option value="Cibeureum">Cibeureum</option>
+                                    <option value="Leuwigajah">Leuwigajah</option>
+                                </select>
+                            </div>
                             {[
-                                { label: "Nomor Kamar", field: "room_number", type: "text", placeholder: "A-101" },
-                                { label: "Lantai", field: "floor", type: "number", placeholder: "1" },
-                                { label: "Gedung", field: "building", type: "text", placeholder: "A" },
+                                { label: "Gedung (A/B/C/D)", field: "building", type: "text", placeholder: "A", disabled: !!editing },
+                                { label: "Lantai (1-5)", field: "floor", type: "number", placeholder: "1", disabled: !!editing },
+                                { label: "No. Unit", field: "unit_number", type: "number", placeholder: "1", disabled: !!editing },
                                 { label: "Harga/Bulan (Rp)", field: "price", type: "number", placeholder: "500000" },
-                            ].map(({ label, field, type, placeholder }) => (
+                            ].map(({ label, field, type, placeholder, disabled }) => (
                                 <div key={field}>
                                     <label className="block text-slate-300 text-sm mb-1.5">{label}</label>
-                                    <input type={type} value={(form as any)[field]} placeholder={placeholder}
+                                    <input type={type} value={(form as any)[field]} placeholder={placeholder} disabled={disabled}
                                         onChange={(e) => setForm(f => ({ ...f, [field]: type === "number" ? Number(e.target.value) : e.target.value }))}
-                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all"
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-all disabled:opacity-50"
                                     />
                                 </div>
                             ))}
-                            <div>
-                                <label className="block text-slate-300 text-sm mb-1.5">Tipe</label>
-                                <select value={form.room_type} onChange={(e) => setForm(f => ({ ...f, room_type: e.target.value }))}
-                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500">
-                                    <option value="studio">Studio</option>
-                                    <option value="tipe_2">Tipe 2 Kamar</option>
-                                    <option value="tipe_3">Tipe 3 Kamar</option>
-                                </select>
-                            </div>
+
                             <div>
                                 <label className="block text-slate-300 text-sm mb-1.5">Status</label>
                                 <select value={form.status} onChange={(e) => setForm(f => ({ ...f, status: e.target.value }))}

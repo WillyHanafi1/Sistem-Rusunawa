@@ -18,7 +18,7 @@ export default function TenantsPage() {
     const [modal, setModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
-    const [form, setForm] = useState({ user_id: 0, room_id: 0, contract_start: "", contract_end: "", deposit_amount: 0, notes: "" });
+    const [form, setForm] = useState({ user_id: 0, room_id: 0, contract_start: "", contract_end: "", deposit_amount: 0, motor_count: 0, notes: "" });
 
     const fetchAll = async () => {
         setLoading(true);
@@ -114,6 +114,7 @@ export default function TenantsPage() {
                                 { label: "Tanggal Mulai Kontrak", field: "contract_start", type: "date" },
                                 { label: "Tanggal Akhir Kontrak", field: "contract_end", type: "date" },
                                 { label: "Deposit (Rp)", field: "deposit_amount", type: "number" },
+                                { label: "Jumlah Motor (0-4)", field: "motor_count", type: "number" },
                             ].map(({ label, field, type }) => (
                                 <div key={field}>
                                     <label className="block text-slate-300 text-sm mb-1.5">{label}</label>

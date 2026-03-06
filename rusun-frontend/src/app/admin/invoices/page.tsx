@@ -11,6 +11,7 @@ interface Invoice {
     base_rent: number;
     water_charge: number;
     electricity_charge: number;
+    parking_charge: number;
     total_amount: number;
     due_date: string;
     status: string;
@@ -97,7 +98,7 @@ export default function InvoicesPage() {
                     <table className="w-full text-sm">
                         <thead>
                             <tr className="border-b border-white/10 text-slate-400">
-                                {["ID", "Tenant ID", "Periode", "Sewa Dasar", "Total", "Jatuh Tempo", "Status", ""].map(h => (
+                                {["ID", "Tenant ID", "Periode", "Sewa Dasar", "Parkir Motor", "Total", "Jatuh Tempo", "Status", ""].map(h => (
                                     <th key={h} className="text-left px-6 py-3 font-medium">{h}</th>
                                 ))}
                             </tr>
@@ -109,6 +110,7 @@ export default function InvoicesPage() {
                                     <td className="px-6 py-4 text-white">Penghuni #{inv.tenant_id}</td>
                                     <td className="px-6 py-4 text-slate-300">{MONTHS[inv.period_month - 1]} {inv.period_year}</td>
                                     <td className="px-6 py-4 text-slate-300">Rp {Number(inv.base_rent).toLocaleString("id-ID")}</td>
+                                    <td className="px-6 py-4 text-slate-300">Rp {Number(inv.parking_charge).toLocaleString("id-ID")}</td>
                                     <td className="px-6 py-4 text-white font-medium">Rp {Number(inv.total_amount).toLocaleString("id-ID")}</td>
                                     <td className="px-6 py-4 text-slate-300">{inv.due_date}</td>
                                     <td className="px-6 py-4">

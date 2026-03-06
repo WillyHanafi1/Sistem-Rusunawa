@@ -9,10 +9,18 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Rusunawa — Sistem Manajemen Rumah Susun",
+  title: "Rusunawa Cimahi | Hunian Terjangkau & Nyaman",
   description:
-    "Sistem manajemen Rumah Susun Sederhana Sewa: kelola kamar, penghuni, tagihan, dan pembayaran dalam satu platform.",
-  keywords: ["rusunawa", "rumah susun", "manajemen properti", "sewa"],
+    "Sistem Informasi dan Portal Resmi Rusunawa Pemerintah Kota Cimahi. Temukan informasi lokasi, harga sewa, dan fasilitas terlengkap.",
+  keywords: ["rusunawa cimahi", "rumah susun cimahi", "sewa rusun", "pemkot cimahi"],
+  openGraph: {
+    title: "Rusunawa Cimahi | Hunian Nyaman & Terjangkau",
+    description: "Portal Resmi Rusunawa Pemerintah Kota Cimahi. Informasi lokasi, harga sewa, dan fasilitas terlengkap.",
+    url: "https://rusunawa.cimahi.go.id",
+    siteName: "Rusunawa Cimahi",
+    locale: "id_ID",
+    type: "website",
+  }
 };
 
 export default function RootLayout({

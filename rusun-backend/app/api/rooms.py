@@ -14,7 +14,7 @@ def list_rooms(
     rusunawa: Optional[RusunawaSite] = None,
     building: Optional[str] = None,
     skip: int = 0,
-    limit: int = 500,
+    limit: int = 1000,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):

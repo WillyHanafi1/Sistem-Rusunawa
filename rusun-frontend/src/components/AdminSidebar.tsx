@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout, getUserName } from "@/lib/auth";
+import { useEffect, useState } from "react";
 import {
     Building2, Home, Users, FileText, LogOut, LayoutDashboard,
 } from "lucide-react";
@@ -15,7 +16,16 @@ const navItems = [
 
 export default function AdminSidebar() {
     const pathname = usePathname();
-    const name = typeof window !== "undefined" ? getUserName() : "Admin";
+    const [name, setName] = useState<string>("Admin");
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        const userName = getUserName();
+        if (userName) {
+            setName(userName);
+        }
+    }, []);
 
     return (
         <aside className="w-64 min-h-screen bg-slate-900 border-r border-white/5 flex flex-col">
@@ -41,8 +51,8 @@ export default function AdminSidebar() {
                             key={href}
                             href={href}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
-                                    ? "bg-blue-600/20 text-blue-400 border border-blue-500/20"
-                                    : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                ? "bg-blue-600/20 text-blue-400 border border-blue-500/20"
+                                : "text-slate-400 hover:bg-white/5 hover:text-white"
                                 }`}
                         >
                             <Icon className="w-4 h-4" />
@@ -56,10 +66,10 @@ export default function AdminSidebar() {
             <div className="p-4 border-t border-white/5">
                 <div className="flex items-center gap-3 mb-3">
                     <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
-                        {name?.charAt(0).toUpperCase()}
+                        {mounted ? name.charAt(0).toUpperCase() : "A"}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-white text-xs font-medium truncate">{name}</p>
+                        <p className="text-white text-xs font-medium truncate">{mounted ? name : "Admin"}</p>
                         <p className="text-slate-500 text-xs">Administrator</p>
                     </div>
                 </div>

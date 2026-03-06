@@ -26,9 +26,14 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "
 export default function PortalPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(true);
-    const name = typeof window !== "undefined" ? getUserName() : "Penghuni";
+    const [name, setName] = useState<string>("Penghuni");
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        setMounted(true);
+        const userName = getUserName();
+        if (userName) setName(userName);
+
         api.get("/invoices/").then(res => setInvoices(res.data)).finally(() => setLoading(false));
     }, []);
 
@@ -49,7 +54,7 @@ export default function PortalPage() {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
-                    <span className="text-slate-300 text-sm">Halo, {name}</span>
+                    <span className="text-slate-300 text-sm">Halo, {mounted ? name : "Penghuni"}</span>
                     <button onClick={logout} className="flex items-center gap-1.5 text-slate-400 hover:text-red-400 text-sm transition-colors">
                         <LogOut className="w-4 h-4" /> Keluar
                     </button>

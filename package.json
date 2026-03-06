@@ -1,0 +1,14 @@
+{
+    "name": "sistem-rusunawa-root",
+    "version": "1.0.0",
+    "description": "Unified runner untuk Sistem Rusunawa (FastAPI Backend + Next.js Frontend)",
+    "scripts": {
+        "dev:frontend": "npm run dev --prefix rusun-frontend",
+        "dev:backend": "cd rusun-backend && python -m uvicorn app.main:app --reload",
+        "dev": "concurrently -c \"cyan.bold,blue.bold\" -n \"FASTAPI,NEXTJS\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+        "install:all": "npm install && npm install --prefix rusun-frontend && cd rusun-backend && pip install -r requirements.txt"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    }
+}
