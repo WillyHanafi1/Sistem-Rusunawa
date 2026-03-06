@@ -9,6 +9,7 @@ class TenantBase(SQLModel):
     contract_start: date
     contract_end: date
     deposit_amount: float = 0.0
+    motor_count: int = Field(default=0, ge=0, le=4)  # 0-4 motor, @Rp30.000/motor
     notes: Optional[str] = None
     is_active: bool = True
 
@@ -31,7 +32,9 @@ class TenantRead(TenantBase):
 class TenantUpdate(SQLModel):
     contract_end: Optional[date] = None
     deposit_amount: Optional[float] = None
+    motor_count: Optional[int] = Field(default=None, ge=0, le=4)
     notes: Optional[str] = None
     is_active: Optional[bool] = None
     ktp_doc_path: Optional[str] = None
     kk_doc_path: Optional[str] = None
+

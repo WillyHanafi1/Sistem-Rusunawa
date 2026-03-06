@@ -1,9 +1,13 @@
 """
-Seeder data lengkap 3 Rusunawa Cimahi:
-- Cigugur Tengah : 192 kamar (A-D, Lt I-IV, 12 unit/lantai)
-- Cibeureum      : 371 kamar (A-C: Lt I=3, Lt II-V=24; D: Lt I=14, Lt II-IV=20)
-- Leuwigajah     : 297 kamar (A-C: Lt I=3, Lt II-V=24)
-Total            : 860 kamar
+Seeder data lengkap 3 Rusunawa Cimahi.
+Total: 860 kamar
+
+Harga per lantai:
+  Cigugur Tengah: Lt1=365rb, Lt2=350rb, Lt3=335rb, Lt4=320rb
+  Cibeureum A/B/C: Lt1=400rb, Lt2=385rb, Lt3=370rb, Lt4=355rb, Lt5=340rb
+  Cibeureum D (+40rb karena kamar lebih luas):
+             Lt1=440rb, Lt2=425rb, Lt3=410rb, Lt4=395rb
+  Leuwigajah: Lt1=400rb, Lt2=400rb, Lt3=385rb, Lt4=370rb, Lt5=355rb
 
 Jalankan: python app/seeder.py
 """
@@ -16,7 +20,61 @@ from app.core.security import hash_password
 
 ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
 
-# ─── Data kamar per rusunawa ──────────────────────────────────────────────────
+# ─── Harga sewa per (rusunawa, gedung, lantai) ─────────────────────────────
+# Format: (rusunawa_site, gedung, lantai) -> harga
+# Gedung yang tidak terdaftar di sini menggunakan harga default site
+
+PRICE_TABLE: dict[tuple, Decimal] = {
+    # Cigugur Tengah (semua gedung sama)
+    (RusunawaSite.cigugur_tengah, "*", 1): Decimal("365000"),
+    (RusunawaSite.cigugur_tengah, "*", 2): Decimal("350000"),
+    (RusunawaSite.cigugur_tengah, "*", 3): Decimal("335000"),
+    (RusunawaSite.cigugur_tengah, "*", 4): Decimal("320000"),
+
+    # Cibeureum Gedung A, B, C
+    (RusunawaSite.cibeureum, "A", 1): Decimal("400000"),
+    (RusunawaSite.cibeureum, "A", 2): Decimal("385000"),
+    (RusunawaSite.cibeureum, "A", 3): Decimal("370000"),
+    (RusunawaSite.cibeureum, "A", 4): Decimal("355000"),
+    (RusunawaSite.cibeureum, "A", 5): Decimal("340000"),  # infer -15rb
+    (RusunawaSite.cibeureum, "B", 1): Decimal("400000"),
+    (RusunawaSite.cibeureum, "B", 2): Decimal("385000"),
+    (RusunawaSite.cibeureum, "B", 3): Decimal("370000"),
+    (RusunawaSite.cibeureum, "B", 4): Decimal("355000"),
+    (RusunawaSite.cibeureum, "B", 5): Decimal("340000"),
+    (RusunawaSite.cibeureum, "C", 1): Decimal("400000"),
+    (RusunawaSite.cibeureum, "C", 2): Decimal("385000"),
+    (RusunawaSite.cibeureum, "C", 3): Decimal("370000"),
+    (RusunawaSite.cibeureum, "C", 4): Decimal("355000"),
+    (RusunawaSite.cibeureum, "C", 5): Decimal("340000"),
+    # Cibeureum Gedung D (+40rb lebih mahal karena kamar lebih luas)
+    (RusunawaSite.cibeureum, "D", 1): Decimal("440000"),
+    (RusunawaSite.cibeureum, "D", 2): Decimal("425000"),
+    (RusunawaSite.cibeureum, "D", 3): Decimal("410000"),
+    (RusunawaSite.cibeureum, "D", 4): Decimal("395000"),
+
+    # Leuwigajah (semua gedung sama)
+    (RusunawaSite.leuwigajah, "*", 1): Decimal("400000"),
+    (RusunawaSite.leuwigajah, "*", 2): Decimal("400000"),
+    (RusunawaSite.leuwigajah, "*", 3): Decimal("385000"),
+    (RusunawaSite.leuwigajah, "*", 4): Decimal("370000"),
+    (RusunawaSite.leuwigajah, "*", 5): Decimal("355000"),
+}
+
+
+def get_price(rusunawa: RusunawaSite, building: str, floor: int) -> Decimal:
+    """Cari harga dari PRICE_TABLE. Coba spesifik dulu (rusunawa+gedung+lantai),
+    lalu fallback ke wildcard gedung (rusunawa+*+lantai)."""
+    specific = PRICE_TABLE.get((rusunawa, building, floor))
+    if specific:
+        return specific
+    wildcard = PRICE_TABLE.get((rusunawa, "*", floor))
+    if wildcard:
+        return wildcard
+    return Decimal("750000")  # fallback default
+
+
+# ─── Struktur kamar per rusunawa ───────────────────────────────────────────
 # Format: { gedung: { lantai_int: jumlah_unit } }
 
 CIGUGUR_TENGAH = {
@@ -45,15 +103,13 @@ RUSUNAWA_DATA = {
     RusunawaSite.leuwigajah: LEUWIGAJAH,
 }
 
-# Harga sewa default (bisa diubah per kamar via admin panel)
-DEFAULT_PRICE = Decimal("750000")
-
 
 def generate_rooms() -> list[Room]:
     rooms = []
     for site, gedung_map in RUSUNAWA_DATA.items():
         for gedung, lantai_map in gedung_map.items():
             for lantai_int, jumlah_unit in lantai_map.items():
+                price = get_price(site, gedung, lantai_int)
                 for unit in range(1, jumlah_unit + 1):
                     room_number = make_room_number(site.value, gedung, lantai_int, unit)
                     rooms.append(Room(
@@ -62,7 +118,7 @@ def generate_rooms() -> list[Room]:
                         floor=lantai_int,
                         unit_number=unit,
                         room_number=room_number,
-                        price=DEFAULT_PRICE,
+                        price=price,
                         status=RoomStatus.kosong,
                     ))
     return rooms
@@ -89,7 +145,6 @@ def seed_admin(session: Session):
 
 
 def seed_rooms(session: Session):
-    # Cek apakah sudah ada rooms
     existing_count = len(session.exec(select(Room)).all())
     if existing_count > 0:
         print(f"ℹ️  Data kamar sudah ada ({existing_count} kamar). Seed dilewati.")
@@ -102,8 +157,11 @@ def seed_rooms(session: Session):
     total = len(rooms)
     print(f"\n✅ {total} kamar berhasil di-seed:")
     for site in RusunawaSite:
-        count = sum(1 for r in rooms if r.rusunawa == site)
-        print(f"   {site.value}: {count} kamar")
+        site_rooms = [r for r in rooms if r.rusunawa == site]
+        count = len(site_rooms)
+        prices = set(r.price for r in site_rooms)
+        price_range = f"Rp{min(prices):,.0f} - Rp{max(prices):,.0f}"
+        print(f"   {site.value}: {count} kamar ({price_range})")
 
 
 def seed():

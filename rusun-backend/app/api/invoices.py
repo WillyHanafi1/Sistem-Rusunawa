@@ -4,7 +4,7 @@ from typing import List
 from decimal import Decimal
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
-from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus
+from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, MOTOR_RATE
 from app.models.tenant import Tenant
 from app.models.room import Room
 from app.models.user import User, UserRole
@@ -76,10 +76,13 @@ def generate_invoice(
         raise HTTPException(status_code=404, detail="Data kamar tidak ditemukan")
 
     base_rent = room.price
+    # Auto-kalkulasi parkir motor: jumlah motor penghuni × Rp30.000
+    parking_charge = MOTOR_RATE * Decimal(tenant.motor_count)
     total = (
         base_rent
         + invoice_in.water_charge
         + invoice_in.electricity_charge
+        + parking_charge
         + invoice_in.other_charge
     )
 
@@ -90,6 +93,7 @@ def generate_invoice(
         base_rent=base_rent,
         water_charge=invoice_in.water_charge,
         electricity_charge=invoice_in.electricity_charge,
+        parking_charge=parking_charge,
         other_charge=invoice_in.other_charge,
         total_amount=total,
         due_date=invoice_in.due_date,

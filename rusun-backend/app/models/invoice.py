@@ -4,6 +4,8 @@ from datetime import date, datetime
 from enum import Enum
 from decimal import Decimal
 
+MOTOR_RATE = Decimal("30000")  # Rp 30.000/motor/bulan
+
 
 class InvoiceStatus(str, Enum):
     unpaid = "unpaid"
@@ -19,6 +21,7 @@ class InvoiceBase(SQLModel):
     base_rent: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     water_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     electricity_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
+    parking_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)  # motor × 30rb
     other_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     total_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     due_date: date
@@ -30,7 +33,7 @@ class Invoice(InvoiceBase, table=True):
     __tablename__ = "invoices"
     id: Optional[int] = Field(default=None, primary_key=True)
     payment_url: Optional[str] = None
-    payment_id: Optional[str] = None       # ID dari Xendit
+    payment_id: Optional[str] = None
     xendit_invoice_id: Optional[str] = None
     paid_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -45,6 +48,7 @@ class InvoiceCreate(SQLModel):
     other_charge: Decimal = Decimal("0")
     due_date: date
     notes: Optional[str] = None
+    # parking_charge tidak perlu diisi manual — auto dari motor_count penghuni
 
 
 class InvoiceRead(InvoiceBase):
@@ -61,3 +65,4 @@ class InvoiceUpdate(SQLModel):
     xendit_invoice_id: Optional[str] = None
     paid_at: Optional[datetime] = None
     notes: Optional[str] = None
+
