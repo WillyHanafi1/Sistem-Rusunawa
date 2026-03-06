@@ -4,14 +4,16 @@ import { usePathname } from "next/navigation";
 import { logout, getUserName } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import {
-    Building2, Home, Users, FileText, LogOut, LayoutDashboard,
+    Building2, Home, Users, FileText, LogOut, LayoutDashboard, MessageSquare
 } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
 
 const navItems = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/rooms", label: "Kamar", icon: Home },
     { href: "/admin/tenants", label: "Penghuni", icon: Users },
     { href: "/admin/invoices", label: "Tagihan", icon: FileText },
+    { href: "/admin/tickets", label: "Keluhan", icon: MessageSquare },
 ];
 
 export default function AdminSidebar() {
@@ -28,15 +30,15 @@ export default function AdminSidebar() {
     }, []);
 
     return (
-        <aside className="w-64 min-h-screen bg-slate-900 border-r border-white/5 flex flex-col">
+        <aside className="w-64 min-h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 flex flex-col transition-colors duration-300">
             {/* Logo */}
-            <div className="p-6 border-b border-white/5">
+            <div className="p-6 border-b border-slate-200 dark:border-white/5">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
                         <Building2 className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                        <p className="font-bold text-white text-sm">Rusunawa</p>
+                        <p className="font-bold text-slate-900 dark:text-white text-sm">Rusunawa</p>
                         <p className="text-slate-500 text-xs">Admin Panel</p>
                     </div>
                 </div>
@@ -51,8 +53,8 @@ export default function AdminSidebar() {
                             key={href}
                             href={href}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
-                                ? "bg-blue-600/20 text-blue-400 border border-blue-500/20"
-                                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                ? "bg-blue-50 dark:bg-blue-600/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 shadow-sm"
+                                : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                                 }`}
                         >
                             <Icon className="w-4 h-4" />
@@ -63,19 +65,20 @@ export default function AdminSidebar() {
             </nav>
 
             {/* User & Logout */}
-            <div className="p-4 border-t border-white/5">
+            <div className="p-4 border-t border-slate-200 dark:border-white/5">
                 <div className="flex items-center gap-3 mb-3">
                     <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">
                         {mounted ? name.charAt(0).toUpperCase() : "A"}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-white text-xs font-medium truncate">{mounted ? name : "Admin"}</p>
+                        <p className="text-slate-900 dark:text-white text-xs font-medium truncate">{mounted ? name : "Admin"}</p>
                         <p className="text-slate-500 text-xs">Administrator</p>
                     </div>
+                    <ThemeToggle />
                 </div>
                 <button
                     onClick={logout}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg text-sm transition-all"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-slate-600 dark:text-slate-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg text-sm transition-all"
                 >
                     <LogOut className="w-4 h-4" />
                     Keluar

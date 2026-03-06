@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.db import create_db_and_tables
-from app.api import auth, rooms, tenants, invoices, webhooks
+from app.api import auth, rooms, tenants, invoices, webhooks, tickets
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.include_router(rooms.router)
 app.include_router(tenants.router)
 app.include_router(invoices.router)
 app.include_router(webhooks.router)
+app.include_router(tickets.router)
 
 
 @app.get("/", tags=["Health"])
