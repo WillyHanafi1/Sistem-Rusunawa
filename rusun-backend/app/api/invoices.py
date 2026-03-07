@@ -88,23 +88,21 @@ def mass_generate_invoices(
         if not active_tenants:
             return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
 
-        tenant_ids = [t.id for t in active_tenants]
-
-        # 2. Cari tagihan yang sudah ada untuk periode ini
+        # 2. Cari tagihan yang sudah ada untuk periode ini (Gunakan Join daripada IN clause yang ada batas paramnya)
+        # Menghindari error SQLAlchemy (tenant_id_1_1, tenant_id_1_2, ... sampe > 2000 param)
         existing_invoices = session.exec(
             select(Invoice).where(
                 Invoice.period_month == mass_in.period_month,
-                Invoice.period_year == mass_in.period_year,
-                Invoice.tenant_id.in_(tenant_ids)
+                Invoice.period_year == mass_in.period_year
             )
         ).all()
         
-        # Kumpulan tenant_id yang sudah ditagih
+        # Kumpulan tenant_id yang sudah ditagih (Filter di Python saja, krn jumlahnya paling ribuan)
         billed_tenant_ids = {inv.tenant_id for inv in existing_invoices}
 
-        # 3. Ambil data kamar untuk base_rent (O(1) dictionary lookup)
-        room_ids = [t.room_id for t in active_tenants]
-        rooms = session.exec(select(Room).where(Room.id.in_(room_ids))).all()
+        # 3. Ambil data kamar untuk base_rent
+        # Karena jumlah kamar yang aktif juga ribuan, kita pakai chunking atau fetch all rooms
+        rooms = session.exec(select(Room)).all()
         room_dict = {r.id: r for r in rooms}
 
         # 4. Filter tenant yang belum ditagih dan siapkan object Invoice baru
