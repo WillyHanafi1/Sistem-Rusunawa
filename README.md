@@ -9,7 +9,7 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 | Layer         | Teknologi                                               |
 | ------------- | ------------------------------------------------------- |
 | **Backend**   | FastAPI 0.115 · SQLModel · Alembic · Uvicorn            |
-| **Frontend**  | Next.js 16 · React 19 · Tailwind CSS v4 · Framer Motion|
+| **Frontend**  | Next.js 16 · React 19 · Tailwind CSS v4 · Framer Motion |
 | **Database**  | PostgreSQL 15 (Docker)                                  |
 | **Auth**      | JWT — python-jose + passlib (bcrypt)                    |
 | **Payment**   | Xendit (webhook auto-update status)                     |
@@ -21,6 +21,7 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 ## Fitur Utama
 
 ### Admin Panel (`/admin`)
+
 - ✅ **Dashboard** — ringkasan statistik utama
 - ✅ **Manajemen Kamar** — CRUD kamar per-gedung/lantai/unit, status otomatis (kosong/isi/rusak)
 - ✅ **Denah Fasilitas** — visualisasi denah lantai interaktif (`/admin/rooms/facilities`)
@@ -33,14 +34,17 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 - ✅ **RBAC** — Role-Based Access Control (Admin & Penghuni)
 
 ### Portal Penghuni (`/portal`)
+
 - ✅ **Lihat Tagihan** — riwayat tagihan pribadi + status pembayaran
 - ✅ **Buat Tiket Keluhan** — formulir pengaduan kerusakan/masalah
 
 ### Landing Pages
+
 - ✅ **Halaman Utama** — landing page responsif + dark mode
 - ✅ **Halaman per-Rusunawa** — Cigugur Tengah, Cibeureum, Leuwigajah (informasi & denah ruangan)
 
 ### Integrasi
+
 - ✅ **Xendit Webhook** — auto-update status invoice ke "Lunas" saat pembayaran masuk
 - ✅ **Upload Dokumen** — simpan file KTP/dokumen pendukung
 
@@ -48,7 +52,7 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 
 ## Struktur Project
 
-```
+```text
 Sistem-Rusunawa/
 ├── docker-compose.yml        # Stack: DB + Backend + PgAdmin
 ├── package.json              # Monorepo runner (concurrently)
@@ -118,6 +122,7 @@ Sistem-Rusunawa/
 ## Cara Menjalankan
 
 ### Prasyarat
+
 - **Node.js** ≥ 18
 - **Python** ≥ 3.10
 - **Docker Desktop** (untuk PostgreSQL)
@@ -138,6 +143,7 @@ cp .env.example .env
 ```
 
 Konfigurasi `.env`:
+
 ```env
 DATABASE_URL=postgresql://rusun_user:rusun_pass@localhost:54320/rusunawa
 JWT_SECRET=ganti-dengan-secret-key-yang-panjang-dan-acak
@@ -153,8 +159,9 @@ docker compose up -d db pgadmin
 ```
 
 Akses:
+
 - **PostgreSQL**: `localhost:54320`
-- **PgAdmin**: http://localhost:5050 (Login: `admin@rusun.com` / `admin123`)
+- **PgAdmin**: <http://localhost:5050> (Login: `admin@rusun.com` / `admin123`)
 
 ### 4. Jalankan Aplikasi (Development)
 
@@ -164,6 +171,7 @@ npm run dev
 ```
 
 Atau jalankan terpisah:
+
 ```bash
 npm run dev:backend    # FastAPI di http://localhost:8000
 npm run dev:frontend   # Next.js di http://localhost:3000
@@ -204,7 +212,7 @@ docker compose up --build -d
 | `POST`   | `/api/webhooks/xendit`       | Webhook endpoint Xendit            |
 | `GET`    | `/api/uploads/{path}`        | Akses file dokumen yang diupload   |
 
-📄 **Swagger UI**: http://localhost:8000/docs
+📄 **Swagger UI**: <http://localhost:8000/docs>
 
 ---
 
@@ -287,23 +295,29 @@ erDiagram
 ## Lessons Learned & Error Fixes
 
 ### 1. Sinkronisasi Backend Docker
+
 Jika Swagger UI menampilkan endpoint lama (404), rebuild spesifik:
+
 ```bash
 docker compose up --build -d backend
 ```
 
 ### 2. Update Enum Database (PostgreSQL)
+
 Menambah nilai baru ke `Enum` di SQLAlchemy tidak otomatis memperbarui tipe di PostgreSQL.
 **Solusi**: Jalankan SQL manual pada kontainer database:
+
 ```sql
 ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'interview';
 ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'contract_created';
 ```
 
 ### 3. Port Conflict Docker vs Development
+
 Jika Docker mengambil port 3000, comment-out service `frontend` di `docker-compose.yml` saat development lokal.
 
 ### 4. Monorepo Pattern
+
 Project menggunakan `concurrently` di root `package.json` agar `npm run dev` di folder root langsung menjalankan FastAPI + Next.js bersamaan. Semua install bisa dilakukan sekaligus via `npm run install:all`.
 
 ---

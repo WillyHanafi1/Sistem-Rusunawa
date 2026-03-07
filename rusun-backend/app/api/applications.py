@@ -64,7 +64,8 @@ async def create_application(
 
     # Validasi dan simpan file KTP
     extension = ktp_file.filename.split(".")[-1] if ktp_file.filename else "jpg"
-    unique_filename = f"ktp_{nik}_{uuid.uuid4().hex[:8]}.{extension}"
+    unique_id = uuid.uuid4().hex[:8]
+    unique_filename = f"ktp_{nik}_{unique_id}.{extension}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
     
     with open(file_path, "wb") as buffer:
@@ -234,7 +235,8 @@ def submit_interview(
                 "tanggal_cetak": datetime.now().strftime("%d-%m-%Y")
             }
             doc.render(context)
-            contract_filename = f"kontrak_{application.nik}_{uuid.uuid4().hex[:6]}.docx"
+            contract_id = uuid.uuid4().hex[:6]
+            contract_filename = f"kontrak_{application.nik}_{contract_id}.docx"
             contract_path = os.path.join(UPLOAD_DIR, contract_filename)
             doc.save(contract_path)
             # Simpan path kontrak (butuh field baru di Tenant atau Application, bisa disimpan di notes sementara jika tidak ada field khusus)
