@@ -1,9 +1,9 @@
 "use client";
 import React, { useState, useEffect, useMemo } from "react";
-import { CheckCircle2, XCircle, Home, Loader2, RefreshCw, Building } from "lucide-react";
+import { CheckCircle2, XCircle, Home, Loader2, RefreshCw, Building, User, Phone, CalendarDays, Wallet } from "lucide-react";
 import api from "@/lib/api";
 
-interface Room {
+interface RoomExtended {
   id: number;
   rusunawa: string;
   building: string;
@@ -12,10 +12,17 @@ interface Room {
   room_number: string;
   price: number;
   status: "kosong" | "isi" | "rusak";
+  tenant_name?: string;
+  tenant_nik?: string;
+  tenant_phone?: string;
+  contract_start?: string;
+  contract_end?: string;
+  parking_price?: number;
+  total_unpaid_bills?: number;
   _isGhost?: boolean;
 }
 
-interface FloorPlanProps {
+interface AdminFloorPlanProps {
   locationName: string;
 }
 
@@ -53,11 +60,11 @@ const LEUWIGAJAH = {
 };
 
 
-export function FloorPlan({ locationName }: FloorPlanProps) {
-  const [rooms, setRooms] = useState<Room[]>([]);
+export function AdminFloorPlan({ locationName }: AdminFloorPlanProps) {
+  const [rooms, setRooms] = useState<RoomExtended[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
-  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<RoomExtended | null>(null);
 
   // Menentukan Layout Struktur Gedung berdasarkan Nama Lokasi (Prop)
   const siteConfig = useMemo(() => {
@@ -71,12 +78,14 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
   const fetchRooms = async () => {
     setLoading(true);
     setError("");
+    setSelectedRoom(null);
     try {
       const apiLocationName = locationName.replace("Rusunawa ", "");
-      const res = await api.get(`/rooms/?rusunawa=${encodeURIComponent(apiLocationName)}`);
+      // Fetching from the new extended endpoint instead of public /rooms
+      const res = await api.get(`/rooms/extended/all?rusunawa=${encodeURIComponent(apiLocationName)}`);
       setRooms(res.data);
     } catch (err: any) {
-      console.error("Failed to fetch rooms for floor plan:", err);
+      console.error("Failed to fetch rooms for admin floor plan:", err);
       setError("Gagal mengambil data kamar dari server.");
     } finally {
       setLoading(false);
@@ -89,7 +98,7 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
 
   // Helper untuk mendapatkan slot array statis jumlah kamar di suatu lantai+gedung
   const getGridSlotsForFloor = (building: string, floor: number) => {
-    const slots: Room[] = [];
+    const slots: RoomExtended[] = [];
     
     // Tentukan limit max unit berdasarkan site (Penting untuk Cibeureum/Leuwigajah yg dinamis beda lantai)
     let maxUnits = 12;
@@ -119,7 +128,7 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
              price: 0,
              status: "kosong" as const,
              _isGhost: true,
-          } as Room);
+          } as RoomExtended);
        }
     }
     return slots;
@@ -132,11 +141,11 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6 border-b border-slate-200 dark:border-white/10 pb-6">
         <div>
           <h3 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <Home className="text-blue-500" /> Matriks Ketersediaan Unit 
+            <Home className="text-blue-500" /> Matriks Unit ({locationName})
             {loading && <Loader2 className="w-5 h-5 text-blue-500 animate-spin ml-2" />}
           </h3>
           <p className="text-sm text-slate-500 mt-1">
-            Dasbor status seluruh unit di {locationName}. Klik pada kotak kamar untuk melihat rincian tarif sewa.
+            Klik pada kotak kamar untuk melihat identitas dan rincian penyewa.
           </p>
         </div>
         
@@ -144,7 +153,7 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
         <div className="flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-white/5">
            <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded bg-emerald-100 border-2 border-emerald-400 dark:bg-emerald-900/40 dark:border-emerald-500"></div>
-              <span className="text-xs font-semibold uppercase text-slate-600 dark:text-slate-400">Tersedia</span>
+              <span className="text-xs font-semibold uppercase text-slate-600 dark:text-slate-400">Kosong</span>
            </div>
            <div className="flex items-center gap-2">
               <div className="w-4 h-4 rounded bg-rose-100 border-2 border-rose-400 dark:bg-rose-900/40 dark:border-rose-500"></div>
@@ -161,15 +170,14 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
         <div className="p-8 text-center bg-red-50 dark:bg-red-500/10 rounded-2xl border border-red-200 dark:border-red-500/20 my-10">
            <p className="text-red-500 font-medium mb-4">{error}</p>
            <button onClick={fetchRooms} className="px-5 py-2.5 bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-200 transition-colors font-semibold flex items-center gap-2 mx-auto">
-              <RefreshCw className="w-4 h-4" /> Coba Lagi
+              <RefreshCw className="w-4 h-4" /> Muat Ulang
            </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           
-          {/* LEFT PANEL: THE MATRIX SCROLLER (Takes 3 Columns on Desktop) */}
+          {/* LEFT PANEL: THE MATRIX SCROLLER */}
           <div className="xl:col-span-3">
-             {/* Unified Scrolling Container */}
              <div className="bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-white/5 overflow-hidden shadow-inner flex flex-col h-[700px]">
                <div className="flex-1 overflow-y-auto overflow-x-auto p-4 md:p-6 custom-scrollbar">
                   
@@ -186,7 +194,7 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
                       <div className="flex flex-col gap-3">
                         {config.floors.map((floor) => {
                           const slots = getGridSlotsForFloor(building, floor);
-                          if (slots.length === 0) return null; // Dont render empty 5th floor in Cibeureum D
+                          if (slots.length === 0) return null; 
 
                           return (
                             <div key={`b${building}-f${floor}`} className="flex items-start gap-4 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/60 dark:border-white/5 shadow-sm">
@@ -236,74 +244,116 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
           </div>
 
 
-          {/* RIGHT PANEL: SELECTED ROOM DETAILS (Takes 1 Col on Desktop) */}
+          {/* RIGHT PANEL: SELECTED ROOM DETAILS ADMIN */}
           <div className="xl:col-span-1">
              <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 flex flex-col h-full sticky top-24 shadow-sm">
                 <h4 className="font-bold text-lg text-slate-900 dark:text-white border-b border-slate-200 dark:border-white/10 pb-4 mb-4">
-                  Rincian Unit Terpilih
+                  Rincian Penghuni Unit
                 </h4>
                 
                 {selectedRoom ? (
                   <div className="flex flex-col flex-1 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <div className="mb-6">
-                        <span className="text-4xl font-black text-slate-900 dark:text-white block mb-2 tracking-tight">
-                           Blok {selectedRoom.building} / {selectedRoom.unit_number}
+                    <div className="mb-4">
+                        <span className="text-3xl font-black text-slate-900 dark:text-white block mb-2 tracking-tight">
+                           Unit {selectedRoom.unit_number}
                         </span>
                         
                         {selectedRoom.status === "kosong" ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Unit Tersedia
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Unit Kosong
                           </span>
                         ) : selectedRoom.status === "rusak" ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                            <XCircle className="w-3.5 h-3.5" /> Perbaikan
+                            <XCircle className="w-3.5 h-3.5" /> Dalam Perbaikan
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 rounded-full text-xs font-bold uppercase tracking-wider">
-                            <XCircle className="w-3.5 h-3.5" /> Telah Disewa
+                            <User className="w-3.5 h-3.5" /> Dihuni
                           </span>
                         )}
                     </div>
 
-                    <div className="space-y-4 mb-8 bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm text-sm">
+                    <div className="space-y-4 mb-6 bg-white dark:bg-slate-900/50 p-5 rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm text-sm">
                       <div>
-                        <p className="text-slate-500 mb-0.5">Kode Resmi Ruangan</p>
-                        <p className="font-bold text-slate-900 dark:text-white">{selectedRoom.room_number}</p>
+                        <p className="text-slate-500 mb-0.5 text-xs uppercase font-semibold">Gedung / Lantai</p>
+                        <p className="font-bold text-slate-900 dark:text-white">Blok {selectedRoom.building} / Lnt {selectedRoom.floor}</p>
                       </div>
+                      
+                      <div className="h-px w-full bg-slate-100 dark:bg-white/5"></div>
+                      
+                      <div>
+                        <p className="text-slate-500 mb-0.5 text-xs uppercase font-semibold">Nama Penghuni</p>
+                        {selectedRoom.tenant_name ? (
+                            <p className="font-bold text-slate-900 dark:text-white text-base">{selectedRoom.tenant_name}</p>
+                        ) : (
+                            <p className="text-slate-400 italic">Belum Ada Penghuni</p>
+                        )}
+                      </div>
+
+                      {/* Info Penghuni Lanjutan, Hanya Kalau ada tenant_name */}
+                      {selectedRoom.tenant_name && (
+                         <>
+                            {selectedRoom.tenant_nik && (
+                                <div>
+                                    <p className="text-slate-500 mb-0.5 text-xs uppercase font-semibold">NIK (No. KTP)</p>
+                                    <p className="font-bold text-slate-900 dark:text-white font-mono">{selectedRoom.tenant_nik}</p>
+                                </div>
+                            )}
+                            
+                            {selectedRoom.tenant_phone && (
+                                <div>
+                                    <p className="text-slate-500 mb-0.5 text-xs uppercase font-semibold">No. Whatsapp / Telp</p>
+                                    <p className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <Phone className="w-3.5 h-3.5 text-blue-500" /> {selectedRoom.tenant_phone}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="h-px w-full bg-slate-100 dark:bg-white/5"></div>
+
+                            {selectedRoom.contract_start && (
+                                <div>
+                                    <p className="text-slate-500 mb-1 text-xs uppercase font-semibold">Masa Berlaku Kontrak</p>
+                                    <div className="flex flex-col gap-1 text-slate-800 dark:text-slate-200">
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 
+                                            <span>Start: {new Date(selectedRoom.contract_start).toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span> 
+                                            <span>End: {new Date(selectedRoom.contract_end!).toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedRoom.total_unpaid_bills !== undefined && (
+                                <div className="p-3 bg-red-50/50 dark:bg-red-500/10 rounded-xl border border-red-100 dark:border-red-500/20">
+                                    <p className="text-red-500 mb-1 text-xs uppercase font-bold flex items-center gap-1"><Wallet className="w-3.5 h-3.5" /> Total Tagihan Tertunggak</p>
+                                    <p className="font-bold text-red-600 dark:text-red-400 text-lg">
+                                        {selectedRoom.total_unpaid_bills > 0 ? `Rp ${Number(selectedRoom.total_unpaid_bills).toLocaleString("id-ID")}` : "Lunas"}
+                                    </p>
+                                </div>
+                            )}
+                         </>
+                      )}
+
                       <div className="h-px w-full bg-slate-100 dark:bg-white/5"></div>
                       <div>
-                        <p className="text-slate-500 mb-0.5">Letak Lantai</p>
-                        <p className="font-bold text-slate-900 dark:text-white">Lantai {selectedRoom.floor}</p>
-                      </div>
-                      <div className="h-px w-full bg-slate-100 dark:bg-white/5"></div>
-                      <div>
-                        <p className="text-slate-500 mb-0.5">Rincian Tarif Dasar (Bulanan)</p>
-                        <p className="font-bold text-slate-900 dark:text-white text-lg text-blue-600 dark:text-blue-400">
+                        <p className="text-slate-500 mb-0.5 text-xs uppercase font-semibold">Biaya Sewa / Bulan</p>
+                        <p className="font-bold text-slate-900 dark:text-white text-blue-600 dark:text-blue-400">
                            Rp {Number(selectedRoom.price).toLocaleString("id-ID")}
                         </p>
                       </div>
-                    </div>
 
-                    <div className="mt-auto">
-                      {selectedRoom.status === "kosong" ? (
-                        <button onClick={() => {
-                           document.querySelector('form')?.scrollIntoView({ behavior: 'smooth' });
-                        }} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-500/30 active:scale-95 uppercase tracking-wide text-sm">
-                          Isi Formulir Untuk Unit Ini
-                        </button>
-                      ) : (
-                        <button disabled className="w-full py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 font-bold rounded-xl cursor-not-allowed uppercase tracking-wide text-sm">
-                          Tidak Tersedia
-                        </button>
-                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-center text-slate-400 py-10 px-2 opacity-80">
                       <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mb-5 border border-slate-200 dark:border-white/5 shadow-inner">
-                        <Building className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                        <User className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                       </div>
-                      <p className="text-sm font-medium">Klik kotak nomor kamar (hijau) manapun pada daftar letak gedung di samping untuk mengintip tarif aslinya dan mendaftar.</p>
+                      <p className="text-sm font-medium">Klik kotak nomor kamar yang terisi (merah) untuk menampilkan data NIK, Nama, dan Kontrak penyewa.</p>
                   </div>
                 )}
              </div>

@@ -5,20 +5,45 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { FloorPlan } from "@/components/FloorPlan";
 import {
   ArrowLeft, Building2, MapPin, Layers, Users, 
-  ShieldCheck, ShowerHead, Car, Tag, ListTodo, Leaf
+  ShieldCheck, ShowerHead, Car, Tag, ListTodo, Leaf, Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
+import api from "@/lib/api";
 
 export default function LeuwigajahPage() {
   const [formData, setFormData] = useState({
     lokasi: "Rusunawa Leuwigajah",
-    noWa: "", nama: "", email: "", tglLahir: "", pasfoto: null
+    nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1, pasfoto: null as File | null
   });
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    alert("Pendaftaran berhasil dikirim! Petugas kami akan segera menghubungi Anda.");
-    setFormData({ ...formData, noWa: "", nama: "", email: "", tglLahir: "", pasfoto: null });
+    if (!formData.pasfoto) {
+      alert("Mohon unggah file KTP / Pasfoto pendaftaran.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const payload = new FormData();
+      payload.append("nik", formData.nik);
+      payload.append("full_name", formData.nama);
+      payload.append("phone_number", formData.noWa);
+      payload.append("email", formData.email);
+      payload.append("rusunawa_target", "Leuwigajah");
+      payload.append("family_members_count", formData.jmlKeluarga.toString());
+      payload.append("ktp_file", formData.pasfoto);
+
+      await api.post("/applications/", payload, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      alert("Pendaftaran berhasil dikirim! Silakan tunggu petugas kami menghubungi Anda.");
+      setFormData({ ...formData, nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1, pasfoto: null });
+    } catch (err: any) {
+      alert(err.response?.data?.detail || "Terjadi kesalahan saat mengirim pendaftaran.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -206,36 +231,45 @@ export default function LeuwigajahPage() {
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">No WA</label>
-              <input required type="tel" value={formData.noWa} onChange={e => setFormData({...formData, noWa: e.target.value})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">NIK KTP <span className="text-red-500">*</span></label>
+              <input required type="text" maxLength={16} minLength={16} placeholder="16 Digit NIK" value={formData.nik} onChange={e => setFormData({...formData, nik: e.target.value.replace(/\D/g, '')})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Nama Lengkap</label>
-              <input required type="text" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Nama Lengkap <span className="text-red-500">*</span></label>
+              <input required type="text" placeholder="Sesuai KTP" value={formData.nama} onChange={e => setFormData({...formData, nama: e.target.value})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Email</label>
-              <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">No. WhatsApp <span className="text-red-500">*</span></label>
+              <input required type="tel" placeholder="08xxxxxxxxxx" value={formData.noWa} onChange={e => setFormData({...formData, noWa: e.target.value.replace(/\D/g, '')})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
-              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Tgl Lahir</label>
-              <input required type="date" value={formData.tglLahir} onChange={e => setFormData({...formData, tglLahir: e.target.value})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Email Aktif <span className="text-red-500">*</span></label>
+              <input required type="email" placeholder="email@gmail.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
             </div>
 
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Jml Anggota Keluarga <span className="text-red-500">*</span></label>
+              <input required type="number" min={1} max={10} placeholder="Termasuk Kepala Keluarga" value={formData.jmlKeluarga} onChange={e => setFormData({...formData, jmlKeluarga: Number(e.target.value)})} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
               <div className="md:w-1/4">
-                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Pasfoto Pendaftaran</label>
-                <span className="text-xs text-slate-500">Max size 2mb(.jpg, .jpeg)</span>
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Upload KTP <span className="text-red-500">*</span></label>
+                <span className="text-xs text-slate-500">Max size 2MB (.jpg/.jpeg/.png)</span>
               </div>
-              <input required type="file" accept=".jpg,.jpeg" className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+              <input required type="file" accept=".jpg,.jpeg,.png" onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFormData({...formData, pasfoto: e.target.files[0]});
+                }
+              }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
             </div>
 
             <div className="flex justify-center pt-4">
-              <button type="submit" className="px-16 py-3.5 bg-yellow-400 hover:bg-yellow-500 text-white font-bold rounded-lg shadow-lg shadow-yellow-400/30 transition-all hover:scale-105 uppercase tracking-wide">
-                KIRIM
+              <button disabled={loading} type="submit" className="px-16 py-3.5 bg-yellow-400 hover:bg-yellow-500 text-white font-bold rounded-lg shadow-lg shadow-yellow-400/30 transition-all hover:scale-105 uppercase tracking-wide flex items-center gap-2 disabled:opacity-70 disabled:hover:scale-100">
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "KIRIM PENGAJUAN"}
               </button>
             </div>
           </form>

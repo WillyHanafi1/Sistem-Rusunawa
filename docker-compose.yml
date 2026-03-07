@@ -26,18 +26,18 @@ services:
     depends_on:
       - db
 
-  frontend:
-    build:
-      context: ./rusun-frontend
-      dockerfile: Dockerfile
-    container_name: rusunawa_frontend
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-    depends_on:
-      - backend
+  #  frontend:
+  #    build:
+  #      context: ./rusun-frontend
+  #      dockerfile: Dockerfile
+  #    container_name: rusunawa_frontend
+  #    restart: always
+  #    ports:
+  #      - "3000:3000"
+  #    environment:
+  #      - NEXT_PUBLIC_API_URL=http://localhost:8000
+  #    depends_on:
+  #      - backend
 
   pgadmin:
     image: dpage/pgadmin4:latest

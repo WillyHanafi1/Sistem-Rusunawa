@@ -26,6 +26,7 @@ class RoomBase(SQLModel):
     building: str = Field(index=True)       # A, B, C, D
     floor: int                               # 1, 2, 3, 4 (disimpan int, tampil romawi)
     unit_number: int                         # 1 s.d. 12
+    room_type: int = Field(default=21)       # Tipe Luas: 21, 24, 27
     # Display: "Cigugur Tengah - A IV 12" — di-generate otomatis via seeder/API
     room_number: str = Field(unique=True, index=True)
     price: Decimal = Field(default=750000, max_digits=12, decimal_places=2)
@@ -52,6 +53,7 @@ class RoomCreate(SQLModel):
     building: str
     floor: int
     unit_number: int
+    room_type: int = 21
     price: Decimal = Decimal("750000")
     status: RoomStatus = RoomStatus.kosong
     description: Optional[str] = None
@@ -67,6 +69,7 @@ class RoomRead(RoomBase):
 
 class RoomUpdate(SQLModel):
     price: Optional[Decimal] = None
+    room_type: Optional[int] = None
     status: Optional[RoomStatus] = None
     description: Optional[str] = None
 
