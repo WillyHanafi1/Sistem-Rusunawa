@@ -9,9 +9,12 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 480
     XENDIT_SECRET_KEY: str = ""
     XENDIT_WEBHOOK_TOKEN: str = ""
+    ALLOWED_ORIGINS: str = ""
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
+
 
 
 @lru_cache()
