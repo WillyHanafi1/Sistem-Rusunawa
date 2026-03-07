@@ -29,7 +29,8 @@ export default function LandingPage() {
   useEffect(() => {
     async function fetchStaff() {
       try {
-        const res = await fetch("http://localhost:8000/api/management/");
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
+        const res = await fetch(`${apiUrl}/api/management/`);
         if (res.ok) {
           const data = await res.json();
           setStaff(data);
