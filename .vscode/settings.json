@@ -1,5 +1,4 @@
 {
-  "python.defaultInterpreterPath": "${workspaceFolder}/rusun-backend/.venv/Scripts/python.exe",
   "python.analysis.extraPaths": [
     "${workspaceFolder}/rusun-backend"
   ],

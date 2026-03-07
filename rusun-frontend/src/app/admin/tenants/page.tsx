@@ -418,7 +418,21 @@ export default function ContractRoomPage() {
 
         columnHelper.accessor('status', {
             id: 'status',
-            header: () => <div className="text-center py-2.5 text-slate-500 font-semibold">Status</div>,
+            header: () => (
+                <div className="flex flex-col gap-1.5 items-center w-full">
+                    <span className="flex items-center gap-1 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Status</span>
+                    <select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[10px] rounded px-0.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal shadow-sm text-center w-full"
+                    >
+                        <option value="">Semua</option>
+                        <option value="isi">Terisi</option>
+                        <option value="kosong">Kosong</option>
+                        <option value="rusak">Rusak</option>
+                    </select>
+                </div>
+            ),
             cell: info => {
                 const r = info.row.original;
                 return (
@@ -464,7 +478,7 @@ export default function ContractRoomPage() {
                 );
             }
         }),
-    ], [filterRusunawa, filterBuilding, filterSearch, invoiceMap, filterYear, loadingInvoices]);
+    ], [filterRusunawa, filterBuilding, filterFloor, filterUnit, filterStatus, filterSearch, invoiceMap, filterYear, loadingInvoices]);
 
     const table = useReactTable({
         data: filteredRooms,
