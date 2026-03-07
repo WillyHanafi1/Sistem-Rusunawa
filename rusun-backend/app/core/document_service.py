@@ -2,6 +2,9 @@ import os
 from docxtpl import DocxTemplate
 from datetime import datetime
 import uuid
+from sqlmodel import Session, select
+from app.core.db import engine
+from app.models.staff import Staff
 
 # Note: docx2pdf requirement depends on OS. 
 # On Windows, it uses Microsoft Word. On Linux, it often requires LibreOffice.
@@ -41,6 +44,21 @@ class DocumentService:
             "tanggal_cetak": datetime.now().strftime("%d-%m-%Y"),
             "tahun": datetime.now().year
         }
+
+        # Inject Management Data (Kepala UPTD, Bendahara, etc)
+        with Session(engine) as session:
+            management_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
+            
+            # Find specific roles for document tags
+            kepala = next((s for s in management_staff if "kepala" in s.role.lower()), None)
+            bendahara = next((s for s in management_staff if "bendahara" in s.role.lower()), None)
+            
+            if kepala:
+                context["nama_kepala_uptd"] = kepala.name
+                context["nip_kepala_uptd"] = kepala.nip
+            if bendahara:
+                context["nama_bendahara"] = bendahara.name
+                context["nip_bendahara"] = bendahara.nip
 
         generated_docs = {}
 

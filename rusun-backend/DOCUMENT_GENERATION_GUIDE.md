@@ -39,6 +39,12 @@ Gunakan tag di bawah ini di dalam file Word Anda. Sistem akan menggantinya secar
 - `{{ tanggal_cetak }}` : Tanggal surat dihasilkan
 - `{{ tahun }}` : Tahun saat ini (4 digit)
 
+### Data Pimpinan (Dinamis dari Database)
+- `{{ nama_kepala_uptd }}` : Nama pimpinan UPTD yang sedang menjabat
+- `{{ nip_kepala_uptd }}` : NIP pimpinan UPTD
+- `{{ nama_bendahara }}` : Nama bendahara yang sedang menjabat
+- `{{ nip_bendahara }}` : NIP bendahara
+
 ---
 
 ## 🚀 Langkah-langkah Pengaturan (Step-by-Step)

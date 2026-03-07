@@ -15,11 +15,11 @@ export function proxy(request: NextRequest) {
     }
 
     if (token && isAuthPage) {
-        if (role === "admin") return NextResponse.redirect(new URL("/admin", request.url));
+        if (role === "admin" || role === "sadmin") return NextResponse.redirect(new URL("/admin", request.url));
         return NextResponse.redirect(new URL("/portal", request.url));
     }
 
-    if (token && isAdminPage && role !== "admin") {
+    if (token && isAdminPage && role !== "admin" && role !== "sadmin") {
         return NextResponse.redirect(new URL("/portal", request.url));
     }
 

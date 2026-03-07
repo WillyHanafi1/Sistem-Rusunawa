@@ -80,6 +80,7 @@ from sqlmodel import Session, select
 from app.core.db import engine, create_db_and_tables
 from app.models.user import User, UserRole
 from app.models.room import Room, RusunawaSite, RoomStatus, make_room_number
+from app.models.staff import Staff
 from app.core.security import hash_password
 
 ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
@@ -211,7 +212,7 @@ def seed_admin(session: Session):
             email="admin@rusunawa.com",
             name="Super Admin",
             phone="08123456789",
-            role=UserRole.admin,
+            role=UserRole.sadmin,
             is_active=True,
             password_hash=hash_password("admin123!"),
         )
@@ -244,13 +245,66 @@ def seed_rooms(session: Session):
         print(f"   {site.value}: {count} kamar ({price_range})")
 
 
+def seed_staff(session: Session):
+    existing_count = len(session.exec(select(Staff)).all())
+    if existing_count > 0:
+        print(f"ℹ️  Data staff sudah ada ({existing_count} orang). Seed dilewati.")
+        return
+
+    staff_data = [
+        # Tier 1
+        Staff(
+            name="Taufik Rahmat, S.Pd., MT.",
+            role="Kepala UPTD",
+            nip="19720512 199803 1 008",
+            tier=1,
+            image_url="https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80",
+            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+        ),
+        # Tier 2
+        Staff(
+            name="Rini Rustianty, S.S., M.Si.",
+            role="Kasubag Tata Usaha",
+            nip="19750821 200604 2 003",
+            tier=2,
+            image_url="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80",
+            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+        ),
+        Staff(
+            name="Rudy Hartono, S.T.",
+            role="Bendahara",
+            nip="19831115 200902 1 002",
+            tier=2,
+            image_url="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=800&q=80",
+            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+        ),
+        Staff(
+            name="Heri Hermawan, S.T.",
+            role="Koordinator Lapangan",
+            nip="19800410 200112 1 005",
+            tier=2,
+            image_url="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=800&q=80",
+            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+        ),
+        # Tier 3 (Divisions)
+        Staff(name="Keamanan 24/7", role="Divisi Keamanan", tier=3, socials={}),
+        Staff(name="Kebersihan", role="Divisi Kebersihan", tier=3, socials={}),
+        Staff(name="Teknisi", role="Divisi Teknisi", tier=3, socials={}),
+        Staff(name="Administrasi", role="Divisi Administrasi", tier=3, socials={}),
+    ]
+    session.add_all(staff_data)
+    session.commit()
+    print(f"[OK] Berhasil seeding {len(staff_data)} data pengurus/staff.")
+
+
 def seed():
     create_db_and_tables()
     with Session(engine) as session:
         print("[START] Memulai proses seeding database...")
         seed_admin(session)
         seed_rooms(session)
-        # seed_tenants(session) # This line was commented out in the instruction, so I'm keeping it commented.
+        seed_staff(session)
+        # seed_tenants(session) 
         print("[SUCCESS] Seeding database selesai!")
 
 

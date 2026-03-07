@@ -2,9 +2,10 @@ import axios from "axios";
 import Cookies from "js-cookie";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+const BASE_URL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
 
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
 });
 

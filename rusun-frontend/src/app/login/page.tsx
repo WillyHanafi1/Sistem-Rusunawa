@@ -18,7 +18,7 @@ export default function LoginPage() {
         setError("");
         try {
             const data = await login(email, password);
-            if (data.role === "admin") {
+            if (data.role === "admin" || data.role === "sadmin") {
                 router.push("/admin");
             } else {
                 router.push("/portal");

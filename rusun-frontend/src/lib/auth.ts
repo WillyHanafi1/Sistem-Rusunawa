@@ -4,7 +4,7 @@ import api from "./api";
 export interface LoginResponse {
     access_token: string;
     token_type: string;
-    role: "admin" | "penghuni";
+    role: "sadmin" | "admin" | "penghuni";
     name: string;
 }
 

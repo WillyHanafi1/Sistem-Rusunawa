@@ -4,6 +4,7 @@ from enum import Enum
 
 
 class UserRole(str, Enum):
+    sadmin = "sadmin"
     admin = "admin"
     penghuni = "penghuni"
 

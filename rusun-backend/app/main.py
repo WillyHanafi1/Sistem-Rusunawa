@@ -4,8 +4,9 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 from app.core.db import create_db_and_tables
-from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applications
-from app.models.application import Application  # Pastikan DB auto-create tabel ini
+from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applications, management
+from app.models.application import Application
+from app.models.staff import Staff
 
 
 @asynccontextmanager
@@ -40,13 +41,14 @@ app.add_middleware(
 )
 
 # Register routers
-app.include_router(auth.router)
-app.include_router(rooms.router)
-app.include_router(tenants.router)
-app.include_router(invoices.router)
-app.include_router(webhooks.router)
-app.include_router(tickets.router)
-app.include_router(applications.router)
+app.include_router(auth.router, prefix="/api")
+app.include_router(rooms.router, prefix="/api")
+app.include_router(tenants.router, prefix="/api")
+app.include_router(invoices.router, prefix="/api")
+app.include_router(webhooks.router, prefix="/api")
+app.include_router(tickets.router, prefix="/api")
+app.include_router(applications.router, prefix="/api")
+app.include_router(management.router, prefix="/api")
 
 # Mount folder uploads untuk membaca foto KTP / dokumen
 os.makedirs("uploads", exist_ok=True)

@@ -26,12 +26,17 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 - ✅ **Manajemen Kamar** — CRUD kamar per-gedung/lantai/unit, status otomatis (kosong/isi/rusak)
 - ✅ **Denah Fasilitas** — visualisasi denah lantai interaktif (`/admin/rooms/facilities`)
 - ✅ **Manajemen Penghuni (Kontrak)** — CRUD kontrak, deposit, jumlah motor
-- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak (`/admin/tenants/interviews`)
+- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak dengan tab riwayat (Antrian/Diterima/Ditolak)
 - ✅ **Tagihan Bulanan** — generate tagihan dengan auto-kalkulasi (sewa + air + listrik + parkir motor)
 - ✅ **Manajemen Tarif** — konfigurasi tarif per-rusunawa (`/admin/tariffs`)
 - ✅ **Pengajuan Sewa** — review, approve/reject, konversi ke kontrak (`/admin/applications`)
 - ✅ **Tiket Keluhan** — tracking keluhan penghuni (Lampu/Listrik, Air/Plumbing, Atap/Bangunan, Lainnya)
-- ✅ **RBAC** — Role-Based Access Control (Admin & Penghuni)
+- ✅ **RBAC** — Role-Based Access Control (Super Admin / Admin / Penghuni)
+
+### Super Admin Panel (`/admin/superadmin`)
+
+- ✅ **Manajemen Pengurus** — CRUD data pengurus UPTD (foto, jabatan, tier, sosial media)
+- ✅ **Landing Page Profil** — data pengurus tampil otomatis di section PROFIL halaman utama
 
 ### Portal Penghuni (`/portal`)
 
@@ -60,22 +65,24 @@ Sistem-Rusunawa/
 ├── rusun-backend/            # ⚙️ FastAPI Backend
 │   ├── app/
 │   │   ├── main.py           # Entrypoint, CORS, router registration
-│   │   ├── seeder.py         # Seed data (admin user, rooms)
+│   │   ├── seeder.py         # Seed data (admin, rooms, staff pengurus)
 │   │   ├── api/              # API Routes
 │   │   │   ├── auth.py       #   POST /api/auth/login, /register
 │   │   │   ├── rooms.py      #   CRUD /api/rooms
 │   │   │   ├── tenants.py    #   CRUD /api/tenants
 │   │   │   ├── invoices.py   #   CRUD /api/invoices + generate
 │   │   │   ├── tickets.py    #   CRUD /api/tickets
-│   │   │   ├── applications.py # CRUD /api/applications
+│   │   │   ├── applications.py # CRUD /api/applications + interview
+│   │   │   ├── management.py #   CRUD /api/management (Super Admin)
 │   │   │   └── webhooks.py   #   POST /api/webhooks/xendit
 │   │   ├── models/           # SQLModel + Pydantic schemas
-│   │   │   ├── user.py       #   User (admin/penghuni)
+│   │   │   ├── user.py       #   User (sadmin/admin/penghuni)
 │   │   │   ├── room.py       #   Room (3 rusunawa, A-D, lantai I-V)
 │   │   │   ├── tenant.py     #   Tenant (kontrak + deposit)
 │   │   │   ├── invoice.py    #   Invoice (multi-charge breakdown)
 │   │   │   ├── ticket.py     #   Ticket (keluhan penghuni)
-│   │   │   └── application.py#   Application (pengajuan sewa)
+│   │   │   ├── application.py#   Application (pengajuan sewa)
+│   │   │   └── staff.py      #   Staff/Pengurus UPTD (tier 1-3)
 │   │   └── core/             # Config, DB engine, JWT security
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -195,22 +202,27 @@ docker compose up --build -d
 
 ## API Endpoints
 
-| Method   | Endpoint                     | Deskripsi                          |
-| -------- | ---------------------------- | ---------------------------------- |
-| `POST`   | `/api/auth/login`            | Login (mendapatkan JWT token)      |
-| `POST`   | `/api/auth/register`         | Registrasi user baru               |
-| `GET`    | `/api/rooms`                 | Daftar semua kamar                 |
-| `POST`   | `/api/rooms`                 | Tambah kamar baru                  |
-| `GET`    | `/api/tenants`               | Daftar kontrak penghuni            |
-| `POST`   | `/api/tenants`               | Buat kontrak baru                  |
-| `GET`    | `/api/invoices`              | Daftar tagihan                     |
-| `POST`   | `/api/invoices`              | Generate tagihan bulanan           |
-| `GET`    | `/api/tickets`               | Daftar tiket keluhan               |
-| `POST`   | `/api/tickets`               | Buat tiket keluhan baru            |
-| `GET`    | `/api/applications`          | Daftar pengajuan sewa              |
-| `POST`   | `/api/applications`          | Ajukan sewa baru                   |
-| `POST`   | `/api/webhooks/xendit`       | Webhook endpoint Xendit            |
-| `GET`    | `/api/uploads/{path}`        | Akses file dokumen yang diupload   |
+| Method   | Endpoint                              | Hak Akses      | Deskripsi                          |
+| -------- | ------------------------------------- | -------------- | ---------------------------------- |
+| `POST`   | `/api/auth/login`                     | Public         | Login (mendapatkan JWT token)      |
+| `POST`   | `/api/auth/register`                  | Public         | Registrasi user baru               |
+| `GET`    | `/api/rooms`                          | Auth           | Daftar semua kamar                 |
+| `POST`   | `/api/rooms`                          | Admin          | Tambah kamar baru                  |
+| `GET`    | `/api/tenants`                        | Admin          | Daftar kontrak penghuni            |
+| `POST`   | `/api/tenants`                        | Admin          | Buat kontrak baru                  |
+| `GET`    | `/api/invoices`                       | Auth           | Daftar tagihan                     |
+| `POST`   | `/api/invoices`                       | Admin          | Generate tagihan bulanan           |
+| `GET`    | `/api/tickets`                        | Auth           | Daftar tiket keluhan               |
+| `POST`   | `/api/tickets`                        | Auth           | Buat tiket keluhan baru            |
+| `GET`    | `/api/applications`                   | Auth           | Daftar pengajuan sewa              |
+| `POST`   | `/api/applications`                   | Public         | Ajukan sewa baru                   |
+| `PUT`    | `/api/applications/{id}/interview`    | Admin          | Proses hasil wawancara             |
+| `GET`    | `/api/management/`                    | Public         | Daftar pengurus UPTD (landing page)|
+| `POST`   | `/api/management/`                    | Super Admin    | Tambah pengurus baru               |
+| `PUT`    | `/api/management/{id}`                | Super Admin    | Update data pengurus               |
+| `DELETE` | `/api/management/{id}`                | Super Admin    | Hapus pengurus                     |
+| `POST`   | `/api/webhooks/xendit`                | Xendit         | Webhook auto-update status invoice |
+| `GET`    | `/api/uploads/{path}`                 | Auth           | Akses file dokumen yang diupload   |
 
 📄 **Swagger UI**: <http://localhost:8000/docs>
 
@@ -231,7 +243,7 @@ erDiagram
         string email UK
         string name
         string phone
-        enum role "admin | penghuni"
+        enum role "sadmin | admin | penghuni"
         bool is_active
     }
 
@@ -288,21 +300,47 @@ erDiagram
         enum rusunawa_target
         enum status "pending | approved | rejected | interview | contract_created"
     }
+
+    Staff {
+        int id PK
+        string name
+        string role
+        string nip
+        int tier "1=Kepala, 2=Sub-Leader, 3=Operasional"
+        string image_url
+        json socials
+        bool is_active
+    }
 ```
 
 ---
 
 ## Lessons Learned & Error Fixes
 
-### 1. Sinkronisasi Backend Docker
+### 1. Wajib Rebuild Backend Setelah Perubahan Kode
 
-Jika Swagger UI menampilkan endpoint lama (404), rebuild spesifik:
+> ⚠️ **PENTING**: Backend dijalankan via Docker container. Setiap kali ada perubahan kode (endpoint baru, model baru, dll.), **container harus di-rebuild** agar kode terbaru aktif. Tanpa rebuild, container tetap menjalankan image lama.
 
 ```bash
+# Dari folder root — rebuild hanya backend (cepat)
 docker compose up --build -d backend
 ```
 
-### 2. Update Enum Database (PostgreSQL)
+Gejala kode tidak terupdate: endpoint baru mengembalikan `404 Not Found`, perubahan tidak berpengaruh meski server jalan.
+
+### 2. Menjalankan Seeder di Dalam Container
+
+Karena backend berjalan dalam Docker, seeder **harus dijalankan di dalam container**, bukan di host:
+
+```bash
+# BENAR — jalankan dari dalam container
+docker exec rusunawa_backend python -m app.seeder
+
+# SALAH — akan gagal karena DB tidak accessible dari host (port 54320 internal)
+python app/seeder.py
+```
+
+### 3. Update Enum Database (PostgreSQL)
 
 Menambah nilai baru ke `Enum` di SQLAlchemy tidak otomatis memperbarui tipe di PostgreSQL.
 **Solusi**: Jalankan SQL manual pada kontainer database:
@@ -312,13 +350,23 @@ ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'interview';
 ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'contract_created';
 ```
 
-### 3. Port Conflict Docker vs Development
+### 4. Port Conflict Docker vs Development
 
 Jika Docker mengambil port 3000, comment-out service `frontend` di `docker-compose.yml` saat development lokal.
 
-### 4. Monorepo Pattern
+### 5. Monorepo Pattern
 
 Project menggunakan `concurrently` di root `package.json` agar `npm run dev` di folder root langsung menjalankan FastAPI + Next.js bersamaan. Semua install bisa dilakukan sekaligus via `npm run install:all`.
+
+### 6. Konsistensi API Router Prefix (404 Not Found)
+
+Selalu pastikan **seluruh router backend didaftarkan dengan `prefix="/api"`** di `main.py` agar seragam (Standar REST) dan dapat diakses dengan mudah oleh Axios frontend secara global di `baseURL: API_URL + '/api'`.
+Jika ada endpoint yang memunculkan `404 Not Found` di *page* yang baru dibuat, pastikan di backend `app.include_router(nama.router, prefix="/api")` bukan tanpa prefix.
+
+### 7. Hydration Mismatch di Next.js (Cookies)
+
+Jika komponen membaca *Cookies* di SSR (misal via `js-cookie`), render Server (HTML) dan rendered Client akan berbeda (karena Server tidak punya akses ke browser cookie). Ini memicu *Hydration Failed Error*.
+**Solusi**: Gunakan state `mounted`. Render komponen khusus role hanya *setelah* `useEffect` / `mounted` menjadi `true`.
 
 ---
 

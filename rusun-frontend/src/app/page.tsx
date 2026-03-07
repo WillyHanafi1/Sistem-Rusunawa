@@ -1,16 +1,47 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { motion, useScroll, useTransform } from "framer-motion";
 import {
   Building2, ArrowRight, ShieldCheck, MapPin,
-  Wallet, Leaf, Clock, Phone, Mail, Layers, Users
+  Wallet, Leaf, Clock, Phone, Mail, Layers, Users, Wrench, Heart, FileText,
+  Shield, Trash2, Headphones, Twitter, Facebook, Instagram
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle"; // Adjust path if needed
+
+interface Staff {
+  id: number;
+  name: string;
+  role: string;
+  nip?: string;
+  tier: number;
+  image_url?: string;
+  socials?: { [key: string]: string };
+}
 
 export default function LandingPage() {
   const { scrollY } = useScroll();
   const [scrolled, setScrolled] = useState(false);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchStaff() {
+      try {
+        const res = await fetch("http://localhost:8000/api/management/");
+        if (res.ok) {
+          const data = await res.json();
+          setStaff(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch staff:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchStaff();
+  }, []);
 
   // Parallax effect for hero background
   const y = useTransform(scrollY, [0, 500], [0, 150]);
@@ -59,6 +90,23 @@ export default function LandingPage() {
     },
   ];
 
+  const topLeader = staff.find(s => s.tier === 1);
+  const subLeaders = staff.filter(s => s.tier === 2);
+  const operationalDivisions = staff.filter(s => s.tier === 3);
+
+  const getIconForSubLeader = (role: string) => {
+    if (role.toLowerCase().includes("tata usaha")) return ShieldCheck;
+    if (role.toLowerCase().includes("bendahara")) return Wallet;
+    return Layers;
+  };
+
+  const getIconForOps = (name: string) => {
+    if (name.toLowerCase().includes("keamanan")) return Shield;
+    if (name.toLowerCase().includes("kebersihan")) return Trash2;
+    if (name.toLowerCase().includes("teknisi")) return Wrench;
+    return Headphones;
+  };
+
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-300 font-sans selection:bg-blue-500/30 transition-colors duration-300">
       {/* Header / Navbar */}
@@ -68,13 +116,14 @@ export default function LandingPage() {
             <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
               <Building2 className="w-5 h-5 text-white" />
             </div>
-            <span className={`font-bold text-lg tracking-tight ${scrolled ? "text-slate-900 dark:text-white" : "text-white"}`}>Rusunawa Cimahi</span>
+            <span className={`font-bold text-lg tracking-tight ${scrolled ? "text-slate-900 dark:text-white" : "text-white"}`}>Pengelola UPTD Rusunawa Kota Cimahi</span>
           </div>
 
           <nav className="hidden md:flex items-center gap-8">
             <a href="#tentang" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Tentang</a>
             <a href="#fasilitas" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Fasilitas</a>
             <a href="#lokasi" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Lokasi</a>
+            <a href="#pengurus" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Pengurus</a>
           </nav>
 
           <div className="flex items-center gap-4">
@@ -107,7 +156,7 @@ export default function LandingPage() {
             transition={{ duration: 0.8, ease: "easeOut" }}
           >
             <span className="inline-block py-1 px-3 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-sm font-medium mb-6">
-              Pemkot Cimahi — Dinas Perumahan dan Kawasan Permukiman
+              Pemkot Cimahi — Pengelola UPTD Rusunawa Kota Cimahi
             </span>
             <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-8 leading-tight">
               Hunian Nyaman, Terjangkau & <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Strategis</span>.
@@ -203,6 +252,146 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Profil Section (Center-Balanced Pyramid) */}
+      <section id="pengurus" className="py-32 relative overflow-hidden bg-white dark:bg-slate-950">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
+          <div className="text-center mb-20">
+            <h2 className="text-4xl md:text-5xl font-extrabold text-slate-900 dark:text-white mb-4 tracking-tight">PROFIL</h2>
+            <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto text-sm md:text-base font-medium italic">
+              Pengelola UPTD Rusunawa Kota Cimahi
+            </p>
+          </div>
+
+          {/* Tier 1: Top Leader (Center) */}
+          <div className="flex justify-center mb-20">
+            {topLeader && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.7, ease: "easeOut" }}
+                className="flex flex-col items-center text-center max-w-md group"
+              >
+                <div className="relative w-48 h-48 md:w-56 md:h-56 mb-8 rounded-full p-2 border-2 border-slate-200 dark:border-white/10 group-hover:border-blue-500/50 transition-colors duration-500">
+                  <div className="absolute inset-0 bg-blue-600 rounded-full blur-2xl opacity-0 group-hover:opacity-10 transition-opacity" />
+                  <div className="relative w-full h-full rounded-full overflow-hidden shadow-2xl bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-900">
+                    <Image 
+                      src={topLeader.image_url || "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80"} 
+                      alt={topLeader.name} 
+                      fill 
+                      className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-1 tracking-tight">{topLeader.name}</h3>
+                <p className="text-slate-600 dark:text-slate-400 font-bold text-sm leading-relaxed">{topLeader.role}</p>
+                <p className="text-slate-400 dark:text-slate-500 text-xs font-mono mb-4">{topLeader.nip}</p>
+                
+                {/* Socials */}
+                <div className="flex gap-4 mb-4">
+                  {['twitter', 'facebook', 'instagram'].map((platform) => {
+                    const Icon = platform === 'twitter' ? Twitter : platform === 'facebook' ? Facebook : Instagram;
+                    const url = topLeader.socials?.[platform];
+                    return url && (
+                      <a key={platform} href={url} className="w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition-all scale-90 hover:scale-110 shadow-lg">
+                        <Icon className="w-4 h-4" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+            {!topLeader && !loading && (
+              <p className="text-slate-400 italic">Data pimpinan belum tersedia.</p>
+            )}
+            {loading && (
+              <div className="w-48 h-48 md:w-56 md:h-56 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse" />
+            )}
+          </div>
+
+          {/* Tier 2: Sub Leaders (Balanced 3-col) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-16 lg:gap-x-24 max-w-6xl mx-auto mb-24">
+            {subLeaders.map((leader, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.2 + (i * 0.2), duration: 0.6, ease: "easeOut" }}
+                className="flex flex-col items-center text-center group"
+              >
+                <div className="relative w-44 h-44 md:w-52 md:h-52 mb-8 rounded-full p-2 border-2 border-slate-200 dark:border-white/10 group-hover:border-blue-500/50 transition-colors duration-500">
+                  <div className="relative w-full h-full rounded-full overflow-hidden shadow-2xl bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-900">
+                    <Image 
+                      src={leader.image_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80"} 
+                      alt={leader.name} 
+                      fill 
+                      className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                  </div>
+                </div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white mb-1 tracking-tight">{leader.name}</h3>
+                <p className="text-slate-600 dark:text-slate-400 font-bold text-sm leading-relaxed px-4">{leader.role}</p>
+                <p className="text-slate-400 dark:text-slate-500 text-xs font-mono mb-4">{leader.nip}</p>
+                
+                {/* Socials */}
+                <div className="flex gap-4">
+                  {['twitter', 'facebook', 'instagram'].map((platform) => {
+                    const Icon = platform === 'twitter' ? Twitter : platform === 'facebook' ? Facebook : Instagram;
+                    const url = leader.socials?.[platform];
+                    return url && (
+                      <a key={platform} href={url} className="w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center hover:bg-blue-600 dark:hover:bg-blue-500 hover:text-white transition-all scale-90 hover:scale-110 shadow-lg">
+                        <Icon className="w-4 h-4" />
+                      </a>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Tier 3: Operational Divisions / Staff Grid (Scalable) */}
+          <div className="mt-32 max-w-6xl mx-auto">
+            <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6 text-center md:text-left">
+              <div>
+                <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Tim Operasional & Unit Pelayanan</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm">Didukung oleh tenaga ahli yang siap melayani di berbagai bidang operasional Rusunawa.</p>
+              </div>
+              <div className="hidden md:block h-px flex-1 bg-slate-200 dark:bg-white/10 mx-8" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {operationalDivisions.map((division, i) => {
+                const Icon = getIconForOps(division.name);
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    whileInView={{ opacity: 1, scale: 1 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.4 + (i * 0.1), duration: 0.5 }}
+                    className="bg-white dark:bg-slate-900/50 border border-slate-100 dark:border-white/5 rounded-3xl p-8 hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 group"
+                  >
+                    <div className="w-12 h-12 bg-blue-600/10 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-blue-600 group-hover:text-white transition-all duration-300">
+                      <Icon className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-lg font-bold text-slate-900 dark:text-white mb-2">{division.name}</h4>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">{division.role}</p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bottom Banner Message (matching reference style) */}
+          <div className="border-t border-slate-100 dark:border-white/5 pt-12 text-center">
+            <p className="text-slate-500 dark:text-slate-400 font-medium text-sm md:text-base tracking-wide max-w-3xl mx-auto">
+              Berkomitmen Untuk Memberikan Pengelolaan dan Pelayanan Hunian Yang Prima, Harmonis dan Berkelanjutan.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Pre-footer */}
       <section className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-blue-600/10" />
@@ -225,7 +414,7 @@ export default function LandingPage() {
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center">
                 <Building2 className="w-4 h-4 text-white" />
               </div>
-              <span className="text-slate-900 dark:text-white font-bold tracking-tight">Rusunawa Cimahi</span>
+              <span className="text-slate-900 dark:text-white font-bold tracking-tight">Pengelola UPTD Rusunawa Kota Cimahi</span>
             </div>
             <p className="text-slate-600 dark:text-slate-400 text-sm max-w-sm mb-6">
               Layanan pengelola rumah susun sewa sederhana tersistem. Hadir untuk kesejahteraan hunian masyarakat Cimahi.
@@ -241,6 +430,7 @@ export default function LandingPage() {
               <li><a href="#tentang" className="hover:text-blue-400">Tentang Kami</a></li>
               <li><a href="#fasilitas" className="hover:text-blue-400">Fasilitas</a></li>
               <li><a href="#lokasi" className="hover:text-blue-400">Lokasi & Tarif</a></li>
+              <li><a href="#pengurus" className="hover:text-blue-400">Pengurus</a></li>
               <li><Link href="/login" className="hover:text-blue-400">Portal Login</Link></li>
             </ul>
           </div>

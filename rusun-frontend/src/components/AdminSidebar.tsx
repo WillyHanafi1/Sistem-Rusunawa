@@ -3,6 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout, getUserName } from "@/lib/auth";
 import { useEffect, useState } from "react";
+import Cookies from "js-cookie";
 import { ThemeToggle } from "./ThemeToggle";
 import { 
     Building2, Home, Users, FileText, LogOut, LayoutDashboard, MessageSquare, ClipboardList, 
@@ -13,7 +14,8 @@ type NavItem = {
     label: string;
     icon: any;
     href?: string;
-    children?: { label: string; href: string; icon?: any }[];
+    children?: { label: string; href: string; icon?: any; role?: "sadmin" | "admin" }[];
+    role?: "sadmin" | "admin";
 };
 
 const navItems: NavItem[] = [
@@ -55,7 +57,14 @@ const navItems: NavItem[] = [
             { href: "/admin/tickets/closed", label: "Riwayat Selesai", icon: History }
         ]
     },
-    { href: "/admin/settings", label: "Pengaturan", icon: Settings },
+    { 
+        label: "Pengaturan", 
+        icon: Settings, 
+        children: [
+            { href: "/admin/settings", label: "Utama", icon: Settings },
+            { href: "/admin/settings/management", label: "Kepengurusan", icon: Users, role: "sadmin" },
+        ]
+    },
 ];
 
 export default function AdminSidebar() {
@@ -84,6 +93,8 @@ export default function AdminSidebar() {
         setOpenMenu(prev => prev === label ? null : label);
     };
 
+    const userRole = mounted ? Cookies.get("user_role") : undefined;
+
     return (
         <aside className="w-64 min-h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 flex flex-col transition-colors duration-300">
             {/* Logo */}
@@ -101,7 +112,7 @@ export default function AdminSidebar() {
 
             {/* Nav */}
             <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto align-top custom-scrollbar">
-                {navItems.map((item) => {
+                {navItems.filter(item => !item.role || item.role === userRole).map((item) => {
                     const hasChildren = !!item.children;
                     const isOpen = openMenu === item.label;
                     
@@ -150,7 +161,7 @@ export default function AdminSidebar() {
                             {/* Children Smooth Collapse */}
                             <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"}`}>
                                 <div className="overflow-hidden space-y-1">
-                                    {item.children?.map(child => {
+                                    {item.children?.filter(child => !child.role || child.role === userRole).map(child => {
                                         const isNavActive = pathname === child.href;
                                         return (
                                             <Link
@@ -181,7 +192,9 @@ export default function AdminSidebar() {
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="text-slate-900 dark:text-white text-xs font-medium truncate">{mounted ? name : "Admin"}</p>
-                        <p className="text-slate-500 text-xs">Administrator</p>
+                        <p className="text-slate-500 text-[10px] uppercase tracking-wider font-bold">
+                            {mounted ? (Cookies.get("user_role") === "sadmin" ? "Super Admin" : "Administrator") : "Loading..."}
+                        </p>
                     </div>
                     <ThemeToggle />
                 </div>
