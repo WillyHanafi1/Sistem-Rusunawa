@@ -9,6 +9,6 @@
         "install:all": "npm install && npm install --prefix rusun-frontend && cd rusun-backend && pip install -r requirements.txt"
     },
     "devDependencies": {
-        "concurrently": "^8.2.2"
+        "concurrently": "^9.2.1"
     }
 }

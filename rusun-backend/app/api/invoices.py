@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 from decimal import Decimal
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
@@ -16,18 +16,24 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 def list_invoices(
     skip: int = 0,
     limit: int = 100,
+    tenant_id: Optional[int] = None,
+    year: Optional[int] = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role == UserRole.penghuni:
-        # Penghuni: hanya lihat invoice miliknya
         tenants = session.exec(select(Tenant).where(Tenant.user_id == current_user.id)).all()
         tenant_ids = [t.id for t in tenants]
         invoices = session.exec(
             select(Invoice).where(Invoice.tenant_id.in_(tenant_ids))
         ).all()
     else:
-        invoices = session.exec(select(Invoice).offset(skip).limit(limit)).all()
+        query = select(Invoice)
+        if tenant_id is not None:
+            query = query.where(Invoice.tenant_id == tenant_id)
+        if year is not None:
+            query = query.where(Invoice.period_year == year)
+        invoices = session.exec(query.offset(skip).limit(limit)).all()
     return invoices
 
 

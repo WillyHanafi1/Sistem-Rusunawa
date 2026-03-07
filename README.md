@@ -1,62 +1,313 @@
 # Sistem Rusunawa 🏠
 
-Sistem manajemen Rumah Susun Sederhana Sewa (Rusunawa) full-stack.
+Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencakup administrasi kamar, kontrak penghuni, tagihan bulanan, pengajuan sewa, hingga portal penghuni self-service.
+
+---
 
 ## Tech Stack
-- **Backend**: FastAPI + SQLModel + PostgreSQL
-- **Frontend**: Next.js 16 + React 19 + Tailwind CSS v4
-- **Auth**: JWT (python-jose + passlib bcrypt)
-- **Payment**: Xendit (webhook auto-update status)
-- **Database**: PostgreSQL 15 via Docker
 
-## Fitur
-- ✅ RBAC (Admin & Penghuni)
-- ✅ Manajemen Kamar (CRUD + status otomatis)
-- ✅ Manajemen Penghuni (kontrak, deposit)
-- ✅ Generate Tagihan Bulanan (auto-kalkulasi tarif)
-- ✅ Webhook Xendit (status invoice auto-update ke Lunas)
-- ✅ Portal Penghuni (lihat tagihan sendiri)
+| Layer         | Teknologi                                               |
+| ------------- | ------------------------------------------------------- |
+| **Backend**   | FastAPI 0.115 · SQLModel · Alembic · Uvicorn            |
+| **Frontend**  | Next.js 16 · React 19 · Tailwind CSS v4 · Framer Motion|
+| **Database**  | PostgreSQL 15 (Docker)                                  |
+| **Auth**      | JWT — python-jose + passlib (bcrypt)                    |
+| **Payment**   | Xendit (webhook auto-update status)                     |
+| **UI Library**| Lucide React · TanStack Table · next-themes             |
+| **DevOps**    | Docker Compose · Concurrently (monorepo runner)         |
 
-## Cara Menjalankan
+---
 
-Langkah paling cepat adalah menggunakan Docker. Pastikan Anda sudah menginstal Docker Desktop di komputer Anda.
+## Fitur Utama
 
-### 1. Persiapan Environment
-Pindah ke folder backend dan copy file `.env.example` menjadi `.env`:
-```bash
-cd rusun-backend
-cp .env.example .env
-```
-*(Catatan: Anda bisa mengubah DATABASE_URL jika perlu, tapi defaultnya sudah saya sesuaikan untuk Docker)*
+### Admin Panel (`/admin`)
+- ✅ **Dashboard** — ringkasan statistik utama
+- ✅ **Manajemen Kamar** — CRUD kamar per-gedung/lantai/unit, status otomatis (kosong/isi/rusak)
+- ✅ **Denah Fasilitas** — visualisasi denah lantai interaktif (`/admin/rooms/facilities`)
+- ✅ **Manajemen Penghuni (Kontrak)** — CRUD kontrak, deposit, jumlah motor
+- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak (`/admin/tenants/interviews`)
+- ✅ **Tagihan Bulanan** — generate tagihan dengan auto-kalkulasi (sewa + air + listrik + parkir motor)
+- ✅ **Manajemen Tarif** — konfigurasi tarif per-rusunawa (`/admin/tariffs`)
+- ✅ **Pengajuan Sewa** — review, approve/reject, konversi ke kontrak (`/admin/applications`)
+- ✅ **Tiket Keluhan** — tracking keluhan penghuni (Lampu/Listrik, Air/Plumbing, Atap/Bangunan, Lainnya)
+- ✅ **RBAC** — Role-Based Access Control (Admin & Penghuni)
 
-### 2. Jalankan dengan Docker (Rekomendasi)
-Kembali ke folder **root** proyek dan jalankan:
-```bash
-docker compose up --build -d
-```
-Aplikasi akan tersedia di:
-- **Frontend**: http://localhost:3000
-- **Backend (API Docs)**: http://localhost:8000/docs
-- **PgAdmin**: http://localhost:5050 (Login: `admin@rusun.com` / `admin123`)
+### Portal Penghuni (`/portal`)
+- ✅ **Lihat Tagihan** — riwayat tagihan pribadi + status pembayaran
+- ✅ **Buat Tiket Keluhan** — formulir pengaduan kerusakan/masalah
 
-### 3. Generate Data Awal (Seeding)
-Setelah kontainer berjalan, buat user admin default:
-```bash
-docker exec -it rusunawa_backend python app/seeder.py
-```
-Login Admin: `admin@rusunawa.com` / `admin123!`
+### Landing Pages
+- ✅ **Halaman Utama** — landing page responsif + dark mode
+- ✅ **Halaman per-Rusunawa** — Cigugur Tengah, Cibeureum, Leuwigajah (informasi & denah ruangan)
+
+### Integrasi
+- ✅ **Xendit Webhook** — auto-update status invoice ke "Lunas" saat pembayaran masuk
+- ✅ **Upload Dokumen** — simpan file KTP/dokumen pendukung
 
 ---
 
 ## Struktur Project
+
 ```
 Sistem-Rusunawa/
-├── docker-compose.yml   # Konfigurasi seluruh stack (DB, BE, FE)
-├── rusun-backend/       # FastAPI Backend
-│   ├── app/             # Source code (API, Models, DB)
-│   └── Dockerfile       # Image Backend
-├── rusun-frontend/      # Next.js Frontend
-│   ├── src/             # Source code (Pages, Components)
-│   └── Dockerfile       # Image Frontend
-└── package.json         # Unified runner (npm run dev)
+├── docker-compose.yml        # Stack: DB + Backend + PgAdmin
+├── package.json              # Monorepo runner (concurrently)
+│
+├── rusun-backend/            # ⚙️ FastAPI Backend
+│   ├── app/
+│   │   ├── main.py           # Entrypoint, CORS, router registration
+│   │   ├── seeder.py         # Seed data (admin user, rooms)
+│   │   ├── api/              # API Routes
+│   │   │   ├── auth.py       #   POST /api/auth/login, /register
+│   │   │   ├── rooms.py      #   CRUD /api/rooms
+│   │   │   ├── tenants.py    #   CRUD /api/tenants
+│   │   │   ├── invoices.py   #   CRUD /api/invoices + generate
+│   │   │   ├── tickets.py    #   CRUD /api/tickets
+│   │   │   ├── applications.py # CRUD /api/applications
+│   │   │   └── webhooks.py   #   POST /api/webhooks/xendit
+│   │   ├── models/           # SQLModel + Pydantic schemas
+│   │   │   ├── user.py       #   User (admin/penghuni)
+│   │   │   ├── room.py       #   Room (3 rusunawa, A-D, lantai I-V)
+│   │   │   ├── tenant.py     #   Tenant (kontrak + deposit)
+│   │   │   ├── invoice.py    #   Invoice (multi-charge breakdown)
+│   │   │   ├── ticket.py     #   Ticket (keluhan penghuni)
+│   │   │   └── application.py#   Application (pengajuan sewa)
+│   │   └── core/             # Config, DB engine, JWT security
+│   ├── requirements.txt
+│   └── Dockerfile
+│
+├── rusun-frontend/           # 🎨 Next.js Frontend
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── page.tsx              # Landing page
+│   │   │   ├── login/page.tsx        # Auth page
+│   │   │   ├── admin/                # Admin pages (9 halaman)
+│   │   │   │   ├── page.tsx          #   Dashboard
+│   │   │   │   ├── rooms/page.tsx    #   Data Kamar
+│   │   │   │   ├── rooms/facilities/ #   Denah Fasilitas
+│   │   │   │   ├── tenants/page.tsx  #   Kontrak Penghuni
+│   │   │   │   ├── tenants/interviews/ # Wawancara
+│   │   │   │   ├── invoices/page.tsx #   Tagihan
+│   │   │   │   ├── tariffs/page.tsx  #   Tarif
+│   │   │   │   ├── applications/     #   Pengajuan
+│   │   │   │   └── tickets/page.tsx  #   Tiket
+│   │   │   ├── portal/              # Portal Penghuni
+│   │   │   │   ├── page.tsx          #   Tagihan pribadi
+│   │   │   │   └── tickets/page.tsx  #   Keluhan
+│   │   │   ├── cibeureum/           # Landing Rusunawa
+│   │   │   ├── cigugur-tengah/
+│   │   │   └── leuwigajah/
+│   │   ├── components/              # Reusable Components
+│   │   │   ├── AdminSidebar.tsx
+│   │   │   ├── AdminFloorPlan.tsx
+│   │   │   ├── FloorPlan.tsx
+│   │   │   ├── InvoiceMonthDrawer.tsx
+│   │   │   ├── ThemeProvider.tsx
+│   │   │   └── ThemeToggle.tsx
+│   │   └── lib/                     # Utilities
+│   │       ├── api.ts               #   Axios instance + interceptors
+│   │       └── auth.ts              #   Auth helpers
+│   ├── package.json
+│   └── Dockerfile
+│
+└── GEMINI.md                 # AI development guidelines
 ```
+
+---
+
+## Cara Menjalankan
+
+### Prasyarat
+- **Node.js** ≥ 18
+- **Python** ≥ 3.10
+- **Docker Desktop** (untuk PostgreSQL)
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/WillyHanafi1/Sistem-Rusunawa.git
+cd Sistem-Rusunawa
+npm run install:all
+```
+
+### 2. Setup Environment
+
+```bash
+cd rusun-backend
+cp .env.example .env
+```
+
+Konfigurasi `.env`:
+```env
+DATABASE_URL=postgresql://rusun_user:rusun_pass@localhost:54320/rusunawa
+JWT_SECRET=ganti-dengan-secret-key-yang-panjang-dan-acak
+XENDIT_SECRET_KEY=       # Opsional — untuk integrasi pembayaran
+XENDIT_WEBHOOK_TOKEN=    # Opsional — untuk verifikasi webhook
+```
+
+### 3. Jalankan Database (Docker)
+
+```bash
+# Dari folder root
+docker compose up -d db pgadmin
+```
+
+Akses:
+- **PostgreSQL**: `localhost:54320`
+- **PgAdmin**: http://localhost:5050 (Login: `admin@rusun.com` / `admin123`)
+
+### 4. Jalankan Aplikasi (Development)
+
+```bash
+# Dari folder root — jalankan backend + frontend bersamaan
+npm run dev
+```
+
+Atau jalankan terpisah:
+```bash
+npm run dev:backend    # FastAPI di http://localhost:8000
+npm run dev:frontend   # Next.js di http://localhost:3000
+```
+
+### 5. Seed Data Awal
+
+```bash
+docker exec -it rusunawa_backend python app/seeder.py
+```
+
+**Login Admin**: `admin@rusunawa.com` / `admin123!`
+
+### 6. Jalankan Full Stack via Docker (Opsional)
+
+```bash
+docker compose up --build -d
+```
+
+---
+
+## API Endpoints
+
+| Method   | Endpoint                     | Deskripsi                          |
+| -------- | ---------------------------- | ---------------------------------- |
+| `POST`   | `/api/auth/login`            | Login (mendapatkan JWT token)      |
+| `POST`   | `/api/auth/register`         | Registrasi user baru               |
+| `GET`    | `/api/rooms`                 | Daftar semua kamar                 |
+| `POST`   | `/api/rooms`                 | Tambah kamar baru                  |
+| `GET`    | `/api/tenants`               | Daftar kontrak penghuni            |
+| `POST`   | `/api/tenants`               | Buat kontrak baru                  |
+| `GET`    | `/api/invoices`              | Daftar tagihan                     |
+| `POST`   | `/api/invoices`              | Generate tagihan bulanan           |
+| `GET`    | `/api/tickets`               | Daftar tiket keluhan               |
+| `POST`   | `/api/tickets`               | Buat tiket keluhan baru            |
+| `GET`    | `/api/applications`          | Daftar pengajuan sewa              |
+| `POST`   | `/api/applications`          | Ajukan sewa baru                   |
+| `POST`   | `/api/webhooks/xendit`       | Webhook endpoint Xendit            |
+| `GET`    | `/api/uploads/{path}`        | Akses file dokumen yang diupload   |
+
+📄 **Swagger UI**: http://localhost:8000/docs
+
+---
+
+## Data Model
+
+```mermaid
+erDiagram
+    User ||--o{ Tenant : has
+    Room ||--o{ Tenant : assigned_to
+    Tenant ||--o{ Invoice : billed
+    Tenant ||--o{ Ticket : reports
+    Application }o--|| Room : targets
+
+    User {
+        int id PK
+        string email UK
+        string name
+        string phone
+        enum role "admin | penghuni"
+        bool is_active
+    }
+
+    Room {
+        int id PK
+        enum rusunawa "Cigugur Tengah | Cibeureum | Leuwigajah"
+        string building "A, B, C, D"
+        int floor "1-5"
+        int unit_number "1-12"
+        int room_type "21, 24, 27 m²"
+        string room_number UK
+        decimal price
+        enum status "kosong | isi | rusak"
+    }
+
+    Tenant {
+        int id PK
+        int user_id FK
+        int room_id FK
+        date contract_start
+        date contract_end
+        float deposit_amount
+        int motor_count "0-4"
+        bool is_active
+    }
+
+    Invoice {
+        int id PK
+        int tenant_id FK
+        int period_month
+        int period_year
+        decimal base_rent
+        decimal water_charge
+        decimal electricity_charge
+        decimal parking_charge
+        decimal total_amount
+        date due_date
+        enum status "unpaid | paid | overdue | cancelled"
+    }
+
+    Ticket {
+        int id PK
+        int tenant_id FK
+        int room_id FK
+        enum category "Lampu | Air | Atap | Lainnya"
+        string description
+        enum status "pending | progress | resolved"
+    }
+
+    Application {
+        int id PK
+        string nik
+        string full_name
+        enum rusunawa_target
+        enum status "pending | approved | rejected | interview | contract_created"
+    }
+```
+
+---
+
+## Lessons Learned & Error Fixes
+
+### 1. Sinkronisasi Backend Docker
+Jika Swagger UI menampilkan endpoint lama (404), rebuild spesifik:
+```bash
+docker compose up --build -d backend
+```
+
+### 2. Update Enum Database (PostgreSQL)
+Menambah nilai baru ke `Enum` di SQLAlchemy tidak otomatis memperbarui tipe di PostgreSQL.
+**Solusi**: Jalankan SQL manual pada kontainer database:
+```sql
+ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'interview';
+ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'contract_created';
+```
+
+### 3. Port Conflict Docker vs Development
+Jika Docker mengambil port 3000, comment-out service `frontend` di `docker-compose.yml` saat development lokal.
+
+### 4. Monorepo Pattern
+Project menggunakan `concurrently` di root `package.json` agar `npm run dev` di folder root langsung menjalankan FastAPI + Next.js bersamaan. Semua install bisa dilakukan sekaligus via `npm run install:all`.
+
+---
+
+## License
+
+Private — Willy Hanafi © 2026

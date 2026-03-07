@@ -8,6 +8,8 @@ class ApplicationStatus(str, Enum):
     pending = "pending"
     approved = "approved"
     rejected = "rejected"
+    interview = "interview"
+    contract_created = "contract_created"
 
 class ApplicationBase(SQLModel):
     nik: str = Field(index=True, max_length=16, min_length=16)
@@ -39,5 +41,11 @@ class ApplicationRead(ApplicationBase):
     id: int
 
 class ApplicationUpdate(SQLModel):
+    nik: Optional[str] = Field(default=None, max_length=16, min_length=16)
+    full_name: Optional[str] = None
+    phone_number: Optional[str] = None
+    email: Optional[str] = None
+    rusunawa_target: Optional[RusunawaSite] = None
+    family_members_count: Optional[int] = Field(default=None, ge=1)
     status: Optional[ApplicationStatus] = None
     notes: Optional[str] = None

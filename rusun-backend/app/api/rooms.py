@@ -36,11 +36,13 @@ def list_rooms(
 
 
 class RoomExtendedRead(RoomRead):
+    tenant_id: Optional[int] = None
     tenant_name: Optional[str] = None
     contract_start: Optional[date] = None
     contract_end: Optional[date] = None
     parking_price: Decimal = Decimal("0")
     total_unpaid_bill: Decimal = Decimal("0")
+    notes: Optional[str] = None
 
 
 @router.get("/extended/all", response_model=List[RoomExtendedRead])
@@ -107,9 +109,11 @@ def get_extended_rooms(
         
         # Populate extended fields
         if tenant and user:
+            data["tenant_id"] = tenant.id
             data["tenant_name"] = user.name
             data["contract_start"] = tenant.contract_start
             data["contract_end"] = tenant.contract_end
+            data["notes"] = tenant.notes
             
             # Parking: motor_count * 30,000
             data["parking_price"] = Decimal(str(tenant.motor_count * 30000))
