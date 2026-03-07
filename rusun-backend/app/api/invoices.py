@@ -82,76 +82,83 @@ def mass_generate_invoices(
     _: User = Depends(require_admin),
 ) -> Dict[str, Any]:
     """Generate tagihan bulanan untuk SEMUA penghuni aktif yang belum punya invoice di bulan/tahun tsb."""
-    # 1. Ambil semua penghuni aktif
-    active_tenants = session.exec(select(Tenant).where(Tenant.is_active == True)).all()
-    if not active_tenants:
-        return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
+    try:
+        # 1. Ambil semua penghuni aktif
+        active_tenants = session.exec(select(Tenant).where(Tenant.is_active == True)).all()
+        if not active_tenants:
+            return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
 
-    tenant_ids = [t.id for t in active_tenants]
+        tenant_ids = [t.id for t in active_tenants]
 
-    # 2. Cari tagihan yang sudah ada untuk periode ini
-    existing_invoices = session.exec(
-        select(Invoice).where(
-            Invoice.period_month == mass_in.period_month,
-            Invoice.period_year == mass_in.period_year,
-            Invoice.tenant_id.in_(tenant_ids)
-        )
-    ).all()
-    
-    # Kumpulan tenant_id yang sudah ditagih
-    billed_tenant_ids = {inv.tenant_id for inv in existing_invoices}
+        # 2. Cari tagihan yang sudah ada untuk periode ini
+        existing_invoices = session.exec(
+            select(Invoice).where(
+                Invoice.period_month == mass_in.period_month,
+                Invoice.period_year == mass_in.period_year,
+                Invoice.tenant_id.in_(tenant_ids)
+            )
+        ).all()
+        
+        # Kumpulan tenant_id yang sudah ditagih
+        billed_tenant_ids = {inv.tenant_id for inv in existing_invoices}
 
-    # 3. Ambil data kamar untuk base_rent (O(1) dictionary lookup)
-    room_ids = [t.room_id for t in active_tenants]
-    rooms = session.exec(select(Room).where(Room.id.in_(room_ids))).all()
-    room_dict = {r.id: r for r in rooms}
+        # 3. Ambil data kamar untuk base_rent (O(1) dictionary lookup)
+        room_ids = [t.room_id for t in active_tenants]
+        rooms = session.exec(select(Room).where(Room.id.in_(room_ids))).all()
+        room_dict = {r.id: r for r in rooms}
 
-    # 4. Filter tenant yang belum ditagih dan siapkan object Invoice baru
-    new_invoices = []
-    
-    for tenant in active_tenants:
-        if tenant.id in billed_tenant_ids:
-            continue
+        # 4. Filter tenant yang belum ditagih dan siapkan object Invoice baru
+        new_invoices = []
+        
+        for tenant in active_tenants:
+            if tenant.id in billed_tenant_ids:
+                continue
+                
+            room = room_dict.get(tenant.room_id)
+            if not room:
+                continue # Abaikan jika data kamar hilang (anomali)
+
+            base_rent = room.price
+            parking_charge = MOTOR_RATE * Decimal(str(tenant.motor_count or 0)) # Safe parse
+            # Default water/electricity to 0 in mass generate
+            water_charge = Decimal("0")
+            electricity_charge = Decimal("0")
+            other_charge_safe = Decimal(str(mass_in.other_charge or 0))
             
-        room = room_dict.get(tenant.room_id)
-        if not room:
-            continue # Abaikan jika data kamar hilang (anomali)
+            total = Decimal(str(base_rent)) + parking_charge + water_charge + electricity_charge + other_charge_safe
 
-        base_rent = room.price
-        parking_charge = MOTOR_RATE * Decimal(tenant.motor_count)
-        # Default water/electricity to 0 in mass generate
-        water_charge = Decimal("0")
-        electricity_charge = Decimal("0")
-        total = base_rent + parking_charge + water_charge + electricity_charge + mass_in.other_charge
+            inv = Invoice(
+                tenant_id=tenant.id,
+                period_month=mass_in.period_month,
+                period_year=mass_in.period_year,
+                base_rent=base_rent,
+                water_charge=water_charge,
+                electricity_charge=electricity_charge,
+                parking_charge=parking_charge,
+                other_charge=other_charge_safe,
+                total_amount=total,
+                due_date=mass_in.due_date,
+                notes=mass_in.notes,
+                status=InvoiceStatus.unpaid,
+            )
+            new_invoices.append(inv)
 
-        inv = Invoice(
-            tenant_id=tenant.id,
-            period_month=mass_in.period_month,
-            period_year=mass_in.period_year,
-            base_rent=base_rent,
-            water_charge=water_charge,
-            electricity_charge=electricity_charge,
-            parking_charge=parking_charge,
-            other_charge=mass_in.other_charge,
-            total_amount=total,
-            due_date=mass_in.due_date,
-            notes=mass_in.notes,
-            status=InvoiceStatus.unpaid,
-        )
-        new_invoices.append(inv)
+        # 5. Bulk insert jika ada yang baru
+        count_generated = len(new_invoices)
+        if count_generated > 0:
+            session.add_all(new_invoices)
+            session.commit()
 
-    # 5. Bulk insert jika ada yang baru
-    count_generated = len(new_invoices)
-    if count_generated > 0:
-        session.add_all(new_invoices)
-        session.commit()
-
-    return {
-        "success": True, 
-        "generated": count_generated, 
-        "total_active": len(active_tenants),
-        "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids)} tagihan sudah ada/di-skip."
-    }
+        return {
+            "success": True, 
+            "generated": count_generated, 
+            "total_active": len(active_tenants),
+            "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids)} tagihan sudah ada/di-skip."
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {str(e)}")
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
 def get_invoice(
