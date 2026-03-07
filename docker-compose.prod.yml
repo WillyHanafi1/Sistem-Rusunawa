@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: rusunawa_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rusun_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-rusunawa}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rusun_user} -d ${POSTGRES_DB:-rusunawa}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rusunawa_net
+
+  backend:
+    build:
+      context: ./rusun-backend
+      dockerfile: Dockerfile
+    container_name: rusunawa_backend
+    restart: always
+    env_file:
+      - ./rusun-backend/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - rusunawa_net
+
+  frontend:
+    build:
+      context: ./rusun-frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    container_name: rusunawa_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+    depends_on:
+      - backend
+    networks:
+      - rusunawa_net
+
+volumes:
+  pgdata:
+  uploads_data:
+
+networks:
+  rusunawa_net:
+    driver: bridge

@@ -25,16 +25,24 @@ app = FastAPI(
     lifespan=lifespan,  # modern pattern (FastAPI >= 0.93)
 )
 
-# CORS
+# CORS - Baca dari env var ALLOWED_ORIGINS (comma-separated) atau gunakan default localhost
+_default_origins = [
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:8000",
+]
+_env_origins = os.getenv("ALLOWED_ORIGINS", "")
+allow_origins = (
+    [origin.strip() for origin in _env_origins.split(",") if origin.strip()]
+    if _env_origins
+    else _default_origins
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:8000"
-    ],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
