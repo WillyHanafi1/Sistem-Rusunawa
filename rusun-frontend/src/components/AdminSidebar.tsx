@@ -96,7 +96,7 @@ export default function AdminSidebar() {
     const userRole = mounted ? Cookies.get("user_role") : undefined;
 
     return (
-        <aside className="w-64 min-h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 flex flex-col transition-colors duration-300">
+        <aside className="w-64 h-screen sticky top-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 flex flex-col transition-colors duration-300 overflow-hidden">
             {/* Logo */}
             <div className="p-6 border-b border-slate-200 dark:border-white/5">
                 <div className="flex items-center gap-3">
@@ -193,7 +193,7 @@ export default function AdminSidebar() {
                     <div className="flex-1 min-w-0">
                         <p className="text-slate-900 dark:text-white text-xs font-medium truncate">{mounted ? name : "Admin"}</p>
                         <p className="text-slate-500 text-[10px] uppercase tracking-wider font-bold">
-                            {mounted ? (Cookies.get("user_role") === "sadmin" ? "Super Admin" : "Administrator") : "Loading..."}
+                            {mounted ? (userRole === "sadmin" ? "Super Admin" : "Administrator") : "Loading..."}
                         </p>
                     </div>
                     <ThemeToggle />

@@ -8,6 +8,7 @@ import {
   Wallet, Leaf, Clock, Phone, Mail, Layers, Users, Wrench, Heart, FileText,
   Shield, Trash2, Headphones, Twitter, Facebook, Instagram
 } from "lucide-react";
+import { Header } from "@/components/Header";
 import { ThemeToggle } from "@/components/ThemeToggle"; // Adjust path if needed
 
 interface Staff {
@@ -22,7 +23,6 @@ interface Staff {
 
 export default function LandingPage() {
   const { scrollY } = useScroll();
-  const [scrolled, setScrolled] = useState(false);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,12 +46,6 @@ export default function LandingPage() {
   // Parallax effect for hero background
   const y = useTransform(scrollY, [0, 500], [0, 150]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
-
-  useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
 
   const features = [
     { icon: ShieldCheck, title: "Keamanan 24 Jam", desc: "Sistem keamanan terpadu dengan CCTV dan petugas jaga 24/7 untuk ketenangan Anda." },
@@ -109,34 +103,7 @@ export default function LandingPage() {
 
   return (
     <div className="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-300 font-sans selection:bg-blue-500/30 transition-colors duration-300">
-      {/* Header / Navbar */}
-      <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? "bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 py-4 shadow-sm" : "bg-transparent py-6"}`}>
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
-            <span className={`font-bold text-lg tracking-tight ${scrolled ? "text-slate-900 dark:text-white" : "text-white"}`}>Pengelola UPTD Rusunawa Kota Cimahi</span>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-8">
-            <a href="#tentang" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Tentang</a>
-            <a href="#fasilitas" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Fasilitas</a>
-            <a href="#lokasi" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Lokasi</a>
-            <a href="#pengurus" className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>Pengurus</a>
-          </nav>
-
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-            <Link href="/login" className={`hidden md:block text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"}`}>
-              Masuk Portal
-            </Link>
-            <Link href="/login" className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2">
-              Daftar Sekarang <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="relative h-screen flex items-center justify-center overflow-hidden">

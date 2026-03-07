@@ -246,45 +246,45 @@ def seed_rooms(session: Session):
 
 
 def seed_staff(session: Session):
-    existing_count = len(session.exec(select(Staff)).all())
-    if existing_count > 0:
-        print(f"ℹ️  Data staff sudah ada ({existing_count} orang). Seed dilewati.")
-        return
-
+    from sqlmodel import delete
+    # Hapus data lama agar sesuai dengan seeder terbaru jika dijalankan ulang
+    session.exec(delete(Staff))
+    session.commit()
+    
     staff_data = [
-        # Tier 1
+        # Tier 1 - TOP LEADER
         Staff(
-            name="Taufik Rahmat, S.Pd., MT.",
-            role="Kepala UPTD",
-            nip="19720512 199803 1 008",
+            name="KOKO, S.E., M.M.",
+            role="Kepala UPTD Rusunawa Kota Cimahi",
+            nip="19810323 200801 1 004",
             tier=1,
             image_url="https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80",
-            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+            socials={}
         ),
-        # Tier 2
+        # Tier 2 - SUB-LEADER
         Staff(
-            name="Rini Rustianty, S.S., M.Si.",
-            role="Kasubag Tata Usaha",
-            nip="19750821 200604 2 003",
+            name="ANNISA SUNDANI",
+            role="Bendahara",
+            nip="19860102 201001 2 001",
             tier=2,
             image_url="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80",
-            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+            socials={}
         ),
         Staff(
-            name="Rudy Hartono, S.T.",
-            role="Bendahara",
-            nip="19831115 200902 1 002",
+            name="KADARISMAN DIPUTRA, S.P.",
+            role="Kasubag Tata Usaha",
+            nip="19840919 201001 1 006",
             tier=2,
             image_url="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=800&q=80",
-            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+            socials={}
         ),
         Staff(
-            name="Heri Hermawan, S.T.",
+            name="ASEP SURYANA MASDUKI",
             role="Koordinator Lapangan",
-            nip="19800410 200112 1 005",
+            nip="19820410 200901 1 005",
             tier=2,
             image_url="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=800&q=80",
-            socials={"twitter": "#", "facebook": "#", "instagram": "#"}
+            socials={}
         ),
         # Tier 3 (Divisions)
         Staff(name="Keamanan 24/7", role="Divisi Keamanan", tier=3, socials={}),

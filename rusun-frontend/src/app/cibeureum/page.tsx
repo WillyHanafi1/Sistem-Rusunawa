@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Header } from "@/components/Header";
 import { FloorPlan } from "@/components/FloorPlan";
 import {
   ArrowLeft, Building2, MapPin, Layers, Users, 
@@ -48,20 +49,7 @@ export default function CibeureumPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-300 transition-colors duration-300 font-sans">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 py-4 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium">
-            <ArrowLeft className="w-5 h-5" /> Kembali
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="font-bold text-lg tracking-tight text-slate-900 dark:text-white">Rusunawa Cimahi</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <ThemeToggle />
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Hero Section */}
       <section className="py-20 relative overflow-hidden flex flex-col items-center justify-center text-center px-6">
