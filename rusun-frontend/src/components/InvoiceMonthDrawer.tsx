@@ -13,8 +13,6 @@ export interface InvoiceDetail {
     period_month: number;
     period_year: number;
     base_rent: number;
-    water_charge: number;
-    electricity_charge: number;
     parking_charge: number;
     other_charge?: number;
     total_amount: number;
@@ -152,8 +150,6 @@ export default function InvoiceMonthDrawer({ invoice, tenantName, roomNumber, on
                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/5 px-5 py-1">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider pt-4 pb-2">Rincian Tagihan</p>
                         <BreakdownRow icon={<Wallet className="w-4 h-4" />} label="Sewa Kamar" value={Number(invoice.base_rent)} />
-                        <BreakdownRow icon={<Droplets className="w-4 h-4" />} label="Air" value={Number(invoice.water_charge)} />
-                        <BreakdownRow icon={<Zap className="w-4 h-4" />} label="Listrik" value={Number(invoice.electricity_charge)} />
                         <BreakdownRow icon={<Car className="w-4 h-4" />} label="Parkir Motor" value={Number(invoice.parking_charge)} />
                         {invoice.other_charge && Number(invoice.other_charge) > 0 && (
                             <BreakdownRow icon={<ReceiptText className="w-4 h-4" />} label="Lain-lain" value={Number(invoice.other_charge)} />

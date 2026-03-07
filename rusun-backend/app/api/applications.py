@@ -146,8 +146,8 @@ def update_application_status(
 
 from pydantic import BaseModel
 from datetime import date
-from docxtpl import DocxTemplate
 from app.models.room import Room, RoomStatus
+from app.core.document_service import DocumentService
 
 class InterviewDecision(BaseModel):
     room_id: int
@@ -220,27 +220,28 @@ def submit_interview(
         room.status = RoomStatus.isi
         session.add(room)
 
-        # Generate Dokumen DOCX
-        template_path = os.path.join(UPLOAD_DIR, "template_kontrak.docx")
-        if os.path.exists(template_path):
-            doc = DocxTemplate(template_path)
-            context = {
-                "nama_penyewa": application.full_name,
-                "nik": application.nik,
-                "nomor_kamar": room.room_number,
-                "harga_sewa": f"Rp {room.price:,.2f}",
-                "deposit": f"Rp {decision.deposit_amount:,.2f}",
-                "tanggal_mulai": decision.contract_start.strftime("%d-%m-%Y"),
-                "tanggal_selesai": decision.contract_end.strftime("%d-%m-%Y"),
-                "tanggal_cetak": datetime.now().strftime("%d-%m-%Y")
-            }
-            doc.render(context)
-            contract_id = uuid.uuid4().hex[:6]
-            contract_filename = f"kontrak_{application.nik}_{contract_id}.docx"
-            contract_path = os.path.join(UPLOAD_DIR, contract_filename)
-            doc.save(contract_path)
-            # Simpan path kontrak (butuh field baru di Tenant atau Application, bisa disimpan di notes sementara jika tidak ada field khusus)
-            new_tenant.notes = f"Kontrak path: {contract_path}"
+        # Generate 4 Dokumen (Pengajuan, BA Wawancara, SIP, Kontrak)
+        doc_context = {
+            "nama_penyewa": application.full_name,
+            "nik": application.nik,
+            "telepon": application.phone_number,
+            "email": application.email,
+            "rusunawa": application.rusunawa_target,
+            "nomor_kamar": room.room_number,
+            "lantai": room.floor,
+            "harga_sewa": f"Rp {room.price:,.2f}",
+            "deposit": f"Rp {decision.deposit_amount:,.2f}",
+            "tanggal_mulai": decision.contract_start.strftime("%d-%m-%Y"),
+            "tanggal_selesai": decision.contract_end.strftime("%d-%m-%Y"),
+            "jumlah_motor": decision.motor_count,
+            "tanggal_wawancara": datetime.now().strftime("%d-%m-%Y")
+        }
+        
+        bundle = DocumentService.generate_bundle(doc_context, application.nik)
+        
+        # Simpan informasi bundle di catatan tenant
+        doc_links = "\n".join([f"{k.upper()}: {v}" for k, v in bundle.items()])
+        new_tenant.notes = f"Dokumen Bundle:\n{doc_links}"
     
     session.add(application)
     session.commit()

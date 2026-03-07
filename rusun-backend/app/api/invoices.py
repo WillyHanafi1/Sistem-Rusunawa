@@ -86,8 +86,6 @@ def generate_invoice(
     parking_charge = MOTOR_RATE * Decimal(tenant.motor_count)
     total = (
         base_rent
-        + invoice_in.water_charge
-        + invoice_in.electricity_charge
         + parking_charge
         + invoice_in.other_charge
     )
@@ -97,8 +95,6 @@ def generate_invoice(
         period_month=invoice_in.period_month,
         period_year=invoice_in.period_year,
         base_rent=base_rent,
-        water_charge=invoice_in.water_charge,
-        electricity_charge=invoice_in.electricity_charge,
         parking_charge=parking_charge,
         other_charge=invoice_in.other_charge,
         total_amount=total,

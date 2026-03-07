@@ -202,7 +202,7 @@ export default function ApplicationsPage() {
     );
 
     return (
-        <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-6">
+        <div className="p-6 md:p-10 max-w-[1600px] mx-auto space-y-8">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
@@ -256,11 +256,14 @@ export default function ApplicationsPage() {
                             <thead className="bg-slate-50 dark:bg-slate-950/50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200 dark:border-slate-800">
                                 <tr>
                                     <th className="px-6 py-4">Tgl Daftar</th>
-                                    <th className="px-6 py-4">Pendaftar</th>
-                                    <th className="px-6 py-4">Lokasi Target</th>
-                                    <th className="px-6 py-4 text-center">Status</th>
+                                    <th className="px-6 py-4">Nama</th>
+                                    <th className="px-6 py-4">NIK</th>
+                                    <th className="px-6 py-4">No. WA</th>
+                                    <th className="px-6 py-4">Email</th>
+                                    <th className="px-6 py-4">Target</th>
                                     <th className="px-6 py-4 text-center">Berkas</th>
                                     <th className="px-6 py-4 text-right">Aksi</th>
+                                    <th className="px-6 py-4 text-center min-w-[150px]">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -281,22 +284,23 @@ export default function ApplicationsPage() {
                                                     {format(new Date(app.created_at), "HH:mm")} WIB
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 min-w-[250px]">
-                                                <div className="font-bold text-slate-900 dark:text-white flex justify-between items-center">
-                                                    <span>{app.full_name}</span>
-                                                </div>
-                                                <div className="text-xs text-slate-500 mt-0.5 space-y-0.5">
-                                                    <p>NIK: <span className="font-mono">{app.nik}</span></p>
-                                                    <p>WA: {app.phone_number}</p>
-                                                    <p>Email: {app.email}</p>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="font-bold text-slate-900 dark:text-white">
+                                                    {app.full_name}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="font-mono text-xs">{app.nik}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-xs">{app.phone_number}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="text-xs">{app.email}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="font-medium text-blue-600 dark:text-blue-400">{app.rusunawa_target}</div>
                                                 <div className="text-xs text-slate-500">{app.family_members_count} Anggota Keluarga</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-center">
-                                                {getStatusBadge(app.status)}
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 {app.ktp_file_path ? (
@@ -351,6 +355,9 @@ export default function ApplicationsPage() {
                                                         </button>
                                                     </div>
                                                 </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                {getStatusBadge(app.status)}
                                             </td>
                                         </motion.tr>
                                     ))}

@@ -19,8 +19,6 @@ class InvoiceBase(SQLModel):
     period_month: int  # 1-12
     period_year: int
     base_rent: Decimal = Field(default=0, max_digits=12, decimal_places=2)
-    water_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
-    electricity_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     parking_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)  # motor × 30rb
     other_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     total_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
@@ -43,8 +41,6 @@ class InvoiceCreate(SQLModel):
     tenant_id: int
     period_month: int
     period_year: int
-    water_charge: Decimal = Decimal("0")
-    electricity_charge: Decimal = Decimal("0")
     other_charge: Decimal = Decimal("0")
     due_date: date
     notes: Optional[str] = None

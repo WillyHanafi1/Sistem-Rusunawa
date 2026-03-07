@@ -198,7 +198,7 @@ export default function ContractRoomPage() {
     const columns = useMemo(() => [
         columnHelper.accessor('rusunawa', {
             header: () => (
-                <div className="flex flex-col gap-1.5 w-px whitespace-nowrap">
+                <div className="flex flex-col gap-1.5 min-w-[120px]">
                     <span className="flex items-center gap-1"><Filter className="w-3 h-3 text-blue-500" /> Rusunawa</span>
                     <select
                         value={filterRusunawa}
@@ -218,7 +218,7 @@ export default function ContractRoomPage() {
         }),
         columnHelper.accessor('building', {
             header: () => (
-                <div className="flex flex-col gap-1.5 items-center w-px">
+                <div className="flex flex-col gap-1.5 items-center w-full">
                     <span className="flex items-center gap-1 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Gedung</span>
                     <select
                         value={filterBuilding}
@@ -237,7 +237,7 @@ export default function ContractRoomPage() {
         }),
         columnHelper.accessor('floor', {
             header: () => (
-                <div className="flex flex-col gap-1.5 items-center w-px">
+                <div className="flex flex-col gap-1.5 items-center w-full">
                     <span className="flex items-center gap-1 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Lantai</span>
                     <select
                         value={filterFloor}
@@ -257,7 +257,7 @@ export default function ContractRoomPage() {
         }),
         columnHelper.accessor('unit_number', {
             header: () => (
-                <div className="flex flex-col gap-1.5 items-center w-px">
+                <div className="flex flex-col gap-1.5 items-center w-full">
                     <span className="flex items-center gap-1 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Unit</span>
                     <input
                         type="text"
@@ -407,40 +407,50 @@ export default function ContractRoomPage() {
             }
         }),
 
-        columnHelper.display({
-            id: 'actions',
-            header: () => <div className="text-center py-2.5 text-slate-500 font-semibold">Aksi & Status</div>,
+        columnHelper.accessor('status', {
+            id: 'status',
+            header: () => <div className="text-center py-2.5 text-slate-500 font-semibold">Status</div>,
             cell: info => {
                 const r = info.row.original;
                 return (
-                    <div className="flex justify-between items-center px-4 gap-4">
+                    <div className="flex justify-center">
                         <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border transition-all shadow-sm ${STATUS_BADGE[r.status]}`}>
                             {r.status === 'isi' ? 'Terisi' : r.status === 'kosong' ? 'Kosong' : 'Rusak'}
                         </span>
-                        <div className="flex gap-1.5">
-                            {r.status === 'isi' ? (
-                                <>
-                                    <button
-                                        onClick={() => handleDownloadContract(r.notes!)}
-                                        className={`p-1.5 rounded-lg transition-all ${r.notes ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200" : "text-slate-200 cursor-not-allowed"}`}
-                                        title={r.notes ? "Unduh Kontrak" : "Kontrak belum diunggah"}
-                                    >
-                                        <Download className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => r.tenant_id && handleDeactivate(r.tenant_id)}
-                                        className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-transparent hover:border-red-200 rounded-lg transition-all"
-                                        title="Akhiri Sewa"
-                                    >
-                                        <UserX className="w-4 h-4" />
-                                    </button>
-                                </>
-                            ) : (
-                                <div className="w-[60px] flex justify-center py-1">
-                                    <span className="text-[10px] text-slate-300 dark:text-slate-600 font-medium italic">N/A</span>
-                                </div>
-                            )}
-                        </div>
+                    </div>
+                );
+            }
+        }),
+
+        columnHelper.display({
+            id: 'actions',
+            header: () => <div className="text-center py-2.5 text-slate-500 font-semibold">Aksi</div>,
+            cell: info => {
+                const r = info.row.original;
+                return (
+                    <div className="flex justify-center gap-1.5">
+                        {r.status === 'isi' ? (
+                            <>
+                                <button
+                                    onClick={() => handleDownloadContract(r.notes!)}
+                                    className={`p-1.5 rounded-lg transition-all ${r.notes ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200" : "text-slate-200 cursor-not-allowed"}`}
+                                    title={r.notes ? "Unduh Kontrak" : "Kontrak belum diunggah"}
+                                >
+                                    <Download className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => r.tenant_id && handleDeactivate(r.tenant_id)}
+                                    className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-transparent hover:border-red-200 rounded-lg transition-all"
+                                    title="Akhiri Sewa"
+                                >
+                                    <UserX className="w-4 h-4" />
+                                </button>
+                            </>
+                        ) : (
+                            <div className="py-1">
+                                <span className="text-[10px] text-slate-300 dark:text-slate-600 font-medium italic">N/A</span>
+                            </div>
+                        )}
                     </div>
                 );
             }
@@ -508,12 +518,18 @@ export default function ContractRoomPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 {table.getHeaderGroups().map(headerGroup => (
-                                    <tr key={headerGroup.id} className="border-b border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-transparent">
-                                        {headerGroup.headers.map(header => (
-                                            <th key={header.id} className="text-left px-4 py-3 font-medium align-top border-r border-slate-200 dark:border-white/8 last:border-r-0">
-                                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                            </th>
-                                        ))}
+                                    <tr key={headerGroup.id} className="border-b border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/80 whitespace-nowrap text-xs">
+                                {headerGroup.headers.map(header => {
+                                    const tight = ['building', 'floor', 'unit_number', 'status', 'actions'].includes(header.id);
+                                    return (
+                                        <th 
+                                            key={header.id} 
+                                            className={`text-left py-3 font-bold tracking-wide align-bottom border-r border-slate-200 dark:border-white/8 last:border-r-0 ${tight ? 'px-1 w-16 text-center' : 'px-4'}`}
+                                        >
+                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                        </th>
+                                    );
+                                })}
                                     </tr>
                                 ))}
                             </thead>
@@ -523,11 +539,14 @@ export default function ContractRoomPage() {
                                         key={row.id}
                                         className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
                                     >
-                                        {row.getVisibleCells().map(cell => (
-                                            <td key={cell.id} className="px-4 py-2 align-middle border-r border-slate-100 dark:border-white/5 last:border-r-0">
-                                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                            </td>
-                                        ))}
+                                        {row.getVisibleCells().map(cell => {
+                                            const tight = ['building', 'floor', 'unit_number', 'status', 'actions'].includes(cell.column.id);
+                                            return (
+                                                <td key={cell.id} className={`py-2 align-middle border-r border-slate-100 dark:border-white/5 last:border-r-0 ${tight ? 'px-1' : 'px-4'}`}>
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </td>
+                                            );
+                                        })}
                                     </tr>
                                 ))}
                             </tbody>
