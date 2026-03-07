@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/api";
-import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight } from "lucide-react";
+import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
 import {
   createColumnHelper,
   flexRender,
@@ -10,6 +10,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import InvoiceMonthDrawer, { InvoiceDetail } from "@/components/InvoiceMonthDrawer";
+import TenantImportModal from "@/components/TenantImportModal";
+import { getRole } from "@/lib/auth";
 
 interface Room {
     id: number;
@@ -112,6 +114,13 @@ export default function ContractRoomPage() {
     const [filterUnit, setFilterUnit] = useState("");
     const [filterStatus, setFilterStatus] = useState("");
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [isMounted, setIsMounted] = useState(false);
+    const userRole = getRole();
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
 
     // --- Fetch rooms ---
     const fetchRooms = async () => {
@@ -479,6 +488,15 @@ export default function ContractRoomPage() {
                     <span className="text-slate-400 mx-1">/</span>
                     <span className="text-slate-500 dark:text-slate-400 text-sm">{rooms.length} Unit Terisi</span>
                 </div>
+                {isMounted && userRole === "sadmin" && (
+                    <button
+                        onClick={() => setShowImportModal(true)}
+                        className="flex items-center gap-2.5 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 transition-all hover:-translate-y-0.5"
+                    >
+                        <FileSpreadsheet className="w-5 h-5" />
+                        Import Excel
+                    </button>
+                )}
             </div>
 
             {/* Status Filter */}
@@ -565,6 +583,13 @@ export default function ContractRoomPage() {
                     tenantName={selectedInvoice.tenantName}
                     roomNumber={selectedInvoice.roomNumber}
                     onClose={() => setSelectedInvoice(null)}
+                />
+            )}
+
+            {showImportModal && (
+                <TenantImportModal
+                    onClose={() => setShowImportModal(false)}
+                    onSuccess={fetchRooms}
                 />
             )}
         </div>

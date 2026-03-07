@@ -1,13 +1,32 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 from typing import List
 from app.core.db import get_session
-from app.core.security import require_admin, get_current_user
+from app.core.security import require_admin, require_super_admin, get_current_user
 from app.models.tenant import Tenant, TenantCreate, TenantRead, TenantUpdate
 from app.models.room import Room, RoomStatus
 from app.models.user import User, UserRole
+from app.core.import_service import process_tenant_import
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
+
+
+@router.post("/import", status_code=200)
+async def import_tenants(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+    _: User = Depends(require_super_admin),
+):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="File harus berupa format Excel (.xlsx atau .xls)")
+    
+    content = await file.read()
+    result = await process_tenant_import(content, session)
+    
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result)
+        
+    return result
 
 
 @router.get("/", response_model=List[TenantRead])
@@ -63,6 +82,7 @@ def create_tenant(
     session.commit()
     session.refresh(tenant)
     return tenant
+
 
 
 @router.patch("/{tenant_id}", response_model=TenantRead)

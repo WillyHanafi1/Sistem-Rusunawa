@@ -368,6 +368,12 @@ Jika ada endpoint yang memunculkan `404 Not Found` di *page* yang baru dibuat, p
 Jika komponen membaca *Cookies* di SSR (misal via `js-cookie`), render Server (HTML) dan rendered Client akan berbeda (karena Server tidak punya akses ke browser cookie). Ini memicu *Hydration Failed Error*.
 **Solusi**: Gunakan state `mounted`. Render komponen khusus role hanya *setelah* `useEffect` / `mounted` menjadi `true`.
 
+### 8. Error 405 Method Not Allowed (Route Hilang/Tertimpa)
+
+Jika terjadi `405 Method Not Allowed` saat memanggil sebuah endpoint (misal `POST /api/tenants/import`), penyebab utamanya biasanya ada dua:
+1. **Route Ordering Conflict:** Rute parametrik (seperti `GET /{tenant_id}`) ditulis *sebelum* rute statis (`POST /import`). Akibatnya, `/import` ditangkap sebagai `tenant_id` oleh method GET, sehingga POST ditolak. **Selalu letakkan rute statis di atas rute dinamis/parametrik**.
+2. **Silent ImportError di FastAPI:** Jika rute sama sekali tidak muncul di Swagger UI (`http://localhost:8000/docs`), kemungkinan besar ada file yang mengimpor sesuatu yang salah (misal salah nama fungsi dari file lain). Karena FastAPI meload router secara dinamis, error import ini bisa membatalkan pendaftaran fungsi tersebut tanpa memunculkan error mencolok di terminal. **Solusi:** Tes muat router secara manual (`python -c "from app.api.tenants import router"`) untuk melihat pesan error aslinya.
+
 ---
 
 ## License
