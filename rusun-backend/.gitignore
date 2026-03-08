@@ -31,3 +31,8 @@ Thumbs.db
 
 # Alembic
 alembic/versions/*.pyc
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
