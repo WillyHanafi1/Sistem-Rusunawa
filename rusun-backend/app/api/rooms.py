@@ -21,7 +21,6 @@ def list_rooms(
     skip: int = 0,
     limit: int = 1000,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
 ):
     query = select(Room)
     if rusunawa:
@@ -175,7 +174,6 @@ def update_bulk_price(
 def get_room(
     room_id: int,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
 ):
     room = session.get(Room, room_id)
     if not room:
