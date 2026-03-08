@@ -144,6 +144,7 @@ npm run install:all
 
 ### 2. Setup Environment
 
+**Backend (`rusun-backend/.env`)**:
 ```bash
 cd rusun-backend
 cp .env.example .env
@@ -154,8 +155,21 @@ Konfigurasi `.env`:
 ```env
 DATABASE_URL=postgresql://rusun_user:rusun_pass@localhost:54320/rusunawa
 JWT_SECRET=ganti-dengan-secret-key-yang-panjang-dan-acak
-XENDIT_SECRET_KEY=       # Opsional — untuk integrasi pembayaran
-XENDIT_WEBHOOK_TOKEN=    # Opsional — untuk verifikasi webhook
+MIDTRANS_IS_PRODUCTION=False         # True jika sudah live production
+MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx  # Server Key Sandbox/Production
+MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx  # Client Key Sandbox/Production
+```
+
+**Frontend (`rusun-frontend/.env.local`)**:
+```bash
+cd ../rusun-frontend
+cp .env.local.example .env.local
+```
+
+Konfigurasi `.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx
 ```
 
 ### 3. Jalankan Database (Docker)

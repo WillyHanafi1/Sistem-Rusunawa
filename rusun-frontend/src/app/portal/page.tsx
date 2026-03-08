@@ -1,9 +1,12 @@
 "use client";
 import { useEffect, useState } from "react";
+import Cookies from "js-cookie";
 import api from "@/lib/api";
 import { logout, getUserName } from "@/lib/auth";
-import { Building2, LogOut, FileText, Loader2, ExternalLink } from "lucide-react";
+import { initiatePayment } from "@/lib/payment";
+import { Building2, LogOut, FileText, Loader2, ExternalLink, CreditCard } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import PaymentFallbackModal from "@/components/PaymentFallbackModal";
 
 
 interface Invoice {
@@ -30,14 +33,52 @@ export default function PortalPage() {
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState<string>("Penghuni");
     const [mounted, setMounted] = useState(false);
+    const [payingId, setPayingId] = useState<number | null>(null);
+    const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+
+    const loadInvoices = () => {
+        setLoading(true);
+        api.get("/invoices/").then(res => setInvoices(res.data)).finally(() => setLoading(false));
+    };
 
     useEffect(() => {
         setMounted(true);
         const userName = getUserName();
         if (userName) setName(userName);
 
-        api.get("/invoices/").then(res => setInvoices(res.data)).finally(() => setLoading(false));
+        loadInvoices();
     }, []);
+
+    const handlePay = async (invoiceId: number) => {
+        setPayingId(invoiceId);
+        try {
+            await initiatePayment(
+                invoiceId, 
+                {
+                    onSuccess: function () {
+                        loadInvoices();
+                        setPayingId(null);
+                    },
+                    onPending: function () {
+                        loadInvoices();
+                        setPayingId(null);
+                    },
+                    onError: function () {
+                        alert("Pembayaran gagal. Silakan coba lagi.");
+                        setPayingId(null);
+                    },
+                    onClose: function () {
+                        setPayingId(null);
+                    }
+                },
+                { setFallbackUrl }
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : "Gagal memulai pembayaran.";
+            alert(msg);
+            setPayingId(null);
+        }
+    };
 
     const unpaid = invoices.filter(i => i.status === "unpaid");
     const totalUnpaid = unpaid.reduce((sum, i) => sum + Number(i.total_amount), 0);
@@ -98,14 +139,23 @@ export default function PortalPage() {
                                     </div>
                                     <div className="text-right space-y-3">
                                         <span className={`inline-block px-3 py-1 rounded-full text-xs border font-medium ${STATUS_BADGE[inv.status] || ""}`}>
-                                            {STATUS_LABEL[inv.status] || inv.status}
+                                            {STATUS_LABEL[inv.status] || (inv.status === 'cancelled' ? 'Dibatalkan' : inv.status)}
                                         </span>
-                                        {inv.status === "unpaid" && inv.payment_url && (
+                                        {(inv.status === "unpaid" || inv.status === "overdue") && (
                                             <div>
-                                                <a href={inv.payment_url} target="_blank"
-                                                    className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-xs font-medium transition-all">
-                                                    <ExternalLink className="w-3 h-3" /> Bayar Sekarang
-                                                </a>
+                                                <button 
+                                                    onClick={() => handlePay(inv.id)}
+                                                    disabled={payingId === inv.id}
+                                                    className={`flex items-center gap-1.5 text-white px-4 py-2 rounded-xl text-xs font-medium transition-all ${
+                                                        payingId === inv.id ? "bg-slate-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"
+                                                    }`}
+                                                >
+                                                    {payingId === inv.id ? (
+                                                        <><Loader2 className="w-3 h-3 animate-spin"/> Membuka...</>
+                                                    ) : (
+                                                        <><ExternalLink className="w-3 h-3" /> Bayar Sekarang</>
+                                                    )}
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -115,6 +165,14 @@ export default function PortalPage() {
                     </div>
                 )}
             </div>
+
+            {/* Fallback payment modal (when Snap.js not loaded) */}
+            {fallbackUrl && (
+                <PaymentFallbackModal
+                    url={fallbackUrl}
+                    onClose={() => { setFallbackUrl(null); setPayingId(null); }}
+                />
+            )}
         </div>
     );
 }

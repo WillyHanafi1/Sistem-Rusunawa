@@ -1,6 +1,10 @@
 "use client";
 
-import { X, CheckCircle2, AlertCircle, Clock, Ban, CreditCard, Wallet, Droplets, Zap, Car, ReceiptText } from "lucide-react";
+import { useState } from "react";
+import Cookies from "js-cookie";
+import { X, CheckCircle2, AlertCircle, Clock, Ban, CreditCard, Wallet, Car, ReceiptText } from "lucide-react";
+import { initiatePayment } from "@/lib/payment";
+import PaymentFallbackModal from "@/components/PaymentFallbackModal";
 
 const MONTHS_LONG = [
     "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -28,7 +32,10 @@ interface Props {
     tenantName?: string;
     roomNumber?: string;
     onClose: () => void;
+    onPaymentSuccess?: () => void;
 }
+
+
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; bg: string; text: string; border: string }> = {
     paid: {
@@ -73,10 +80,45 @@ const BreakdownRow = ({ icon, label, value }: { icon: React.ReactNode; label: st
     </div>
 );
 
-export default function InvoiceMonthDrawer({ invoice, tenantName, roomNumber, onClose }: Props) {
+export default function InvoiceMonthDrawer({ invoice, tenantName, roomNumber, onClose, onPaymentSuccess }: Props) {
+    const [isLoadingPayment, setIsLoadingPayment] = useState(false);
+    const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+    
     if (!invoice) return null;
 
     const cfg = STATUS_CONFIG[invoice.status];
+
+    const handlePay = async () => {
+        setIsLoadingPayment(true);
+        try {
+            await initiatePayment(
+                invoice.id, 
+                {
+                    onSuccess: function () {
+                        if (onPaymentSuccess) onPaymentSuccess();
+                        onClose();
+                    },
+                    onPending: function () {
+                        if (onPaymentSuccess) onPaymentSuccess();
+                        onClose();
+                    },
+                    onError: function () {
+                        alert("Pembayaran gagal. Silakan coba lagi.");
+                        setIsLoadingPayment(false);
+                    },
+                    onClose: function () {
+                        // User menutup popup sebelum selesai bayar
+                        setIsLoadingPayment(false);
+                    }
+                },
+                { setFallbackUrl }
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : "Gagal memulai pembayaran.";
+            alert(msg);
+            setIsLoadingPayment(false);
+        }
+    };
 
     return (
         <>
@@ -162,30 +204,32 @@ export default function InvoiceMonthDrawer({ invoice, tenantName, roomNumber, on
                         </div>
                     </div>
 
-                    {/* Payment Section — Midtrans Placeholder */}
+                    {/* Payment Section — Midtrans Integration */}
                     {(invoice.status === "unpaid" || invoice.status === "overdue") && (
                         <div className="space-y-3">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Cara Pembayaran</p>
 
-                            {invoice.payment_url ? (
-                                <a
-                                    href={invoice.payment_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center justify-center gap-2 w-full bg-blue-600 hover:bg-blue-500 text-white py-3.5 px-5 rounded-2xl font-bold text-sm transition-all shadow-lg shadow-blue-500/20"
-                                >
-                                    <CreditCard className="w-4.5 h-4.5" />
-                                    Bayar Sekarang
-                                </a>
-                            ) : (
-                                <div className="bg-slate-50 dark:bg-slate-800/50 border border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center space-y-2">
-                                    <CreditCard className="w-8 h-8 text-slate-300 dark:text-slate-600 mx-auto" />
-                                    <p className="text-sm font-semibold text-slate-400">Payment Gateway</p>
-                                    <p className="text-xs text-slate-400 leading-relaxed">
-                                        Integrasi Midtrans (VA, QRIS, E-Wallet) <br />akan tersedia segera.
-                                    </p>
-                                </div>
-                            )}
+                            <button
+                                onClick={handlePay}
+                                disabled={isLoadingPayment}
+                                className={`flex items-center justify-center gap-2 w-full text-white py-3.5 px-5 rounded-2xl font-bold text-sm transition-all shadow-lg ${
+                                    isLoadingPayment 
+                                    ? "bg-slate-400 cursor-not-allowed shadow-none" 
+                                    : "bg-blue-600 hover:bg-blue-500 shadow-blue-500/20"
+                                }`}
+                            >
+                                {isLoadingPayment ? (
+                                    <>
+                                        <div className="w-4.5 h-4.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Membuka Pembayaran...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CreditCard className="w-4.5 h-4.5" />
+                                        Bayar Sekarang
+                                    </>
+                                )}
+                            </button>
                         </div>
                     )}
 
@@ -203,6 +247,14 @@ export default function InvoiceMonthDrawer({ invoice, tenantName, roomNumber, on
                     <p className="text-center text-xs text-slate-400">Invoice #{invoice.id} · Dibuat otomatis oleh Sistem Rusunawa</p>
                 </div>
             </div>
+
+            {/* Fallback payment modal (when Snap.js not loaded) */}
+            {fallbackUrl && (
+                <PaymentFallbackModal
+                    url={fallbackUrl}
+                    onClose={() => { setFallbackUrl(null); setIsLoadingPayment(false); }}
+                />
+            )}
         </>
     );
 }

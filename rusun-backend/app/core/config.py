@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 480
     XENDIT_SECRET_KEY: str = ""
     XENDIT_WEBHOOK_TOKEN: str = ""
+    MIDTRANS_SERVER_KEY: str = ""
+    MIDTRANS_CLIENT_KEY: str = ""
+    MIDTRANS_IS_PRODUCTION: bool = False
     ALLOWED_ORIGINS: str = ""
 
     class Config:

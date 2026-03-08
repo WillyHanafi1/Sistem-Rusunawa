@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from enum import Enum
 from decimal import Decimal
 
@@ -21,7 +21,7 @@ class InvoiceBase(SQLModel):
     base_rent: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     water_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     electricity_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
-    parking_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)  # motor × 30rb
+    parking_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     other_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     total_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     due_date: date
@@ -34,9 +34,10 @@ class Invoice(InvoiceBase, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     payment_url: Optional[str] = None
     payment_id: Optional[str] = None
-    xendit_invoice_id: Optional[str] = None
+    midtrans_order_id: Optional[str] = None  # renamed dari xendit_invoice_id
     paid_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    # ✅ timezone-aware, tidak deprecated
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class InvoiceCreate(SQLModel):
@@ -48,7 +49,6 @@ class InvoiceCreate(SQLModel):
     other_charge: Decimal = Decimal("0")
     due_date: date
     notes: Optional[str] = None
-    # parking_charge tidak perlu diisi manual — auto dari motor_count penghuni
 
 
 class InvoiceMassGenerate(SQLModel):
@@ -61,8 +61,10 @@ class InvoiceMassGenerate(SQLModel):
 
 class InvoiceRead(InvoiceBase):
     id: int
-    payment_url: Optional[str]
-    paid_at: Optional[datetime]
+    payment_url: Optional[str] = None
+    payment_id: Optional[str] = None        # ✅ wajib ada — dipakai frontend untuk window.snap.pay()
+    midtrans_order_id: Optional[str] = None # ✅ berguna untuk debugging
+    paid_at: Optional[datetime] = None
     created_at: datetime
 
 
@@ -70,7 +72,7 @@ class InvoiceUpdate(SQLModel):
     status: Optional[InvoiceStatus] = None
     payment_url: Optional[str] = None
     payment_id: Optional[str] = None
-    xendit_invoice_id: Optional[str] = None
+    midtrans_order_id: Optional[str] = None
 
 
 class InvoiceReadWithRoom(InvoiceRead):
@@ -84,4 +86,3 @@ class InvoiceReadWithRoom(InvoiceRead):
     contract_end: date
     paid_at: Optional[datetime] = None
     notes: Optional[str] = None
-

@@ -590,13 +590,13 @@ export default function ContractRoomPage() {
                 </div>
             )}
 
-            {/* Invoice Month Drawer */}
             {selectedInvoice && (
                 <InvoiceMonthDrawer
                     invoice={selectedInvoice.invoice}
                     tenantName={selectedInvoice.tenantName}
                     roomNumber={selectedInvoice.roomNumber}
                     onClose={() => setSelectedInvoice(null)}
+                    onPaymentSuccess={() => fetchInvoicesForYear(filterYear)}
                 />
             )}
 

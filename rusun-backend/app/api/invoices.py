@@ -8,6 +8,9 @@ from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdat
 from app.models.tenant import Tenant
 from app.models.room import Room
 from app.models.user import User, UserRole
+from app.core.config import settings
+import midtransclient
+from datetime import datetime
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -171,6 +174,8 @@ def get_invoice(
         tenant = session.get(Tenant, invoice.tenant_id)
         if not tenant or tenant.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Akses ditolak")
+    elif current_user.role not in [UserRole.admin, UserRole.sadmin]:
+        raise HTTPException(status_code=403, detail="Akses ditolak")
     return invoice
 
 
@@ -250,3 +255,71 @@ def update_invoice(
     session.commit()
     session.refresh(invoice)
     return invoice
+
+
+@router.post("/{invoice_id}/pay", response_model=InvoiceRead)
+def pay_invoice_midtrans(
+    invoice_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate Midtrans payment link/token on demand saat user klik 'Bayar'.
+    """
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+        
+    if current_user.role == UserRole.penghuni:
+        tenant = session.get(Tenant, invoice.tenant_id)
+        if not tenant or tenant.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Akses ditolak")
+
+    if invoice.status == InvoiceStatus.paid:
+        raise HTTPException(status_code=400, detail="Tagihan sudah lunas")
+
+    # Jika sudah punya payment_url dan status unpaid, kembalikan saja URL lama agar tidak generate ulang di Midtrans
+    if invoice.payment_url and invoice.payment_id:
+        return invoice
+
+    tenant = session.get(Tenant, invoice.tenant_id)
+    user = session.get(User, tenant.user_id) if tenant else None
+
+    snap = midtransclient.Snap(
+        is_production=settings.MIDTRANS_IS_PRODUCTION,
+        server_key=settings.MIDTRANS_SERVER_KEY,
+        client_key=settings.MIDTRANS_CLIENT_KEY
+    )
+
+    # Tambahkan timestamp di order_id supaya unik untuk setiap percobaan generate
+    order_id = f"INV-{invoice.id}-{int(datetime.utcnow().timestamp())}"
+    
+    param = {
+        "transaction_details": {
+            "order_id": order_id,
+            "gross_amount": int(invoice.total_amount)
+        },
+        "customer_details": {
+            "first_name": user.name if user else "Penghuni",
+            "email": user.email if user else "penghuni@rusunawa.local",
+            "phone": user.phone if user else ""
+        }
+    }
+
+    try:
+        # Panggil API Midtrans untuk mendapatkan Snap Token & URL Iframe
+        transaction = snap.create_transaction(param)
+        
+        # Simpan kembali Response Midtrans ke Database Anda
+        invoice.payment_url = transaction['redirect_url']
+        invoice.payment_id = transaction['token']
+        # Simpan order_id asli kita mempermudah debugging webhook Midtrans
+        invoice.midtrans_order_id = order_id
+        
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+        
+        return invoice
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal generate pembayaran Midtrans: {str(e)}")
