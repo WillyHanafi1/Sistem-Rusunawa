@@ -59,6 +59,8 @@ class InvoiceMassGenerate(SQLModel):
     notes: Optional[str] = None
 
 
+from pydantic import model_validator
+
 class InvoiceRead(InvoiceBase):
     id: int
     payment_url: Optional[str] = None
@@ -67,6 +69,16 @@ class InvoiceRead(InvoiceBase):
     paid_at: Optional[datetime] = None
     created_at: datetime
 
+    @model_validator(mode="after")
+    def calculate_overdue(self) -> "InvoiceRead":
+        if self.status == InvoiceStatus.unpaid:
+            # Jika status unpaid tapi ternyata ada paid_at, anggap lunas (safety check)
+            if self.paid_at:
+                self.status = InvoiceStatus.paid
+            # Jika memang belum bayar dan sudah lewat tenggat, set overdue
+            elif self.due_date and self.due_date < date.today():
+                self.status = InvoiceStatus.overdue
+        return self
 
 class InvoiceUpdate(SQLModel):
     status: Optional[InvoiceStatus] = None
@@ -84,5 +96,3 @@ class InvoiceReadWithRoom(InvoiceRead):
     tenant_name: str
     contract_start: date
     contract_end: date
-    paid_at: Optional[datetime] = None
-    notes: Optional[str] = None
