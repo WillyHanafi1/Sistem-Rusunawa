@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, Field
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, date
 from app.models.room import RusunawaSite
 
 class ApplicationStatus(str, Enum):
@@ -22,6 +22,24 @@ class ApplicationBase(SQLModel):
     ktp_file_path: Optional[str] = None
     other_file_path: Optional[str] = None
     notes: Optional[str] = None
+    
+    # Profile / Bio Data (Added for Interview)
+    place_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    religion: Optional[str] = None
+    marital_status: Optional[str] = None # e.g., Kawin, Belum Kawin, Cerai
+    occupation: Optional[str] = None
+    previous_address: Optional[str] = None
+    
+    # Document Metadata
+    sk_number: Optional[str] = None
+    sk_date: Optional[date] = None
+    ps_number: Optional[str] = None
+    ps_date: Optional[date] = None
+    sip_number: Optional[str] = None
+    sip_date: Optional[date] = None
+    entry_time: Optional[str] = None # e.g. "10:00"
+    
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Application(ApplicationBase, table=True):
@@ -36,6 +54,14 @@ class ApplicationCreate(SQLModel):
     rusunawa_target: RusunawaSite
     family_members_count: int = 1
     notes: Optional[str] = None
+    
+    # New Bio Fields
+    place_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    religion: Optional[str] = None
+    marital_status: Optional[str] = None
+    occupation: Optional[str] = None
+    previous_address: Optional[str] = None
 
 class ApplicationRead(ApplicationBase):
     id: int
@@ -49,3 +75,20 @@ class ApplicationUpdate(SQLModel):
     family_members_count: Optional[int] = Field(default=None, ge=1)
     status: Optional[ApplicationStatus] = None
     notes: Optional[str] = None
+    
+    # Bio Updates
+    place_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    religion: Optional[str] = None
+    marital_status: Optional[str] = None
+    occupation: Optional[str] = None
+    previous_address: Optional[str] = None
+    
+    # Doc Updates
+    sk_number: Optional[str] = None
+    sk_date: Optional[date] = None
+    ps_number: Optional[str] = None
+    ps_date: Optional[date] = None
+    sip_number: Optional[str] = None
+    sip_date: Optional[date] = None
+    entry_time: Optional[str] = None

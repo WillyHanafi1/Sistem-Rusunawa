@@ -18,5 +18,17 @@ jobs:
           script: |
             cd /opt/rusunawa
             git pull origin master
+            
+            # 1. Ensure DB is up and create compressed backup
+            docker compose -f docker-compose.prod.yml up -d db
+            mkdir -p backups
+            docker exec rusunawa_db pg_dump -U rusun_user rusunawa | gzip > backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz
+            # Keep only last 5 backups
+            ls -dt backups/* | tail -n +6 | xargs -d '\n' rm -f -- 2>/dev/null || true
+            
+            # 2. Build and migrate
             docker compose -f docker-compose.prod.yml build
+            docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
+            
+            # 3. Deploy
             docker compose -f docker-compose.prod.yml up -d

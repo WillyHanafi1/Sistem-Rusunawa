@@ -85,7 +85,7 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
             disabled={!isClickable}
             onClick={() => isClickable && onClick(invoice!)}
             title={disabled ? `Sebelum masa kontrak` : invoice ? `${MONTHS_SHORT[month - 1]} ${year} — ${invoice.status}` : `${MONTHS_SHORT[month - 1]} ${year} — Belum di-generate`}
-            className={`w-7 h-7 flex-shrink-0 rounded-md border-2 flex items-center justify-center font-bold text-[10px] transition-all duration-150 select-none ${cellStyle}`}
+            className={`w-6 h-6 flex-shrink-0 rounded-md border-2 flex items-center justify-center font-bold text-[9px] transition-all duration-150 select-none ${cellStyle}`}
         >
             {month}
         </button>
@@ -313,13 +313,14 @@ export default function ContractRoomPage() {
                 const r = info.row.original;
                 if (r.contract_start && r.contract_end) {
                     return (
-                        <div className="flex flex-col gap-0.5 text-[11px] text-slate-600 dark:text-slate-300 min-w-[100px]">
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        <div className="flex items-center gap-1.5 text-[12px] text-slate-600 dark:text-slate-300 min-w-[170px] whitespace-nowrap">
+                            <div className="flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                                 {new Date(r.contract_start).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: '2-digit' })}
                             </div>
-                            <div className="flex items-center gap-1.5 font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                            <span className="text-slate-400 mx-0.5">-</span>
+                            <div className="flex items-center gap-1 font-medium">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
                                 {new Date(r.contract_end).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: '2-digit' })}
                             </div>
                         </div>
@@ -361,7 +362,7 @@ export default function ContractRoomPage() {
                     {/* Month labels */}
                     <div className="flex gap-1">
                         {MONTHS_SHORT.map(m => (
-                            <div key={m} className="w-7 flex-shrink-0 text-center text-[9px] font-bold text-slate-400 uppercase">{m}</div>
+                            <div key={m} className="w-6 flex-shrink-0 text-center text-[9px] font-bold text-slate-400 uppercase">{m}</div>
                         ))}
                     </div>
                 </div>
@@ -372,7 +373,7 @@ export default function ContractRoomPage() {
                     return (
                         <div className="flex items-center gap-1">
                             {Array.from({ length: 12 }, (_, i) => (
-                                <div key={i} className="w-7 h-7 flex-shrink-0 rounded-md border-2 border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-900" />
+                                <div key={i} className="w-6 h-6 flex-shrink-0 rounded-md border-2 border-slate-100 dark:border-slate-800/60 bg-slate-50 dark:bg-slate-900" />
                             ))}
                         </div>
                     );
@@ -574,7 +575,7 @@ export default function ContractRoomPage() {
                                         {row.getVisibleCells().map(cell => {
                                             const tight = ['building', 'floor', 'unit_number', 'status', 'actions'].includes(cell.column.id);
                                             return (
-                                                <td key={cell.id} className={`py-2 align-middle border-r border-slate-100 dark:border-white/5 last:border-r-0 ${tight ? 'px-1' : 'px-4'}`}>
+                                                <td key={cell.id} className={`py-1 align-middle border-r border-slate-100 dark:border-white/5 last:border-r-0 ${tight ? 'px-1' : 'px-4'}`}>
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </td>
                                             );

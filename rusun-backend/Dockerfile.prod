@@ -1,0 +1,48 @@
+# --- Stage 1: Builder ---
+FROM python:3.11-slim as builder
+
+WORKDIR /app
+
+# Prevent Python from writing .pyc files and enable unbuffered logging
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies and create wheels
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+
+# --- Stage 2: Runtime ---
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only runtime dependencies (libpq for PostgreSQL)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy wheels from builder and install them
+COPY --from=builder /app/wheels /wheels
+COPY --from=builder /app/requirements.txt .
+RUN pip install --no-cache-dir /wheels/*
+
+# Copy project files
+COPY . .
+
+# Expose port
+EXPOSE 8000
+
+# Run as non-root user for security
+# RUN addgroup --system app && adduser --system --group app
+# USER app
+
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

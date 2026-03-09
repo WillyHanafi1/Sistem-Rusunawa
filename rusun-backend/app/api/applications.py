@@ -6,6 +6,7 @@ from app.core.security import require_admin, get_current_user
 from app.models.application import Application, ApplicationCreate, ApplicationRead, ApplicationUpdate, ApplicationStatus
 from app.models.user import User, UserRole
 from app.models.tenant import Tenant
+from app.models.family_member import FamilyMember, FamilyMemberCreate
 from app.core.security import hash_password
 import os
 import shutil
@@ -157,6 +158,26 @@ class InterviewDecision(BaseModel):
     motor_count: int = 0
     status: ApplicationStatus = ApplicationStatus.contract_created
     notes: Optional[str] = None
+    
+    # Bio Data
+    place_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    religion: Optional[str] = None
+    marital_status: Optional[str] = None
+    occupation: Optional[str] = None
+    previous_address: Optional[str] = None
+    
+    # Family Members
+    family_members: Optional[List[FamilyMemberCreate]] = []
+    
+    # Document Metadata
+    sk_number: Optional[str] = None
+    sk_date: Optional[date] = None
+    ps_number: Optional[str] = None
+    ps_date: Optional[date] = None
+    sip_number: Optional[str] = None
+    sip_date: Optional[date] = None
+    entry_time: Optional[str] = None
 
 @router.post("/{app_id}/interview", response_model=ApplicationRead)
 def submit_interview(
@@ -173,80 +194,177 @@ def submit_interview(
     if not room or room.status != RoomStatus.kosong:
         raise HTTPException(status_code=400, detail="Kamar tidak ditemukan atau tidak kosong")
 
-    # Amankan status baru
-    application.status = decision.status
-    if decision.notes:
-        application.notes = decision.notes
+    try:
+        # Amankan status baru
+        application.status = decision.status
+        if decision.notes:
+            application.notes = decision.notes
 
-    if decision.status == ApplicationStatus.contract_created:
-        # Cek User
-        existing_user = session.exec(select(User).where(User.email == application.email)).first()
-        if not existing_user:
-            new_user = User(
-                email=application.email,
-                name=application.full_name,
-                password_hash=hash_password(application.nik),
-                phone=application.phone_number,
-                role=UserRole.penghuni,
-                is_active=True
-            )
-            session.add(new_user)
-            session.commit()
-            session.refresh(new_user)
-            user_id = new_user.id
-        else:
-            user_id = existing_user.id
+        if decision.status == ApplicationStatus.contract_created:
+            # Update Application Bio & Doc Numbers
+            application.place_of_birth = decision.place_of_birth
+            application.date_of_birth = decision.date_of_birth
+            application.religion = decision.religion
+            application.marital_status = decision.marital_status
+            application.occupation = decision.occupation
+            application.previous_address = decision.previous_address
             
-        # Cek Tenant aktif
-        active_tenant = session.exec(
-            select(Tenant).where(Tenant.user_id == user_id).where(Tenant.is_active == True)
-        ).first()
-        if active_tenant:
-            raise HTTPException(status_code=400, detail="User ini sudah menjadi penghuni aktif.")
+            application.sk_number = decision.sk_number
+            application.sk_date = decision.sk_date
+            application.ps_number = decision.ps_number
+            application.ps_date = decision.ps_date
+            application.sip_number = decision.sip_number
+            application.sip_date = decision.sip_date
+            application.entry_time = decision.entry_time
+            
+            session.add(application)
+            
+            # Save Family Members for Application
+            if decision.family_members:
+                for fm_in in decision.family_members:
+                    fm = FamilyMember.model_validate(fm_in)
+                    fm.application_id = application.id
+                    session.add(fm)
+            
+            # Flush to ensure application changes are ready (though ID exists)
+            session.flush()
 
-        # Buat Tenant
-        new_tenant = Tenant(
-            user_id=user_id,
-            room_id=room.id,
-            is_active=True,
-            contract_start=decision.contract_start,
-            contract_end=decision.contract_end,
-            deposit_amount=decision.deposit_amount,
-            motor_count=decision.motor_count
-        )
-        session.add(new_tenant)
-        
-        # Update Kamar
-        room.status = RoomStatus.isi
-        session.add(room)
+            # Cek User
+            existing_user = session.exec(select(User).where(User.email == application.email)).first()
+            if not existing_user:
+                new_user = User(
+                    email=application.email,
+                    name=application.full_name,
+                    password_hash=hash_password(application.nik),
+                    phone=application.phone_number,
+                    role=UserRole.penghuni,
+                    is_active=True
+                )
+                session.add(new_user)
+                session.flush() # Get new_user.id
+                user_id = new_user.id
+            else:
+                user_id = existing_user.id
+                
+            # Cek Tenant aktif
+            active_tenant = session.exec(
+                select(Tenant).where(Tenant.user_id == user_id).where(Tenant.is_active == True)
+            ).first()
+            if active_tenant:
+                raise HTTPException(status_code=400, detail="User ini sudah menjadi penghuni aktif.")
 
-        # Generate 4 Dokumen (Pengajuan, BA Wawancara, SIP, Kontrak)
-        doc_context = {
-            "nama_penyewa": application.full_name,
-            "nik": application.nik,
-            "telepon": application.phone_number,
-            "email": application.email,
-            "rusunawa": application.rusunawa_target,
-            "nomor_kamar": room.room_number,
-            "lantai": room.floor,
-            "harga_sewa": f"Rp {room.price:,.2f}",
-            "deposit": f"Rp {decision.deposit_amount:,.2f}",
-            "tanggal_mulai": decision.contract_start.strftime("%d-%m-%Y"),
-            "tanggal_selesai": decision.contract_end.strftime("%d-%m-%Y"),
-            "jumlah_motor": decision.motor_count,
-            "tanggal_wawancara": datetime.now().strftime("%d-%m-%Y")
-        }
-        
-        bundle = DocumentService.generate_bundle(doc_context, application.nik)
-        
-        # Simpan informasi bundle di catatan tenant
-        doc_links = "\n".join([f"{k.upper()}: {v}" for k, v in bundle.items()])
-        new_tenant.notes = f"Dokumen Bundle:\n{doc_links}"
-    
-    session.add(application)
-    session.commit()
-    session.refresh(application)
-    return application
+            # Buat Tenant
+            new_tenant = Tenant(
+                user_id=user_id,
+                room_id=room.id,
+                is_active=True,
+                contract_start=decision.contract_start,
+                contract_end=decision.contract_end,
+                deposit_amount=decision.deposit_amount,
+                motor_count=decision.motor_count,
+                # Bio Data to Tenant
+                place_of_birth = decision.place_of_birth,
+                date_of_birth = decision.date_of_birth,
+                religion = decision.religion,
+                marital_status = decision.marital_status,
+                occupation = decision.occupation,
+                previous_address = decision.previous_address
+            )
+            session.add(new_tenant)
+            session.flush() # Get new_tenant.id
+            
+            # Link Family Members to Tenant
+            if decision.family_members:
+                for fm_in in decision.family_members:
+                    fm_tenant = FamilyMember.model_validate(fm_in)
+                    fm_tenant.tenant_id = new_tenant.id
+                    session.add(fm_tenant)
+            
+            # Update Kamar
+            room.status = RoomStatus.isi
+            session.add(room)
+
+            # Generate 4 Dokumen
+            family_list = []
+            if decision.family_members:
+                for idx, fm in enumerate(decision.family_members, 1):
+                    family_list.append({
+                        "no": idx,
+                        "nama": fm.name,
+                        "umur": fm.age,
+                        "lp": fm.gender,
+                        "agama": fm.religion,
+                        "status": fm.marital_status,
+                        "hub": fm.relation,
+                        "pekerjaan": fm.occupation
+                    })
+
+            # Indonesian Day/Month names
+            DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
+            MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+            now = datetime.now()
+            
+            doc_context = {
+                "nama_penyewa": application.full_name,
+                "nik": application.nik,
+                "telepon": application.phone_number,
+                "email": application.email,
+                "rusunawa": application.rusunawa_target,
+                "nomor_kamar": room.room_number,
+                "lantai": room.floor,
+                "gedung": room.building,
+                "unit": room.unit_number,
+                "harga_sewa": f"Rp {room.price:,.2f}",
+                "deposit": f"Rp {decision.deposit_amount:,.2f}",
+                "tanggal_mulai": decision.contract_start.strftime("%d-%m-%Y"),
+                "tanggal_selesai": decision.contract_end.strftime("%d-%m-%Y"),
+                "jumlah_motor": decision.motor_count,
+                "tanggal_wawancara": now.strftime("%d-%m-%Y"),
+                "hari": DAYS[now.weekday()],
+                "tanggal_indo": f"{now.day} {MONTHS[now.month-1]} {now.year}",
+                "bulan_indo": MONTHS[now.month-1],
+                "tahun": now.year,
+                
+                # Bio Data
+                "tempat_lahir": decision.place_of_birth,
+                "tgl_lahir": decision.date_of_birth.strftime("%d-%m-%Y") if decision.date_of_birth else "",
+                "agama": decision.religion,
+                "status_kawin": decision.marital_status,
+                "pekerjaan": decision.occupation,
+                "alamat_asal": decision.previous_address,
+                
+                # Documents metadata
+                "sk_nomor": decision.sk_number,
+                "sk_tanggal": decision.sk_date.strftime("%d-%m-%Y") if decision.sk_date else "",
+                "ps_nomor": decision.ps_number,
+                "ps_tanggal": decision.ps_date.strftime("%d-%m-%Y") if decision.ps_date else "",
+                "sip_nomor": decision.sip_number,
+                "sip_tanggal": decision.sip_date.strftime("%d-%m-%Y") if decision.sip_date else "",
+                "jam_masuk": decision.entry_time,
+                
+                # Family List
+                "keluarga": family_list,
+                "jumlah_keluarga": len(family_list)
+            }
+            
+            bundle = DocumentService.generate_bundle(doc_context, application.nik)
+            
+            # Simpan informasi bundle di catatan tenant
+            doc_links = "\n".join([f"{k.upper()}: {v}" for k, v in bundle.items()])
+            new_tenant.notes = f"Dokumen Bundle:\n{doc_links}"
+            application.notes = f"INTERVIEW_SUCCESS|{doc_links}"
+
+        session.add(application)
+        session.commit()
+        session.refresh(application)
+        return application
+
+    except HTTPException:
+        session.rollback()
+        raise
+    except Exception as e:
+        session.rollback()
+        raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses wawancara: {str(e)}")
 
 @router.delete("/{app_id}", status_code=204)
 def delete_application(

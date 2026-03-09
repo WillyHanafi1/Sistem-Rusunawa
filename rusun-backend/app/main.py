@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applications, management
 from app.models.application import Application
 from app.models.staff import Staff
+from app.models.family_member import FamilyMember
 
 
 @asynccontextmanager
