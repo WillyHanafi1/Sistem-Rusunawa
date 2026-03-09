@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 from app.core.db import create_db_and_tables
+from app.core.config import settings
 from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applications, management
 from app.models.application import Application
 from app.models.staff import Staff
@@ -33,7 +34,7 @@ _default_origins = [
     "http://localhost:3001",
     "http://localhost:8000",
 ]
-_env_origins = os.getenv("ALLOWED_ORIGINS", "")
+_env_origins = settings.ALLOWED_ORIGINS
 allow_origins = (
     [origin.strip() for origin in _env_origins.split(",") if origin.strip()]
     if _env_origins
