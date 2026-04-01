@@ -4,4 +4,18 @@ __pycache__/
 .env
 *.pyc
 venv/
+.venv/
 .DS_Store
+
+# Data & Configs lokal
+*.xlsx
+*.csv
+openapi.json
+
+# Log & Temp
+*.log
+backend_logs.txt
+tmp_*.md
+
+# Editor
+.vscode/
