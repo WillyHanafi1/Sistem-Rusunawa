@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session, select
 from app.core.db import get_session
@@ -13,6 +13,7 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 
 @router.post("/login")
 def login(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ):
@@ -26,7 +27,29 @@ def login(
         raise HTTPException(status_code=400, detail="Akun tidak aktif")
 
     token = create_access_token({"sub": str(user.id), "role": user.role})
-    return {"access_token": token, "token_type": "bearer", "role": user.role, "name": user.name}
+    
+    # Set HttpOnly Cookie
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=(settings.ENVIRONMENT == "production"), # Always True in Production
+        samesite="lax",
+        max_age=60 * 60 * 24 * 7, # 1 minggu
+    )
+
+    return {
+        "access_token": token, 
+        "token_type": "bearer", 
+        "role": user.role, 
+        "name": user.name
+    }
+
+
+@router.post("/logout")
+def logout(response: Response):
+    response.delete_cookie(key="access_token")
+    return {"message": "Berhasil logout"}
 
 
 @router.get("/me", response_model=UserRead)

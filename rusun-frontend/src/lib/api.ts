@@ -7,16 +7,10 @@ const BASE_URL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true, // WAJIB untuk mengirim HttpOnly Cookies secara otomatis
 });
 
-// Attach token to every request
-api.interceptors.request.use((config) => {
-  const token = Cookies.get("access_token");
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Tidak lagi memerlukan penyuntikan token manual karena browser menanganinya via Cookie
 
 api.interceptors.response.use(
   (res) => res,

@@ -18,13 +18,20 @@ export async function login(email: string, password: string): Promise<LoginRespo
     });
 
     const data = res.data;
-    Cookies.set("access_token", data.access_token, { expires: 1, sameSite: "Lax", path: '/' });
+    // access_token sudah diset otomatis oleh browser via HttpOnly Cookie (dari header Set-Cookie)
+    // Kita hapus setelan manual di sini agar tidak ada duplikasi di client-side cookie yang tidak aman
     Cookies.set("user_role", data.role, { expires: 1, sameSite: "Lax", path: '/' });
     Cookies.set("user_name", data.name, { expires: 1, sameSite: "Lax", path: '/' });
     return data;
 }
 
-export function logout() {
+export async function logout() {
+    try {
+        await api.post("/auth/logout");
+    } catch (e) {
+        console.error("Logout error", e);
+    }
+
     // Sapu bersih semua kemungkinan cookie di berbagai path
     const paths = ['/', '/admin', '/portal', '/login'];
     paths.forEach(path => {
@@ -50,5 +57,7 @@ export function getUserName(): string | undefined {
 }
 
 export function isLoggedIn(): boolean {
-    return !!Cookies.get("access_token");
+    // Karena access_token sekarang HttpOnly, kita tidak bisa mengeceknya dari JS.
+    // Kita gunakan user_role sebagai indikator login sederhana untuk UI.
+    return !!Cookies.get("user_role");
 }

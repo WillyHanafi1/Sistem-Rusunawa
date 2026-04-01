@@ -4,7 +4,7 @@ from functools import lru_cache
 
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://rusun_user:rusun_pass@localhost:5432/rusunawa"
-    JWT_SECRET: str = "changeme-secret"
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 480
     XENDIT_SECRET_KEY: str = ""
@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     MIDTRANS_CLIENT_KEY: str = ""
     MIDTRANS_IS_PRODUCTION: bool = False
     ALLOWED_ORIGINS: str = ""
+    ENVIRONMENT: str = "production" # "development" or "production"
     # Perwal 36/2017 Compliance Settings
     DEPOSIT_MULTIPLIER: int = 2
     MIN_CONTRACT_MONTHS: int = 6

@@ -12,6 +12,7 @@ import os
 import shutil
 from datetime import datetime
 import uuid
+import re
 
 # Base direktori untuk menyimpan file upload
 UPLOAD_DIR = "uploads"
@@ -66,12 +67,47 @@ async def create_application(
             detail=f"Pengajuan dengan NIK '{nik}' masih dalam status TUNDA dan sedang kami proses."
         )
 
-    # Helper to save files
+    # Security: Validate NIK (Must be 16 digits)
+    if not re.match(r"^\d{16}$", nik):
+        raise HTTPException(status_code=400, detail="NIK tidak valid. Harus 16 digit angka.")
+
+    # Helper to save files (Sanitized)
     def save_file(file: UploadFile, prefix: str):
-        ext = file.filename.split(".")[-1] if file.filename else "jpg"
+        # 1. Validate File Extension (Strict whitelist)
+        allowed_extensions = {"jpg", "jpeg", "png", "pdf"}
+        filename = file.filename or ""
+        ext = filename.split(".")[-1].lower() if "." in filename else "jpg"
+        
+        if ext not in allowed_extensions:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Tipe file '.{ext}' tidak diizinkan. Gunakan JPG, PNG, atau PDF."
+            )
+
+        # 2. Basic Content Type Validation (Signature/Magic Bytes)
+        # Reading first 2048 bytes to check signature
+        content = file.file.read(2048)
+        file.file.seek(0) # Reset file pointer for saving
+        
+        # Simple signature checks
+        is_pdf = content.startswith(b"%PDF")
+        is_png = content.startswith(b"\x89PNG")
+        is_jpg = content.startswith(b"\xff\xd8")
+        
+        if ext == "pdf" and not is_pdf:
+            raise HTTPException(status_code=400, detail="File PDF tidak valid (Header mismatch)")
+        if ext in ["jpg", "jpeg", "png"] and not (is_png or is_jpg):
+            raise HTTPException(status_code=400, detail="File gambar tidak valid (Header mismatch)")
+
+        # 3. Generate secure name (Ignore user-provided filename completely)
         u_id = uuid.uuid4().hex[:8]
-        u_name = f"{prefix}_{nik}_{u_id}.{ext}"
+        # Clean prefix and NIK just in case (though NIK is validated already)
+        clean_prefix = re.sub(r'[^a-zA-Z0-9]', '', prefix)
+        u_name = f"{clean_prefix}_{nik}_{u_id}.{ext}"
+        
+        # 4. Secure path join
         path = os.path.join(UPLOAD_DIR, u_name)
+        
         with open(path, "wb") as buff:
             shutil.copyfileobj(file.file, buff)
         return path
@@ -122,11 +158,19 @@ def update_application_status(
         # Cek apakah Email sudah jadi User
         existing_user = session.exec(select(User).where(User.email == application.email)).first()
         if not existing_user:
-            # Buat akun User baru (Email = pengajuan email, Password default = NIK)
+            # Security Fix: Use a random generated password instead of NIK
+            import secrets
+            import string
+            temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
+            
+            # TODO: Send email to user with this temp_password
+            print(f"[SECURITY] Generated initial password for {application.email}: {temp_password}")
+            
+            # Buat akun User baru
             new_user = User(
                 email=application.email,
                 name=application.full_name,
-                password_hash=hash_password(application.nik),
+                password_hash=hash_password(temp_password),
                 phone=application.phone_number,
                 role=UserRole.penghuni,
                 is_active=True
@@ -286,10 +330,16 @@ def submit_interview(
             # Cek User
             existing_user = session.exec(select(User).where(User.email == application.email)).first()
             if not existing_user:
+                import secrets
+                import string
+                temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
+                
+                print(f"[SECURITY] Generated initial password for {application.email}: {temp_password}")
+
                 new_user = User(
                     email=application.email,
                     name=application.full_name,
-                    password_hash=hash_password(application.nik),
+                    password_hash=hash_password(temp_password),
                     phone=application.phone_number,
                     role=UserRole.penghuni,
                     is_active=True

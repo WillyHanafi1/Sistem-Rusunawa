@@ -88,8 +88,8 @@ def update_ticket(
     if not ticket:
         raise HTTPException(status_code=404, detail="Keluhan tidak ditemukan")
     
-    # Only Admin can update status or other fields
-    if current_user.role != UserRole.admin:
+    # Only Admin or Super Admin can update status or other fields
+    if current_user.role not in [UserRole.admin, UserRole.sadmin]:
         raise HTTPException(status_code=403, detail="Akses ditolak")
 
     update_data = ticket_in.model_dump(exclude_unset=True)
