@@ -1,6 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
+from datetime import date
+from pydantic import BaseModel
+from app.core.config import settings
+
 from app.core.db import get_session
 from app.core.security import require_admin, require_super_admin, get_current_user
 from app.models.tenant import Tenant, TenantCreate, TenantRead, TenantUpdate
@@ -105,6 +109,41 @@ def update_tenant(
         if room:
             room.status = RoomStatus.kosong
             session.add(room)
+
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+    return tenant
+
+
+class RenewRequest(BaseModel):
+    new_end_date: date
+    notes: Optional[str] = None
+
+@router.post("/{tenant_id}/renew", response_model=TenantRead)
+def renew_contract(
+    tenant_id: int,
+    req: RenewRequest,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    tenant = session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Data penghuni tidak ditemukan")
+    if not tenant.is_active:
+        raise HTTPException(status_code=400, detail="Tidak dapat memperpanjang kontrak penghuni yang tidak aktif")
+
+    # Validasi bulan
+    months_diff = (req.new_end_date.year - tenant.contract_end.year) * 12 + req.new_end_date.month - tenant.contract_end.month
+    if months_diff <= 0:
+        raise HTTPException(status_code=400, detail="Tanggal perpanjangan harus lebih lama dari tanggal habis kontrak saat ini")
+    if months_diff > settings.MAX_RENEWAL_MONTHS:
+        raise HTTPException(status_code=400, detail=f"Perpanjangan maksimal adalah {settings.MAX_RENEWAL_MONTHS} bulan")
+
+    tenant.contract_end = req.new_end_date
+    tenant.renewal_count += 1
+    if req.notes:
+        tenant.notes = f"{tenant.notes}\n[Perpanjangan {tenant.renewal_count}]: {req.notes}" if tenant.notes else f"[Perpanjangan {tenant.renewal_count}]: {req.notes}"
 
     session.add(tenant)
     session.commit()

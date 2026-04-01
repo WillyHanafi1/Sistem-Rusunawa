@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/api";
-import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
+import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle } from "lucide-react";
+import { format, addMonths } from "date-fns";
 import {
   createColumnHelper,
   flexRender,
@@ -29,6 +30,7 @@ interface Room {
     total_unpaid_bill?: number;
     tenant_id?: number | null;
     notes?: string | null;
+    renewal_count?: number;
 }
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -116,6 +118,14 @@ export default function ContractRoomPage() {
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
     const [showImportModal, setShowImportModal] = useState(false);
     const [isMounted, setIsMounted] = useState(false);
+    
+    // Renew Logic
+    const [renewModalOpen, setRenewModalOpen] = useState(false);
+    const [selectedRoomForRenew, setSelectedRoomForRenew] = useState<Room | null>(null);
+    const [newEndDate, setNewEndDate] = useState("");
+    const [renewNotes, setRenewNotes] = useState("");
+    const [renewLoading, setRenewLoading] = useState(false);
+
     const userRole = getRole();
 
     useEffect(() => {
@@ -193,6 +203,35 @@ export default function ContractRoomPage() {
             window.open(url, '_blank');
         } else {
             alert("File kontrak tidak ditemukan.");
+        }
+    };
+
+    const handleOpenRenew = (room: Room) => {
+        setSelectedRoomForRenew(room);
+        if (room.contract_end) {
+            setNewEndDate(format(addMonths(new Date(room.contract_end), 12), "yyyy-MM-dd"));
+        } else {
+            setNewEndDate(format(addMonths(new Date(), 12), "yyyy-MM-dd"));
+        }
+        setRenewNotes("");
+        setRenewModalOpen(true);
+    };
+
+    const handleRenewSubmit = async () => {
+        if (!selectedRoomForRenew?.tenant_id) return;
+        setRenewLoading(true);
+        try {
+            await api.post(`/tenants/${selectedRoomForRenew.tenant_id}/renew`, {
+                new_end_date: newEndDate,
+                notes: renewNotes
+            });
+            setRenewModalOpen(false);
+            fetchRooms();
+        } catch (err: any) {
+            const msg = err.response?.data?.detail || "Gagal memperpanjang kontrak.";
+            alert(msg);
+        } finally {
+            setRenewLoading(false);
         }
     };
 
@@ -313,16 +352,23 @@ export default function ContractRoomPage() {
                 const r = info.row.original;
                 if (r.contract_start && r.contract_end) {
                     return (
-                        <div className="flex items-center gap-1.5 text-[12px] text-slate-600 dark:text-slate-300 min-w-[170px] whitespace-nowrap">
-                            <div className="flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                                {new Date(r.contract_start).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: '2-digit' })}
+                        <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-1.5 text-[12px] text-slate-600 dark:text-slate-300 min-w-[170px] whitespace-nowrap">
+                                <div className="flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                                    {new Date(r.contract_start).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: '2-digit' })}
+                                </div>
+                                <span className="text-slate-400 mx-0.5">-</span>
+                                <div className="flex items-center gap-1 font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
+                                    {new Date(r.contract_end).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: '2-digit' })}
+                                </div>
                             </div>
-                            <span className="text-slate-400 mx-0.5">-</span>
-                            <div className="flex items-center gap-1 font-medium">
-                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></span>
-                                {new Date(r.contract_end).toLocaleDateString("id-ID", { day: '2-digit', month: 'short', year: '2-digit' })}
-                            </div>
+                            {r.renewal_count && r.renewal_count > 0 ? (
+                                <span className="text-[10px] text-blue-500 font-bold italic ml-3">
+                                    (Perpanjangan ke-{r.renewal_count})
+                                </span>
+                            ) : null}
                         </div>
                     );
                 }
@@ -463,6 +509,13 @@ export default function ContractRoomPage() {
                                     <Download className="w-4 h-4" />
                                 </button>
                                 <button
+                                    onClick={() => handleOpenRenew(r)}
+                                    className="p-1.5 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-transparent hover:border-emerald-200 rounded-lg transition-all"
+                                    title="Perpanjang Kontrak"
+                                >
+                                    <PlusCircle className="w-4 h-4" />
+                                </button>
+                                <button
                                     onClick={() => r.tenant_id && handleDeactivate(r.tenant_id)}
                                     className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-transparent hover:border-red-200 rounded-lg transition-all"
                                     title="Akhiri Sewa"
@@ -499,7 +552,7 @@ export default function ContractRoomPage() {
                 </div>
                 <div className="flex items-center gap-3 px-5 py-3 bg-blue-50/50 dark:bg-blue-500/5 text-blue-700 dark:text-blue-400 rounded-2xl border border-blue-100 dark:border-blue-500/10 shadow-sm backdrop-blur-sm">
                     <Home className="w-5 h-5 text-blue-500" />
-                    <span className="font-bold text-base">{rooms.filter(r => r.status === 'isi').length}</span>
+                    <span className="font-bold text-base">{rooms.filter((r: Room) => r.status === 'isi').length}</span>
                     <span className="text-slate-400 mx-1">/</span>
                     <span className="text-slate-500 dark:text-slate-400 text-sm">{rooms.length} Unit Terisi</span>
                 </div>
@@ -521,7 +574,7 @@ export default function ContractRoomPage() {
                     { label: "Terisi", value: "isi" },
                     { label: "Kosong", value: "kosong" },
                     { label: "Rusak", value: "rusak" },
-                ].map(opt => (
+                ].map((opt: { label: string; value: string }) => (
                     <button
                         key={opt.value}
                         onClick={() => setFilterStatus(opt.value)}
@@ -607,6 +660,111 @@ export default function ContractRoomPage() {
                     onSuccess={fetchRooms}
                 />
             )}
+
+            {/* Renew Modal */}
+            <RenewModal
+                isOpen={renewModalOpen}
+                room={selectedRoomForRenew}
+                newEndDate={newEndDate}
+                notes={renewNotes}
+                loading={renewLoading}
+                onClose={() => setRenewModalOpen(false)}
+                onNewEndDateChange={setNewEndDate}
+                onNotesChange={setRenewNotes}
+                onSubmit={handleRenewSubmit}
+            />
+        </div>
+    );
+}
+
+interface RenewModalProps {
+    isOpen: boolean;
+    room: Room | null;
+    newEndDate: string;
+    notes: string;
+    loading: boolean;
+    onClose: () => void;
+    onNewEndDateChange: (val: string) => void;
+    onNotesChange: (val: string) => void;
+    onSubmit: () => Promise<void>;
+}
+
+function RenewModal({ isOpen, room, newEndDate, notes, loading, onClose, onNewEndDateChange, onNotesChange, onSubmit }: RenewModalProps) {
+    if (!isOpen || !room) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-white/20">
+                <div className="p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-500/20 flex items-center justify-center">
+                            <PlusCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Perpanjang Kontrak</h2>
+                            <p className="text-xs text-slate-500">Kamar {room.room_number} — {room.tenant_name}</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded-2xl">
+                            <div className="flex items-start gap-3">
+                                <AlertCircle className="w-4 h-4 text-amber-600 mt-0.5" />
+                                <div className="text-xs text-amber-800 dark:text-amber-300">
+                                    <p className="font-bold mb-1 underline">Ketentuan Perwal:</p>
+                                    <p>Setiap kali perpanjangan maksimal **12 bulan**. Tanggal berakhir baru tidak boleh kurang dari kontrak saat ini.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tanggal Berakhir Kontrak Saat Ini</label>
+                            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-white/5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400">
+                                {room.contract_end ? new Date(room.contract_end).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric" }) : "—"}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tanggal Berakhir Baru</label>
+                            <input
+                                type="date"
+                                value={newEndDate}
+                                onChange={(e) => onNewEndDateChange(e.target.value)}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Catatan Perpanjangan</label>
+                            <textarea
+                                value={notes}
+                                onChange={(e) => onNotesChange(e.target.value)}
+                                placeholder="Alasan perpanjangan atau detail tambahan..."
+                                rows={2}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-8">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 px-6 py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 rounded-2xl font-bold transition-all"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            disabled={loading || !newEndDate}
+                            onClick={onSubmit}
+                            className="flex-[2] px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white rounded-2xl font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
+                            Simpan Perpanjangan
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

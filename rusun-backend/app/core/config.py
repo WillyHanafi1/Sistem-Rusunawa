@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     MIDTRANS_CLIENT_KEY: str = ""
     MIDTRANS_IS_PRODUCTION: bool = False
     ALLOWED_ORIGINS: str = ""
+    # Perwal 36/2017 Compliance Settings
+    DEPOSIT_MULTIPLIER: int = 2
+    MIN_CONTRACT_MONTHS: int = 6
+    MAX_CONTRACT_MONTHS: int = 24
+    MAX_RENEWAL_MONTHS: int = 12
 
     class Config:
         env_file = ".env"

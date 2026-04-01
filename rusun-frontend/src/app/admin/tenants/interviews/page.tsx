@@ -126,7 +126,7 @@ export default function InterviewsPage() {
         if (selectedRoomId) {
             const room = rooms.find(r => r.id === Number(selectedRoomId));
             if (room) {
-                setDepositAmount(room.price * 3);
+                setDepositAmount(room.price * 2);
             }
         }
     }, [selectedRoomId, rooms]);
@@ -138,7 +138,7 @@ export default function InterviewsPage() {
         // Reset form
         setSelectedRoomId("");
         setContractStart(format(new Date(), "yyyy-MM-dd"));
-        setContractEnd(format(addYears(new Date(), 2), "yyyy-MM-dd")); // Default 2 years
+        setContractEnd(format(addYears(new Date(), 1), "yyyy-MM-dd")); // Default 1 year (Perwal allows 6-24 months)
         setDepositAmount(0);
         setMotorCount(0);
         setNotes("");

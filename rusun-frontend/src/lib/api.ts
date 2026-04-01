@@ -18,13 +18,24 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-redirect on 401
 api.interceptors.response.use(
   (res) => res,
   (err) => {
+    // Jika 401 Unauthorized, artinya sesi habis atau token salah
     if (err.response?.status === 401 && typeof window !== "undefined") {
+      // Sapu bersih semua kemungkinan cookie di berbagai path
+      const paths = ['/', '/admin', '/portal', '/login'];
+      paths.forEach(path => {
+        Cookies.remove("access_token", { path });
+        Cookies.remove("user_role", { path });
+        Cookies.remove("user_name", { path });
+      });
+      
+      // Fallback tanpa path
       Cookies.remove("access_token");
       Cookies.remove("user_role");
+      Cookies.remove("user_name");
+
       window.location.href = "/login";
     }
     return Promise.reject(err);

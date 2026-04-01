@@ -8,18 +8,21 @@ export function proxy(request: NextRequest) {
 
     const isAuthPage = pathname.startsWith("/login");
     const isAdminPage = pathname.startsWith("/admin");
-    const isPortalPage = pathname.startsWith("/portal");
 
-    if (!token && !isAuthPage) {
+    // 1. Halaman login selalu bisa diakses siapa saja.
+    //    Jika user sudah login, login page sendiri yang handle redirect (client-side).
+    //    Ini mencegah infinite loop antara middleware dan client-side auth check.
+    if (isAuthPage) {
+        return NextResponse.next();
+    }
+
+    // 2. Proteksi route: jika tidak ada token, tendang ke login
+    if (!token) {
         return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    if (token && isAuthPage) {
-        if (role === "admin" || role === "sadmin") return NextResponse.redirect(new URL("/admin", request.url));
-        return NextResponse.redirect(new URL("/portal", request.url));
-    }
-
-    if (token && isAdminPage && role !== "admin" && role !== "sadmin") {
+    // 3. Proteksi admin: hanya admin/sadmin yang boleh akses /admin
+    if (isAdminPage && role !== "admin" && role !== "sadmin") {
         return NextResponse.redirect(new URL("/portal", request.url));
     }
 

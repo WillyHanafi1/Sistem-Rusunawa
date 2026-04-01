@@ -194,6 +194,24 @@ def submit_interview(
     if not room or room.status != RoomStatus.kosong:
         raise HTTPException(status_code=400, detail="Kamar tidak ditemukan atau tidak kosong")
 
+    from app.core.config import settings
+
+    # Validasi Deposit 2x Sewa (Perwal)
+    expected_deposit = room.price * settings.DEPOSIT_MULTIPLIER
+    if decision.deposit_amount < expected_deposit:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Uang jaminan sewa minimal {settings.DEPOSIT_MULTIPLIER} bulan sewa (Rp {expected_deposit:,.0f})"
+        )
+
+    # Validasi Durasi Kontrak 6-24 bulan (Perwal)
+    months_diff = (decision.contract_end.year - decision.contract_start.year) * 12 + decision.contract_end.month - decision.contract_start.month
+    if months_diff < settings.MIN_CONTRACT_MONTHS or months_diff > settings.MAX_CONTRACT_MONTHS:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Durasi kontrak harus antara {settings.MIN_CONTRACT_MONTHS} hingga {settings.MAX_CONTRACT_MONTHS} bulan"
+        )
+
     try:
         # Amankan status baru
         application.status = decision.status

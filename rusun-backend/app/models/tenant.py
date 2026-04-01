@@ -12,6 +12,7 @@ class TenantBase(SQLModel):
     motor_count: int = Field(default=0, ge=0, le=4)
     notes: Optional[str] = None
     is_active: bool = True
+    renewal_count: int = Field(default=0)
 
     # Profile / Bio Data
     place_of_birth: Optional[str] = None

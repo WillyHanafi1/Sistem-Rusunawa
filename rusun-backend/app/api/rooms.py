@@ -42,6 +42,7 @@ class RoomExtendedRead(RoomRead):
     parking_price: Decimal = Decimal("0")
     total_unpaid_bill: Decimal = Decimal("0")
     notes: Optional[str] = None
+    renewal_count: int = 0
 
 
 @router.get("/extended/all", response_model=List[RoomExtendedRead])
@@ -113,6 +114,7 @@ def get_extended_rooms(
             data["contract_start"] = tenant.contract_start
             data["contract_end"] = tenant.contract_end
             data["notes"] = tenant.notes
+            data["renewal_count"] = tenant.renewal_count
             
             # Parking: motor_count * 30,000
             data["parking_price"] = Decimal(str(tenant.motor_count * 30000))

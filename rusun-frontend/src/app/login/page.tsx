@@ -1,7 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { login, getRole } from "@/lib/auth";
+import { login, getRole, isLoggedIn } from "@/lib/auth";
 import { Building2, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -11,6 +11,21 @@ export default function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [checking, setChecking] = useState(true);
+
+    // Client-side: jika sudah login, redirect ke portal/admin
+    useEffect(() => {
+        if (isLoggedIn()) {
+            const role = getRole();
+            if (role === "admin" || role === "sadmin") {
+                router.replace("/admin");
+            } else {
+                router.replace("/portal");
+            }
+        } else {
+            setChecking(false);
+        }
+    }, [router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,6 +44,15 @@ export default function LoginPage() {
             setLoading(false);
         }
     };
+
+    // Jangan tampilkan form saat sedang cek status login
+    if (checking) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-blue-950 dark:to-slate-900 flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-100 via-blue-50 to-slate-100 dark:from-slate-900 dark:via-blue-950 dark:to-slate-900 flex items-center justify-center p-4 transition-colors duration-300">

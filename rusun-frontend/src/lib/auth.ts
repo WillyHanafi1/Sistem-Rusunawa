@@ -18,16 +18,26 @@ export async function login(email: string, password: string): Promise<LoginRespo
     });
 
     const data = res.data;
-    Cookies.set("access_token", data.access_token, { expires: 1, sameSite: "Lax" });
-    Cookies.set("user_role", data.role, { expires: 1, sameSite: "Lax" });
-    Cookies.set("user_name", data.name, { expires: 1, sameSite: "Lax" });
+    Cookies.set("access_token", data.access_token, { expires: 1, sameSite: "Lax", path: '/' });
+    Cookies.set("user_role", data.role, { expires: 1, sameSite: "Lax", path: '/' });
+    Cookies.set("user_name", data.name, { expires: 1, sameSite: "Lax", path: '/' });
     return data;
 }
 
 export function logout() {
+    // Sapu bersih semua kemungkinan cookie di berbagai path
+    const paths = ['/', '/admin', '/portal', '/login'];
+    paths.forEach(path => {
+        Cookies.remove("access_token", { path });
+        Cookies.remove("user_role", { path });
+        Cookies.remove("user_name", { path });
+    });
+    
+    // Fallback tanpa path
     Cookies.remove("access_token");
     Cookies.remove("user_role");
     Cookies.remove("user_name");
+
     window.location.href = "/login";
 }
 

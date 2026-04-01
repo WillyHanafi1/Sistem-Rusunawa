@@ -364,6 +364,62 @@ Untuk deployment, gunakan `Dockerfile.prod` yang telah dioptimalkan:
 
 ---
 
+## Dasar Hukum & Kepatuhan Regulasi 📜
+
+Sistem ini dikembangkan mengacu pada **Peraturan Walikota (Perwal) Cimahi Nomor 36 Tahun 2017** tentang Tata Tertib, Tata Cara Penghunian, Retribusi, dan SOP Rusunawa — beserta **Perwal Cimahi Nomor 47 Tahun 2019** (perubahan tarif retribusi).
+
+### Ketentuan Utama Perwal
+
+| # | Aspek | Ketentuan |
+|---|-------|-----------|
+| 1 | **Sasaran** | Masyarakat Berpenghasilan Rendah (MBR), penghasilan 1–1.5× UMK |
+| 2 | **Syarat Pemohon** | WNI, belum punya rumah, KTP/KK/Surat Nikah/Bukti Penghasilan |
+| 3 | **Alur Masuk** | Pendaftaran → Evaluasi Berkas → Wawancara → Surat Persetujuan Kepala UPT |
+| 4 | **Biaya Masuk** | Sewa 1 bulan + uang jaminan 2 bulan sewa |
+| 5 | **Masa Hunian** | Min 6 bulan, maks 24 bulan + perpanjangan maks 12 bulan |
+| 6 | **Tagihan Bulanan** | Retribusi sewa + kebersihan + air bersih + listrik |
+| 7 | **Batas Bayar** | Tanggal 20 tiap bulan |
+| 8 | **Denda** | 2% per bulan keterlambatan |
+| 9 | **Sanksi** | Max 3 surat teguran (7 hari/teguran) → pemutusan sepihak |
+| 10 | **Akhir Kontrak** | Jaminan dikembalikan (dipotong tunggakan/kerusakan) |
+
+### Tarif Retribusi (Perwal 47/2019)
+
+| Lokasi | Tipe | Lt 1 | Lt 2 | Lt 3 | Lt 4 | Lt 5 |
+|--------|------|------|------|------|------|------|
+| **Cigugur Tengah** | 21 m² | 365rb | 350rb | 335rb | 320rb | — |
+| **Cibeureum A/B/C** | 24 m² | 400rb* | 400rb | 385rb | 370rb | 355rb |
+| **Cibeureum D** | 27 m² | 440rb* | 425rb | 410rb | 395rb | — |
+| **Leuwigajah** | 24 m² | 400rb* | 400rb | 385rb | 370rb | 355rb |
+
+> *\*Lantai 1: tarif difabel. Non-difabel +Rp15rb. Ruang komersial Lt 1 = Rp15.000/m²/bulan.*
+
+### Status Kepatuhan Sistem
+
+| Aspek | Status | Keterangan |
+|-------|--------|------------|
+| 3 lokasi Rusunawa | ✅ | `RusunawaSite` enum |
+| Tipe kamar (21/24/27 m²) | ✅ | `room_type` field |
+| Tarif per-lantai | ✅ | Seeder `PRICE_TABLE` |
+| Alur pengajuan & wawancara | ✅ | `Application` → interview → kontrak |
+| RBAC (sadmin/admin/penghuni) | ✅ | `UserRole` enum |
+| Komponen tagihan (sewa+air+listrik+parkir) | ✅ | `Invoice` model |
+| Manajemen pengurus UPTD | ✅ | `Staff` model (tier 1–3) |
+| Dokumen otomatis (4 template) | ✅ | `DocumentService` |
+| Validasi deposit 2× sewa | ⚠️ | Belum divalidasi otomatis |
+| Validasi durasi kontrak 6–24 bln | ⚠️ | Belum divalidasi otomatis |
+| Perpanjangan kontrak maks 12 bln | ❌ | Belum ada fitur |
+| Denda keterlambatan 2%/bulan | ❌ | Belum ada |
+| Mekanisme surat teguran (SP 1/2/3) | ❌ | Belum ada |
+| Komponen kebersihan terpisah | ⚠️ | Digabung `other_charge` |
+| Syarat dokumen lengkap (KK/Surat Nikah/dll) | ⚠️ | Baru KTP saja |
+| Unit difabel (tarif berbeda) | ❌ | Belum dibedakan |
+| Pengembalian uang jaminan | ❌ | Belum ada alur |
+
+> **Skor kepatuhan saat ini: ~50% (9/18 aspek)**. Fitur yang belum ada termasuk denda, surat teguran, dan perpanjangan kontrak — sebagian besar adalah fitur fase berikutnya.
+
+---
+
 ## Lessons Learned & Error Fixes
 
 ### 1. Wajib Rebuild Backend Setelah Perubahan Kode

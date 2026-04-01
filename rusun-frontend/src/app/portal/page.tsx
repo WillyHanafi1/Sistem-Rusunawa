@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Cookies from "js-cookie";
 import api from "@/lib/api";
-import { logout, getUserName } from "@/lib/auth";
+import { logout, getUserName, isLoggedIn } from "@/lib/auth";
 import { initiatePayment } from "@/lib/payment";
 import { Building2, LogOut, FileText, Loader2, ExternalLink, CreditCard } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -29,6 +30,7 @@ const STATUS_LABEL: Record<string, string> = { unpaid: "Belum Lunas", paid: "Lun
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
 export default function PortalPage() {
+    const router = useRouter();
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [loading, setLoading] = useState(true);
     const [name, setName] = useState<string>("Penghuni");
@@ -38,16 +40,31 @@ export default function PortalPage() {
 
     const loadInvoices = () => {
         setLoading(true);
-        api.get("/invoices/").then(res => setInvoices(res.data)).finally(() => setLoading(false));
+        api.get("/invoices/")
+            .then(res => setInvoices(res.data))
+            .catch(err => {
+                console.error("Gagal mengambil tagihan:", err);
+                if (err.response?.status === 401) {
+                    logout();
+                }
+            })
+            .finally(() => setLoading(false));
     };
 
     useEffect(() => {
         setMounted(true);
+        
+        // Pengecekan autentikasi - gunakan router.replace agar tidak bentrok dengan middleware
+        if (!isLoggedIn()) {
+            router.replace("/login");
+            return;
+        }
+
         const userName = getUserName();
         if (userName) setName(userName);
 
         loadInvoices();
-    }, []);
+    }, [router]);
 
     const handlePay = async (invoiceId: number) => {
         setPayingId(invoiceId);

@@ -47,50 +47,45 @@ export function Header() {
   };
 
   return (
-    <header 
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-        scrolled 
-          ? "bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 py-4 shadow-sm" 
-          : "bg-transparent py-6"
-      }`}
+    <header
+      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled
+        ? "bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 py-4 shadow-sm"
+        : "bg-transparent py-6"
+        }`}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
             <Building2 className="w-5 h-5 text-white" />
           </div>
-          <span className={`font-bold text-lg tracking-tight transition-colors ${
-            scrolled ? "text-slate-900 dark:text-white" : "text-white"
-          }`}>
+          <span className={`font-bold text-lg tracking-tight transition-colors ${scrolled ? "text-slate-900 dark:text-white" : "text-white"
+            }`}>
             UPTD Rusunawa Cimahi
           </span>
         </Link>
 
         <nav className="hidden lg:flex items-center gap-8">
-          <Link 
-            href={getNavLink("#tentang")} 
-            className={`text-sm font-medium transition-colors ${
-              scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
-            }`}
+          <Link
+            href={getNavLink("#tentang")}
+            className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
+              }`}
           >
             Tentang
           </Link>
-          <Link 
-            href={getNavLink("#fasilitas")} 
-            className={`text-sm font-medium transition-colors ${
-              scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
-            }`}
+          <Link
+            href={getNavLink("#fasilitas")}
+            className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
+              }`}
           >
             Fasilitas
           </Link>
-          
+
           {/* Dropdown Lokasi */}
           <div className="relative" ref={dropdownRef}>
-            <button 
+            <button
               onClick={() => setLokasiOpen(!lokasiOpen)}
-              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${
-                scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
-              }`}
+              className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
+                }`}
             >
               Lokasi <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${lokasiOpen ? "rotate-180" : ""}`} />
             </button>
@@ -121,11 +116,10 @@ export function Header() {
             </AnimatePresence>
           </div>
 
-          <Link 
-            href={getNavLink("#pengurus")} 
-            className={`text-sm font-medium transition-colors ${
-              scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
-            }`}
+          <Link
+            href={getNavLink("#pengurus")}
+            className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
+              }`}
           >
             Pengurus
           </Link>
@@ -133,16 +127,15 @@ export function Header() {
 
         <div className="flex items-center gap-4">
           <ThemeToggle />
-          <Link href="/login" className={`hidden md:block text-sm font-medium transition-colors ${
-            scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
-          }`}>
+          <Link href="/login" className={`hidden md:block text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
+            }`}>
             Masuk Portal
           </Link>
-          <Link 
-            href="/login" 
+          <Link
+            href="/#lokasi"
             className="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-full text-sm font-medium transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2 group"
           >
-            Daftar <span className="hidden sm:inline">Sekarang</span> 
+            Daftar <span className="hidden sm:inline">Rusunawa</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>

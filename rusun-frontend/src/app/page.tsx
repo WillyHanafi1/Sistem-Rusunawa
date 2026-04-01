@@ -367,9 +367,9 @@ export default function LandingPage() {
 
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Siap Menjadi Penghuni?</h2>
-          <p className="text-lg text-slate-400 mb-10">Daftarkan diri Anda sekarang atau masuk ke portal untuk melihat informasi pendaftaran dan persyaratannya.</p>
-          <Link href="/login" className="inline-flex bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-full font-bold transition-transform hover:scale-105 shadow-xl shadow-blue-500/25">
-            Daftar Akun Sekarang
+          <p className="text-lg text-slate-400 mb-10">Pilih lokasi hunian yang Anda inginkan dan ajukan permohonan pendaftaran langsung secara online melalui sistem kami.</p>
+          <Link href="/#lokasi" className="inline-flex bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-full font-bold transition-transform hover:scale-105 shadow-xl shadow-blue-500/25">
+            Lihat Tipe Hunian
           </Link>
         </div>
       </section>
