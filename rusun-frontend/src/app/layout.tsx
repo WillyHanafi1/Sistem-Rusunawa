@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Script from "next/script";
+import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
 const inter = Inter({
@@ -34,6 +35,7 @@ export default function RootLayout({
     <html lang="id" className={inter.variable} suppressHydrationWarning>
       <body className="antialiased font-sans bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-300 selection:bg-blue-500/30">
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+          <Toaster position="top-right" />
           {children}
         </ThemeProvider>
         

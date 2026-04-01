@@ -20,7 +20,10 @@ class ApplicationBase(SQLModel):
     family_members_count: int = Field(default=1, ge=1)
     status: ApplicationStatus = ApplicationStatus.pending
     ktp_file_path: Optional[str] = None
+    kk_file_path: Optional[str] = None
+    marriage_cert_file_path: Optional[str] = None
     other_file_path: Optional[str] = None
+    is_documents_verified: bool = Field(default=False)
     notes: Optional[str] = None
     
     # Profile / Bio Data (Added for Interview)
@@ -85,6 +88,7 @@ class ApplicationUpdate(SQLModel):
     previous_address: Optional[str] = None
     
     # Doc Updates
+    is_documents_verified: Optional[bool] = None
     sk_number: Optional[str] = None
     sk_date: Optional[date] = None
     ps_number: Optional[str] = None

@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
-from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom
+from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom
 from app.models.tenant import Tenant
 from app.models.room import Room
 from app.models.user import User, UserRole
@@ -138,9 +138,9 @@ def mass_generate_invoices(
                 parking_charge=parking_charge,
                 other_charge=other_charge_safe,
                 total_amount=total,
-                due_date=mass_in.due_date,
                 notes=mass_in.notes,
                 status=InvoiceStatus.unpaid,
+                document_type=DocumentType.skrd,
             )
             new_invoices.append(inv)
 
@@ -228,9 +228,9 @@ def generate_invoice(
         parking_charge=parking_charge,
         other_charge=invoice_in.other_charge,
         total_amount=total,
-        due_date=invoice_in.due_date,
         notes=invoice_in.notes,
         status=InvoiceStatus.unpaid,
+        document_type=DocumentType.skrd,
     )
     session.add(invoice)
     session.commit()

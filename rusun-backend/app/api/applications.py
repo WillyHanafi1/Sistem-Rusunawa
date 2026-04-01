@@ -47,7 +47,10 @@ async def create_application(
     email: str = Form(...),
     rusunawa_target: str = Form(...),
     family_members_count: int = Form(1),
+    marital_status: Optional[str] = Form(None),
     ktp_file: UploadFile = File(...),
+    kk_file: Optional[UploadFile] = File(None),
+    marriage_cert_file: Optional[UploadFile] = File(None),
     session: Session = Depends(get_session),
 ):
     # Cek apakah NIK ini sudah pernah daftar tapi masih pending
@@ -63,14 +66,19 @@ async def create_application(
             detail=f"Pengajuan dengan NIK '{nik}' masih dalam status TUNDA dan sedang kami proses."
         )
 
-    # Validasi dan simpan file KTP
-    extension = ktp_file.filename.split(".")[-1] if ktp_file.filename else "jpg"
-    unique_id = uuid.uuid4().hex[:8]
-    unique_filename = f"ktp_{nik}_{unique_id}.{extension}"
-    file_path = os.path.join(UPLOAD_DIR, unique_filename)
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(ktp_file.file, buffer)
+    # Helper to save files
+    def save_file(file: UploadFile, prefix: str):
+        ext = file.filename.split(".")[-1] if file.filename else "jpg"
+        u_id = uuid.uuid4().hex[:8]
+        u_name = f"{prefix}_{nik}_{u_id}.{ext}"
+        path = os.path.join(UPLOAD_DIR, u_name)
+        with open(path, "wb") as buff:
+            shutil.copyfileobj(file.file, buff)
+        return path
+
+    ktp_path = save_file(ktp_file, "ktp")
+    kk_path = save_file(kk_file, "kk") if kk_file else None
+    marriage_path = save_file(marriage_cert_file, "marriage") if marriage_cert_file else None
 
     application = Application(
         nik=nik,
@@ -79,7 +87,11 @@ async def create_application(
         email=email,
         rusunawa_target=rusunawa_target,
         family_members_count=family_members_count,
-        ktp_file_path=file_path
+        marital_status=marital_status,
+        ktp_file_path=ktp_path,
+        kk_file_path=kk_path,
+        marriage_cert_file_path=marriage_path,
+        is_documents_verified=False
     )
     
     session.add(application)
@@ -145,6 +157,23 @@ def update_application_status(
     return application
 
 
+@router.patch("/{app_id}/verify-all", response_model=ApplicationRead)
+def verify_all_documents(
+    app_id: int,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    application = session.get(Application, app_id)
+    if not application:
+        raise HTTPException(status_code=404, detail="Data pengajuan tidak ditemukan")
+    
+    application.is_documents_verified = True
+    session.add(application)
+    session.commit()
+    session.refresh(application)
+    return application
+
+
 from pydantic import BaseModel
 from datetime import date
 from app.models.room import Room, RoomStatus
@@ -189,6 +218,13 @@ def submit_interview(
     application = session.get(Application, app_id)
     if not application:
         raise HTTPException(status_code=404, detail="Data pengajuan tidak ditemukan")
+    
+    # Validasi Verifikasi Dokumen
+    if not application.is_documents_verified:
+        raise HTTPException(
+            status_code=400, 
+            detail="Dokumen pendaftaran belum diverifikasi oleh Admin. Silakan verifikasi dokumen terlebih dahulu."
+        )
     
     room = session.get(Room, decision.room_id)
     if not room or room.status != RoomStatus.kosong:

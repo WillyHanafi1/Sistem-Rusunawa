@@ -24,6 +24,9 @@ interface Invoice {
     status: string;
     payment_url?: string;
     paid_at?: string | null;
+    penalty_amount?: number;
+    document_type?: string;
+    document_status_updated_at?: string | null;
     // Enriched fields from backend
     room_number: string;
     rusunawa: string;
@@ -46,6 +49,22 @@ const STATUS_BADGE: Record<string, string> = {
 
 const STATUS_LABEL: Record<string, string> = {
     unpaid: "Belum Lunas", paid: "Lunas", overdue: "Jatuh Tempo", cancelled: "Dibatalkan"
+};
+
+const DOCUMENT_LABEL: Record<string, string> = {
+    skrd: "SKRD",
+    strd: "STRD (Denda)",
+    teguran1: "Teguran 1",
+    teguran2: "Teguran 2",
+    teguran3: "Teguran 3",
+};
+
+const DOCUMENT_BADGE: Record<string, string> = {
+    skrd: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    strd: "bg-red-500/10 text-red-600 border-red-500/20",
+    teguran1: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+    teguran2: "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    teguran3: "bg-red-700/10 text-red-700 border-red-700/20",
 };
 
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -161,8 +180,14 @@ export default function InvoicesPage() {
             cell: info => <span className="text-slate-600 dark:text-slate-300">Rp {Number(info.getValue()).toLocaleString("id-ID")}</span>,
         }),
         columnHelper.accessor('parking_charge', {
-            header: 'Parkir Motor',
+            header: 'Parkir',
             cell: info => <span className="text-slate-600 dark:text-slate-300">Rp {Number(info.getValue()).toLocaleString("id-ID")}</span>,
+        }),
+        columnHelper.accessor('penalty_amount', {
+            header: 'Denda (2%)',
+            cell: info => <span className={info.getValue() && Number(info.getValue()) > 0 ? "text-red-600 font-bold" : "text-slate-400"}>
+                {info.getValue() && Number(info.getValue()) > 0 ? `Rp ${Number(info.getValue()).toLocaleString("id-ID")}` : "-"}
+            </span>,
         }),
         columnHelper.accessor('total_amount', {
             header: 'Total Bayar',
@@ -171,9 +196,16 @@ export default function InvoicesPage() {
         columnHelper.accessor('status', {
             header: 'Status',
             cell: info => (
-                <span className={`px-2 py-0.5 rounded-full text-[10px] border font-bold uppercase tracking-wider ${STATUS_BADGE[info.getValue()]}`}>
-                    {STATUS_LABEL[info.getValue()]}
-                </span>
+                <div className="flex flex-col gap-1">
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] border font-bold uppercase text-center ${STATUS_BADGE[info.getValue()]}`}>
+                        {STATUS_LABEL[info.getValue()]}
+                    </span>
+                    {info.row.original.status === 'unpaid' && (
+                        <span className={`px-2 py-0.5 rounded-md text-[9px] border font-medium text-center ${DOCUMENT_BADGE[info.row.original.document_type || 'skrd']}`}>
+                            {DOCUMENT_LABEL[info.row.original.document_type || 'skrd']}
+                        </span>
+                    )}
+                </div>
             ),
         }),
         columnHelper.accessor('paid_at', {
@@ -225,6 +257,25 @@ export default function InvoicesPage() {
                             className="w-16 bg-transparent text-sm font-medium focus:outline-none px-2"
                         />
                     </div>
+
+                    <button 
+                        onClick={async () => {
+                            if(!confirm("Proses denda 2% dan naikkan status teguran untuk semua tagihan yang lewat jatuh tempo?")) return;
+                            try {
+                                setLoading(true);
+                                const res = await api.post("/tasks/process-overdue");
+                                alert(res.data.message);
+                                fetchAll();
+                            } catch (e: any) {
+                                alert(e.response?.data?.detail || "Gagal memproses denda");
+                            } finally {
+                                setLoading(false);
+                            }
+                        }}
+                        className="flex items-center gap-2 bg-amber-600 hover:bg-amber-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-amber-500/20 transition-all"
+                    >
+                        Proses Denda
+                    </button>
 
                     <button onClick={() => setModal(true)}
                         className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0">

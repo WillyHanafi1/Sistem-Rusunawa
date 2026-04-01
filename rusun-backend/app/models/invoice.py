@@ -14,6 +14,14 @@ class InvoiceStatus(str, Enum):
     cancelled = "cancelled"
 
 
+class DocumentType(str, Enum):
+    skrd = "skrd"
+    strd = "strd"
+    teguran1 = "teguran1"
+    teguran2 = "teguran2"
+    teguran3 = "teguran3"
+
+
 class InvoiceBase(SQLModel):
     tenant_id: int = Field(foreign_key="tenants.id")
     period_month: int  # 1-12
@@ -23,9 +31,12 @@ class InvoiceBase(SQLModel):
     electricity_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     parking_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     other_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
+    penalty_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     total_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     due_date: date
     status: InvoiceStatus = InvoiceStatus.unpaid
+    document_type: DocumentType = DocumentType.skrd
+    document_status_updated_at: Optional[datetime] = None
     notes: Optional[str] = None
 
 

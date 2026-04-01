@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     MIN_CONTRACT_MONTHS: int = 6
     MAX_CONTRACT_MONTHS: int = 24
     MAX_RENEWAL_MONTHS: int = 12
+    # Late Penalty & Warning Settings
+    PENALTY_RATE: float = 0.02
+    STRD_DAY: int = 21
+    WARNING_INTERVAL_DAYS: int = 7
 
     class Config:
         env_file = ".env"

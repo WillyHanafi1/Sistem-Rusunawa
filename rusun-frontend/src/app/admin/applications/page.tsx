@@ -15,8 +15,12 @@ interface Application {
     email: string;
     rusunawa_target: string;
     family_members_count: number;
+    marital_status: string | null;
     status: "pending" | "approved" | "rejected" | "interview" | "contract_created";
     ktp_file_path: string | null;
+    kk_file_path: string | null;
+    marriage_cert_file_path: string | null;
+    is_documents_verified: boolean;
     created_at: string;
 }
 
@@ -27,7 +31,10 @@ const EMPTY_FORM = {
     email: "",
     rusunawa_target: "Cigugur Tengah",
     family_members_count: 1,
-    ktp_file: null as File | null
+    marital_status: "Belum Kawin",
+    ktp_file: null as File | null,
+    kk_file: null as File | null,
+    marriage_cert_file: null as File | null
 };
 
 export default function ApplicationsPage() {
@@ -43,6 +50,10 @@ export default function ApplicationsPage() {
     const [form, setForm] = useState({ ...EMPTY_FORM });
     const [editingId, setEditingId] = useState<number | null>(null);
     const [formLoading, setFormLoading] = useState(false);
+
+    // Document Preview
+    const [viewingDocsApp, setViewingDocsApp] = useState<Application | null>(null);
+    const [verifying, setVerifying] = useState(false);
 
     const fetchApplications = async () => {
         try {
@@ -101,7 +112,10 @@ export default function ApplicationsPage() {
             email: app.email,
             rusunawa_target: app.rusunawa_target,
             family_members_count: app.family_members_count,
-            ktp_file: null
+            marital_status: app.marital_status || "Belum Kawin",
+            ktp_file: null,
+            kk_file: null,
+            marriage_cert_file: null
         });
         setEditingId(app.id);
         setModalMode("edit");
@@ -125,26 +139,16 @@ export default function ApplicationsPage() {
                 payload.append("email", form.email);
                 payload.append("rusunawa_target", form.rusunawa_target);
                 payload.append("family_members_count", form.family_members_count.toString());
+                payload.append("marital_status", form.marital_status);
                 payload.append("ktp_file", form.ktp_file);
+                if (form.kk_file) payload.append("kk_file", form.kk_file);
+                if (form.marriage_cert_file) payload.append("marriage_cert_file", form.marriage_cert_file);
 
                 await api.post("/applications/", payload, {
                     headers: { "Content-Type": "multipart/form-data" }
                 });
                 alert("Pengajuan berhasil ditambahkan.");
             } else if (modalMode === "edit" && editingId) {
-                // For edit, we use PATCH. 
-                // Currently API only supports updating status & notes directly, 
-                // BUT we need to update user data. We should check if the backend allows this,
-                // or we just send the updated fields.
-                // Assuming `/applications/{id}` via PATCH handles generic fields via ApplicationUpdate (if backend supports it).
-                
-                // Let's verify backend: Backend accepts ApplicationUpdate. In 'app/models/application.py':
-                // ApplicationUpdate contains status and notes. IT DOES NOT CONTAIN nik, full_name, etc.
-                // Oh! The backend doesn't support updating applicant data yet.
-                // We must update the API in the backend first to allow editing applicant details.
-                
-                // I will add the frontend request here, and fix the backend immediately after.
-                
                 const updatePayload: any = {
                     nik: form.nik,
                     full_name: form.full_name,
@@ -152,10 +156,9 @@ export default function ApplicationsPage() {
                     email: form.email,
                     rusunawa_target: form.rusunawa_target,
                     family_members_count: form.family_members_count,
+                    marital_status: form.marital_status
                 };
                 
-                // Handle file upload gracefully if selected during edit (if we add backend support later)
-                // For now, let's just patch the text data.
                 await api.patch(`/applications/${editingId}`, updatePayload);
                 alert("Pengajuan berhasil diperbarui.");
             }
@@ -186,15 +189,25 @@ export default function ApplicationsPage() {
         }
     };
 
-    const handleDownloadKtp = async (filePath: string) => {
-        try {
-            const safePath = filePath.replace(/\\/g, '/');
-            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${safePath}`;
-            window.open(url, '_blank');
-        } catch(e) {
-            console.error(e);
-        }
+    const handleDownloadFile = (filePath: string) => {
+        const safePath = filePath.replace(/\\/g, '/');
+        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${safePath}`;
+        window.open(url, '_blank');
     }
+
+    const handleVerifyAll = async (appId: number) => {
+        try {
+            setVerifying(true);
+            await api.patch(`/applications/${appId}/verify-all`);
+            setViewingDocsApp(null);
+            fetchApplications();
+            alert("Semua dokumen berhasil diverifikasi.");
+        } catch (error: any) {
+            alert(error.response?.data?.detail || "Gagal memverifikasi dokumen.");
+        } finally {
+            setVerifying(false);
+        }
+    };
 
     const filteredApps = apps.filter(app =>
         app.full_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -303,13 +316,23 @@ export default function ApplicationsPage() {
                                                 <div className="text-xs text-slate-500">{app.family_members_count} Anggota Keluarga</div>
                                             </td>
                                             <td className="px-6 py-4 text-center">
-                                                {app.ktp_file_path ? (
-                                                    <button onClick={() => handleDownloadKtp(app.ktp_file_path!)} className="inline-flex items-center justify-center p-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg transition-colors group" title="Unduh KTP">
-                                                        <Download className="w-4 h-4 group-hover:-translate-y-0.5 transition-transform" />
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <button 
+                                                        onClick={() => setViewingDocsApp(app)} 
+                                                        className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors group relative ${app.is_documents_verified ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`} 
+                                                        title="Lihat Berkas"
+                                                    >
+                                                        <FileText className="w-4 h-4" />
+                                                        {app.is_documents_verified && (
+                                                            <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-0.5">
+                                                                <CheckCircle2 className="w-2.5 h-2.5" />
+                                                            </div>
+                                                        )}
                                                     </button>
-                                                ): (
-                                                    <span className="text-xs text-slate-400 italic">Tidak ada</span>
-                                                )}
+                                                    <span className={`text-[10px] font-bold uppercase ${app.is_documents_verified ? 'text-green-600' : 'text-slate-400'}`}>
+                                                        {app.is_documents_verified ? 'Verified' : 'Unverified'}
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex items-center justify-end gap-2 flex-wrap">
@@ -427,19 +450,52 @@ export default function ApplicationsPage() {
                                         className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" 
                                     />
                                 </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Status Pernikahan</label>
+                                    <select 
+                                        value={form.marital_status} onChange={e => setForm({...form, marital_status: e.target.value})} 
+                                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                                    >
+                                        <option value="Belum Kawin">Belum Kawin</option>
+                                        <option value="Kawin">Kawin</option>
+                                        <option value="Cerai Hidup">Cerai Hidup</option>
+                                        <option value="Cerai Mati">Cerai Mati</option>
+                                    </select>
+                                </div>
                             </div>
                             
-                            {modalMode === 'create' && (
-                                <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-5">
-                                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Unggah KTP / Pasfoto <span className="text-red-500">*</span></label>
-                                    <input required type="file" accept=".jpg,.jpeg,.png" onChange={e => {
-                                        if (e.target.files && e.target.files.length > 0) {
-                                            setForm({...form, ktp_file: e.target.files[0]});
-                                        }
-                                    }} className="w-full file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
-                                    <p className="text-xs text-slate-500 mt-1">Hanya file gambar JPG/PNG, ukuran maksimal 2MB.</p>
+                            <div className="space-y-4 border-t border-slate-100 dark:border-slate-800 pt-5">
+                                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Unggah Berkas</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">File KTP {modalMode === 'create' && <span className="text-red-500">*</span>}</label>
+                                        <input required={modalMode === 'create'} type="file" accept=".jpg,.jpeg,.png" onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setForm({...form, ktp_file: e.target.files[0]});
+                                            }
+                                        }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">File Kartu Keluarga</label>
+                                        <input type="file" accept=".jpg,.jpeg,.png" onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setForm({...form, kk_file: e.target.files[0]});
+                                            }
+                                        }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                    </div>
+                                    {form.marital_status === "Kawin" && (
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-semibold text-slate-500 uppercase">File Surat Nikah</label>
+                                            <input type="file" accept=".jpg,.jpeg,.png" onChange={e => {
+                                                if (e.target.files && e.target.files.length > 0) {
+                                                    setForm({...form, marriage_cert_file: e.target.files[0]});
+                                                }
+                                            }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                        </div>
+                                    )}
                                 </div>
-                            )}
+                                <p className="text-[10px] text-slate-400">Hanya file gambar JPG/PNG, ukuran maksimal 2MB per file.</p>
+                            </div>
 
                             <div className="flex gap-3 justify-end pt-5 border-t border-slate-100 dark:border-slate-800">
                                 <button type="button" onClick={() => setModalMode(null)} className="px-5 py-2.5 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 hover:dark:bg-slate-700 rounded-xl text-sm font-bold transition-all">
@@ -451,6 +507,120 @@ export default function ApplicationsPage() {
                             </div>
                         </form>
                     </div>
+                </div>
+            )}
+
+            {/* Document Verification Modal */}
+            {viewingDocsApp && (
+                <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[110] p-4 overflow-y-auto">
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-5xl shadow-2xl my-auto overflow-hidden"
+                    >
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+                            <div>
+                                <h2 className="text-xl text-slate-900 dark:text-white font-bold">Preview Dokumen</h2>
+                                <p className="text-sm text-slate-500">{viewingDocsApp.full_name} ({viewingDocsApp.nik})</p>
+                            </div>
+                            <button onClick={() => setViewingDocsApp(null)} className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-2 bg-white dark:bg-slate-800 rounded-full transition-colors border border-slate-200 dark:border-slate-700 shadow-sm"><X className="w-5 h-5" /></button>
+                        </div>
+
+                        <div className="p-8">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                {/* KTP */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">1</div>
+                                        KTP / Identitas
+                                    </h3>
+                                    {viewingDocsApp.ktp_file_path ? (
+                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${viewingDocsApp.ktp_file_path}`} 
+                                                alt="KTP" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.ktp_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/2] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic">Belum diunggah</div>
+                                    )}
+                                </div>
+
+                                {/* KK */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">2</div>
+                                        Kartu Keluarga (KK)
+                                    </h3>
+                                    {viewingDocsApp.kk_file_path ? (
+                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${viewingDocsApp.kk_file_path}`} 
+                                                alt="KK" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.kk_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/2] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic">Belum diunggah</div>
+                                    )}
+                                </div>
+
+                                {/* Surat Nikah */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">3</div>
+                                        Surat Nikah (Opsional)
+                                    </h3>
+                                    {viewingDocsApp.marriage_cert_file_path ? (
+                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${viewingDocsApp.marriage_cert_file_path}`} 
+                                                alt="Surat Nikah" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.marriage_cert_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/2] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic">
+                                            {viewingDocsApp.marital_status === "Kawin" ? "Wajib diunggah" : "Tidak diperlukan"}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="mt-12 flex flex-col items-center justify-center p-8 bg-blue-50 dark:bg-blue-900/20 rounded-3xl border border-blue-100 dark:border-blue-800 gap-4">
+                                <div className="text-center">
+                                    <h4 className="text-blue-900 dark:text-blue-300 font-bold text-lg">Konfirmasi Verifikasi</h4>
+                                    <p className="text-blue-700/70 dark:text-blue-400/70 text-sm">Dengan menekan tombol di bawah, Anda menyatakan bahwa semua dokumen fisik/digital di atas telah sesuai dengan aslinya.</p>
+                                </div>
+                                
+                                {viewingDocsApp.is_documents_verified ? (
+                                    <div className="flex items-center gap-2 text-green-600 font-bold px-6 py-3 bg-green-100 rounded-2xl border border-green-200">
+                                        <CheckCircle2 className="w-5 h-5" />
+                                        DOKUMEN TELAH DIVERIFIKASI
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => handleVerifyAll(viewingDocsApp.id)}
+                                        disabled={verifying}
+                                        className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-bold flex items-center gap-3 transition-all shadow-xl shadow-blue-500/30 hover:-translate-y-1 active:scale-95 disabled:opacity-50"
+                                    >
+                                        {verifying ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                                        VERIFIKASI SEMUA DOKUMEN SEKARANG
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </motion.div>
                 </div>
             )}
         </div>

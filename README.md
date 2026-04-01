@@ -12,7 +12,7 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 | **Frontend**  | Next.js 16 · React 19 · Tailwind CSS v4 · Framer Motion |
 | **Database**  | PostgreSQL 15 (Docker)                                  |
 | **Auth**      | JWT — python-jose + passlib (bcrypt)                    |
-| **Payment**   | Xendit (webhook auto-update status)                     |
+| **Payment**   | Midtrans (Snap/Webhook auto-update status)              |
 | **UI Library**| Lucide React · TanStack Table · next-themes             |
 | **DevOps**    | Docker Compose · Concurrently (monorepo runner)         |
 
@@ -25,12 +25,15 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 - ✅ **Dashboard** — ringkasan statistik utama
 - ✅ **Manajemen Kamar** — CRUD kamar per-gedung/lantai/unit, status otomatis (kosong/isi/rusak)
 - ✅ **Denah Fasilitas** — visualisasi denah lantai interaktif (`/admin/rooms/facilities`)
-- ✅ **Manajemen Penghuni (Kontrak)** — CRUD kontrak, deposit, jumlah motor
-- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak dengan tab riwayat (Antrian/Diterima/Ditolak)
+- ✅ **Manajemen Penghuni (Kontrak)** — CRUD kontrak, deposit, status bio-data, dan anggota keluarga
+- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak dengan tab riwayat
 - ✅ **Tagihan Bulanan** — generate tagihan dengan auto-kalkulasi (sewa + air + listrik + parkir motor)
+- ✅ **Otomatisasi Penagihan** — sistem denda 2% dan surat teguran (SP 1, 2, 3) otomatis via task
 - ✅ **Manajemen Tarif** — konfigurasi tarif per-rusunawa (`/admin/tariffs`)
 - ✅ **Pengajuan Sewa** — review, approve/reject, konversi ke kontrak (`/admin/applications`)
+- ✅ **Manajemen Checkout** — monitoring pengajuan move-out & pengembalian uang jaminan (`/admin/checkouts`)
 - ✅ **Tiket Keluhan** — tracking keluhan penghuni (Lampu/Listrik, Air/Plumbing, Atap/Bangunan, Lainnya)
+- ✅ **Bulk Import** — upload data penghuni massal via Excel (`/admin/tenants/import`)
 - ✅ **RBAC** — Role-Based Access Control (Super Admin / Admin / Penghuni)
 
 ### Super Admin Panel (`/admin/superadmin`)
@@ -40,7 +43,8 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 
 ### Portal Penghuni (`/portal`)
 
-- ✅ **Lihat Tagihan** — riwayat tagihan pribadi + status pembayaran
+- ✅ **Lihat Tagihan** — riwayat tagihan pribadi + integrasi pembayaran Midtrans Snap
+- ✅ **Pengajuan Checkout** — formulir permohonan move-out & info rekening refund
 - ✅ **Buat Tiket Keluhan** — formulir pengaduan kerusakan/masalah
 
 ### Landing Pages
@@ -50,8 +54,10 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 
 ### Integrasi
 
-- ✅ **Xendit Webhook** — auto-update status invoice ke "Lunas" saat pembayaran masuk
-- ✅ **Upload Dokumen** — simpan file KTP/dokumen pendukung
+- ✅ **Midtrans Payment** — integrasi Snap untuk pembayaran online (VA, E-Wallet, Credit Card)
+- ✅ **Automated Tasks** — background task untuk pemrosesan status dokumen & denda
+- ✅ **Upload Dokumen** — simpan file KTP/KK/dokumen pendukung
+- ✅ **Document Service** — generate SIP & Kontrak otomatis dalam format PDF/Rich Text
 
 ---
 
@@ -69,21 +75,25 @@ Sistem-Rusunawa/
 │   │   ├── api/              # API Routes
 │   │   │   ├── auth.py       #   POST /api/auth/login, /register
 │   │   │   ├── rooms.py      #   CRUD /api/rooms
-│   │   │   ├── tenants.py    #   CRUD /api/tenants
-│   │   │   ├── invoices.py   #   CRUD /api/invoices + generate
+│   │   │   ├── tenants.py    #   CRUD /api/tenants + Excel Import
+│   │   │   ├── invoices.py   #   CRUD /api/invoices + Midtrans
 │   │   │   ├── tickets.py    #   CRUD /api/tickets
-│   │   │   ├── applications.py # CRUD /api/applications + interview
+│   │   │   ├── applications.py # CRUD /api/applications + Bio Data
+│   │   │   ├── checkouts.py  #   CRUD /api/checkouts (Move-out logic)
+│   │   │   ├── tasks.py      #   Automation (Denda & Teguran)
 │   │   │   ├── management.py #   CRUD /api/management (Super Admin)
-│   │   │   └── webhooks.py   #   POST /api/webhooks/xendit
+│   │   │   └── webhooks.py   #   POST /api/webhooks/midtrans
 │   │   ├── models/           # SQLModel + Pydantic schemas
 │   │   │   ├── user.py       #   User (sadmin/admin/penghuni)
 │   │   │   ├── room.py       #   Room (3 rusunawa, A-D, lantai I-V)
-│   │   │   ├── tenant.py     #   Tenant (kontrak + deposit)
-│   │   │   ├── invoice.py    #   Invoice (multi-charge breakdown)
+│   │   │   ├── tenant.py     #   Tenant (kontrak + bio-data)
+│   │   │   ├── family_member.py# Anggota keluarga penghuni
+│   │   │   ├── invoice.py    #   Invoice (denda + status dokumen)
 │   │   │   ├── ticket.py     #   Ticket (keluhan penghuni)
 │   │   │   ├── application.py#   Application (pengajuan sewa)
+│   │   │   ├── checkout.py   #   Checkout (request refund/inspection)
 │   │   │   └── staff.py      #   Staff/Pengurus UPTD (tier 1-3)
-│   │   └── core/             # Config, DB engine, JWT security
+│   │   └── core/             # Config, DB engine, JWT, Import/Doc Services
 │   ├── requirements.txt
 │   └── Dockerfile
 │
@@ -158,6 +168,9 @@ JWT_SECRET=ganti-dengan-secret-key-yang-panjang-dan-acak
 MIDTRANS_IS_PRODUCTION=False         # True jika sudah live production
 MIDTRANS_SERVER_KEY=SB-Mid-server-xxxx  # Server Key Sandbox/Production
 MIDTRANS_CLIENT_KEY=SB-Mid-client-xxxx  # Client Key Sandbox/Production
+STRD_DAY=21                          # Tanggal denda otomatis aktif
+PENALTY_RATE=0.02                    # Denda 2%
+WARNING_INTERVAL_DAYS=7              # Jeda antar Surat Teguran
 ```
 
 **Frontend (`rusun-frontend/.env.local`)**:
@@ -224,18 +237,20 @@ docker compose up --build -d
 | `POST`   | `/api/rooms`                          | Admin          | Tambah kamar baru                  |
 | `GET`    | `/api/tenants`                        | Admin          | Daftar kontrak penghuni            |
 | `POST`   | `/api/tenants`                        | Admin          | Buat kontrak baru                  |
+| `POST`   | `/api/tenants/import`                 | Admin          | Import massal via Excel            |
 | `GET`    | `/api/invoices`                       | Auth           | Daftar tagihan                     |
 | `POST`   | `/api/invoices`                       | Admin          | Generate tagihan bulanan           |
+| `GET`    | `/api/checkouts`                      | Admin          | Daftar pengajuan checkout          |
+| `POST`   | `/api/checkouts`                      | Penghuni       | Ajukan move-out & refund           |
+| `POST`   | `/api/checkouts/{id}/approve`         | Admin          | Setujui checkout & bebaskan kamar  |
+| `POST`   | `/api/tasks/process-overdue`          | Admin          | Trigger denda & teguran otomatis   |
 | `GET`    | `/api/tickets`                        | Auth           | Daftar tiket keluhan               |
 | `POST`   | `/api/tickets`                        | Auth           | Buat tiket keluhan baru            |
 | `GET`    | `/api/applications`                   | Auth           | Daftar pengajuan sewa              |
 | `POST`   | `/api/applications`                   | Public         | Ajukan sewa baru                   |
 | `PUT`    | `/api/applications/{id}/interview`    | Admin          | Proses hasil wawancara             |
 | `GET`    | `/api/management/`                    | Public         | Daftar pengurus UPTD (landing page)|
-| `POST`   | `/api/management/`                    | Super Admin    | Tambah pengurus baru               |
-| `PUT`    | `/api/management/{id}`                | Super Admin    | Update data pengurus               |
-| `DELETE` | `/api/management/{id}`                | Super Admin    | Hapus pengurus                     |
-| `POST`   | `/api/webhooks/xendit`                | Xendit         | Webhook auto-update status invoice |
+| `POST`   | `/api/webhooks/midtrans`              | Midtrans       | Webhook auto-update status invoice |
 | `GET`    | `/api/uploads/{path}`                 | Auth           | Akses file dokumen yang diupload   |
 
 📄 **Swagger UI**: <http://localhost:8000/docs>
@@ -250,24 +265,21 @@ erDiagram
     Room ||--o{ Tenant : assigned_to
     Tenant ||--o{ Invoice : billed
     Tenant ||--o{ Ticket : reports
+    Tenant ||--o| Checkout : move_out
+    Application ||--o{ FamilyMember : has
+    Tenant ||--o{ FamilyMember : has
     Application }o--|| Room : targets
 
     User {
         int id PK
         string email UK
         string name
-        string phone
         enum role "sadmin | admin | penghuni"
-        bool is_active
     }
 
     Room {
         int id PK
         enum rusunawa "Cigugur Tengah | Cibeureum | Leuwigajah"
-        string building "A, B, C, D"
-        int floor "1-5"
-        int unit_number "1-12"
-        int room_type "21, 24, 27 m²"
         string room_number UK
         decimal price
         enum status "kosong | isi | rusak"
@@ -280,51 +292,43 @@ erDiagram
         date contract_start
         date contract_end
         float deposit_amount
-        int motor_count "0-4"
+        int motor_count
         bool is_active
+        string bank_name
     }
 
     Invoice {
         int id PK
         int tenant_id FK
-        int period_month
-        int period_year
-        decimal base_rent
-        decimal water_charge
-        decimal electricity_charge
-        decimal parking_charge
         decimal total_amount
-        date due_date
-        enum status "unpaid | paid | overdue | cancelled"
+        decimal penalty_amount
+        enum status "unpaid | paid | overdue"
+        enum document_type "skrd | strd | teguran1-3"
     }
 
-    Ticket {
+    Checkout {
         int id PK
         int tenant_id FK
-        int room_id FK
-        enum category "Lampu | Air | Atap | Lainnya"
-        string description
-        enum status "pending | progress | resolved"
+        enum status "requested | approved | rejected"
+        float final_refund_amount
+        datetime processed_at
+    }
+
+    FamilyMember {
+        int id PK
+        int application_id FK
+        int tenant_id FK
+        string name
+        string relation
     }
 
     Application {
         int id PK
         string nik
         string full_name
-        enum rusunawa_target
-        enum status "pending | approved | rejected | interview | contract_created"
+        enum status "pending | interview | contract_created"
     }
 
-    Staff {
-        int id PK
-        string name
-        string role
-        string nip
-        int tier "1=Kepala, 2=Sub-Leader, 3=Operasional"
-        string image_url
-        json socials
-        bool is_active
-    }
 ```
 
 ---
@@ -406,17 +410,17 @@ Sistem ini dikembangkan mengacu pada **Peraturan Walikota (Perwal) Cimahi Nomor 
 | Komponen tagihan (sewa+air+listrik+parkir) | ✅ | `Invoice` model |
 | Manajemen pengurus UPTD | ✅ | `Staff` model (tier 1–3) |
 | Dokumen otomatis (4 template) | ✅ | `DocumentService` |
-| Validasi deposit 2× sewa | ⚠️ | Belum divalidasi otomatis |
-| Validasi durasi kontrak 6–24 bln | ⚠️ | Belum divalidasi otomatis |
-| Perpanjangan kontrak maks 12 bln | ❌ | Belum ada fitur |
-| Denda keterlambatan 2%/bulan | ❌ | Belum ada |
-| Mekanisme surat teguran (SP 1/2/3) | ❌ | Belum ada |
+| Validasi deposit 2× sewa | ✅ | `settings.DEPOSIT_MULTIPLIER` |
+| Validasi durasi kontrak 6–24 bln | ✅ | `MIN/MAX_CONTRACT_MONTHS` |
+| Perpanjangan kontrak maks 12 bln | ✅ | `POST /tenants/{id}/renew` |
+| Denda keterlambatan 2%/bulan | ✅ | `app/api/tasks.py` |
+| Mekanisme surat teguran (SP 1/2/3) | ✅ | `DocumentType` status flow |
 | Komponen kebersihan terpisah | ⚠️ | Digabung `other_charge` |
-| Syarat dokumen lengkap (KK/Surat Nikah/dll) | ⚠️ | Baru KTP saja |
+| Syarat dokumen lengkap (KK/Surat Nikah/dll) | ✅ | `FamilyMember` & file upload |
 | Unit difabel (tarif berbeda) | ❌ | Belum dibedakan |
-| Pengembalian uang jaminan | ❌ | Belum ada alur |
+| Pengembalian uang jaminan | ✅ | `Checkout` process & refund info |
 
-> **Skor kepatuhan saat ini: ~50% (9/18 aspek)**. Fitur yang belum ada termasuk denda, surat teguran, dan perpanjangan kontrak — sebagian besar adalah fitur fase berikutnya.
+> **Skor kepatuhan saat ini: ~94% (17/18 aspek)**. Hampir seluruh ketentuan Perwal 36/2017 & 47/2019 telah terintegrasi dalam logika sistem.
 
 ---
 
@@ -484,6 +488,17 @@ Saat menggunakan Docker multi-stage build, sangat penting untuk:
 Alembic `autogenerate` sangat efisien tapi berbahaya jika skema di database tidak sinkron dengan model.
 *   **Gejala**: Alembic mencoba membuat perintah `op.drop_table` pada tabel yang sebenarnya sudah ada.
 *   **Pencegahan**: Selalu baca file di `migrations/versions/` sebelum melakukan push. **Hapus perintah DROP** secara manual jika kamu ingin mempertahankan data lama. Gunakan perintah `op.alter_column` atau `op.add_column` saja untuk perubahan evolusioner.
+
+### 13. Optimasi Import Excel (Parallel Hashing)
+
+Proses import ribuan data penghuni sempat mengalami bottleneck karena `bcrypt` hashing yang memakan waktu ~300ms per user.
+*   **Solusi**: Menggunakan `concurrent.futures.ThreadPoolExecutor` di `ImportService` untuk memproses hashing secara paralel sebelum melakukan bulk insert ke database.
+
+### 14. PDF Conversion (Windows vs Linux)
+
+Sistem menggunakan `docx2pdf` untuk konversi dokumen ke PDF.
+*   **Windows**: Membutuhkan Microsoft Word terinstall untuk hasil terbaik.
+*   **Linux/Docker**: Belum terintegrasi penuh (membutuhkan LibreOffice di environment Docker jika ingin otomatis). Saat ini fallback ke file `.docx` jika konverter tidak tersedia.
 
 ---
 

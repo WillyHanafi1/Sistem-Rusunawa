@@ -22,6 +22,11 @@ class TenantBase(SQLModel):
     occupation: Optional[str] = None
     previous_address: Optional[str] = None
 
+    # Bank Info (For Refunds)
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_holder: Optional[str] = None
+
 
 class Tenant(TenantBase, table=True):
     __tablename__ = "tenants"
@@ -57,3 +62,8 @@ class TenantUpdate(SQLModel):
     marital_status: Optional[str] = None
     occupation: Optional[str] = None
     previous_address: Optional[str] = None
+
+    # Bank Info Updates
+    bank_name: Optional[str] = None
+    bank_account_number: Optional[str] = None
+    bank_account_holder: Optional[str] = None
