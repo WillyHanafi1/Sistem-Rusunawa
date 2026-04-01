@@ -345,7 +345,18 @@ Untuk menghindari kehilangan data saat merubah struktur tabel (SQLModel), gunaka
 - **Backup Otomatis (Gzip)**:
   Sistem kini melakukan backup otomatis ke `backups/backup_*.sql.gz` setiap kali deployment. Gunakan `gunzip` untuk mengekstraknya jika ingin melakukan restore manual.
 
-### 10. Docker Production (Multi-stage) 🐳
+### 11. Checklist Sebelum Push (Deployment Aman) 🛡️
+
+Selalu cek checklist ini di lokal kamu sebelum melakukan `git push origin master` untuk menghindari error di produksi:
+
+- [ ] **Migrasi DB**: Apakah file di `migrations/versions/` sudah dicek dan **tidak ada** perintah `op.drop_table` atau `op.drop_column` yang tidak diinginkan?
+- [ ] **Dependencies**: Jika menambah library baru, apakah sudah tercatat di `requirements.txt`? (Khususnya `bcrypt` dan `setuptools`).
+- [ ] **Templates**: Apakah file `.docx` baru sudah diletakkan di `rusun-backend/app/templates/`?
+- [ ] **Build Check**: Coba jalankan `docker compose up --build backend` di lokal untuk memastikan tidak ada error saat pembuatan image.
+
+---
+
+### 12. Docker Production (Multi-stage) 🐳
 
 Untuk deployment, gunakan `Dockerfile.prod` yang telah dioptimalkan:
 - **Ukuran Image Lebih Kecil**: Mengurangi penggunaan disk di Droplet.
@@ -406,16 +417,17 @@ Jika ada endpoint yang memunculkan `404 Not Found` di *page* yang baru dibuat, p
 Jika komponen membaca *Cookies* di SSR (misal via `js-cookie`), render Server (HTML) dan rendered Client akan berbeda (karena Server tidak punya akses ke browser cookie). Ini memicu *Hydration Failed Error*.
 **Solusi**: Gunakan state `mounted`. Render komponen khusus role hanya *setelah* `useEffect` / `mounted` menjadi `true`.
 
-### 9. OperationalError: no such column (Schema Mismatch)
+### 11. Dependency Management di Multi-stage Build
 
-SQLModel's `create_db_and_tables()` only creates tables if they don't exist; it does **not** perform migrations (ALTER TABLE).
-- **Symptoms**: `OperationError` in backend logs or `Network Error` in frontend during development.
-- **Golden Rule**: Every time you modify a `SQLModel` class (add/remove columns), you must delete the existing `database.db` file (or use Alembic for production) to allow the system to re-initialize the schema.
+Saat menggunakan Docker multi-stage build, sangat penting untuk:
+*   **Hindari `--no-deps`**: Jika menambahkan library yang memiliki banyak ketergantungan (seperti `bcrypt` atau `docxtpl`), jangan gunakan flag `--no-deps` saat proses pembuatan *wheels* agar semua sub-library ikut terinstall.
+*   **Explicit setuptools**: Beberapa library seperti `docxcompose` membutuhkan `pkg_resources` (bagian dari `setuptools`) di level runtime. Selalu tambahkan `setuptools==69.5.1` secara eksplisit di `requirements.txt`.
 
-### 10. Port 8000 Already in Use (Zombie Processes on Windows)
+### 12. Jebakan Autogenerate Alembic (DROP Table)
 
-If the backend crashes while `--reload` is active, some child processes might stay alive and hold Port 8000.
-- **Solution**: Run `taskkill /F /IM python.exe` in PowerShell to clear all pending python processes before restarting the server.
+Alembic `autogenerate` sangat efisien tapi berbahaya jika skema di database tidak sinkron dengan model.
+*   **Gejala**: Alembic mencoba membuat perintah `op.drop_table` pada tabel yang sebenarnya sudah ada.
+*   **Pencegahan**: Selalu baca file di `migrations/versions/` sebelum melakukan push. **Hapus perintah DROP** secara manual jika kamu ingin mempertahankan data lama. Gunakan perintah `op.alter_column` atau `op.add_column` saja untuk perubahan evolusioner.
 
 ---
 
