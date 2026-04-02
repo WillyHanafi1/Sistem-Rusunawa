@@ -10,9 +10,43 @@ from app.core.security import require_admin, require_super_admin, get_current_us
 from app.models.tenant import Tenant, TenantCreate, TenantRead, TenantUpdate
 from app.models.room import Room, RoomStatus
 from app.models.user import User, UserRole
+from app.models.invoice import Invoice, InvoiceRead
+from app.models.ticket import Ticket, TicketRead
 from app.core.import_service import process_tenant_import
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
+
+
+class TenantHistory(BaseModel):
+    invoices: List[InvoiceRead]
+    tickets: List[TicketRead]
+
+
+@router.get("/{tenant_id}/history", response_model=TenantHistory)
+def get_tenant_history(
+    tenant_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    tenant = session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Data penghuni tidak ditemukan")
+    
+    if current_user.role == UserRole.penghuni and tenant.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Akses ditolak")
+
+    invoices = session.exec(
+        select(Invoice).where(Invoice.tenant_id == tenant_id).order_by(Invoice.period_year.desc(), Invoice.period_month.desc())
+    ).all()
+
+    tickets = session.exec(
+        select(Ticket).where(Ticket.tenant_id == tenant_id).order_by(Ticket.created_at.desc())
+    ).all()
+
+    return {
+        "invoices": invoices,
+        "tickets": tickets
+    }
 
 
 @router.post("/import", status_code=200)

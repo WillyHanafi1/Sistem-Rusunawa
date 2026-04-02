@@ -39,7 +39,7 @@ export default function LoginPage() {
                 router.push("/portal");
             }
         } catch (err: any) {
-            setError(err.response?.data?.detail || "Login gagal. Periksa email & password.");
+            setError(err.message || "Login gagal. Periksa email & password.");
         } finally {
             setLoading(false);
         }

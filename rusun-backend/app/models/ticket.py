@@ -39,3 +39,8 @@ class TicketUpdate(SQLModel):
     description: Optional[str] = None
     status: Optional[TicketStatus] = None
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+class TicketReadWithDetails(TicketRead):
+    tenant_name: str
+    unit_number: int
+    building: str

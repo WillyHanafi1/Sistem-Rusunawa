@@ -8,6 +8,8 @@ from app.core.security import (
 )
 from app.models.user import User, UserCreate, UserRead
 
+from app.core.config import settings
+
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
@@ -36,6 +38,7 @@ def login(
         secure=(settings.ENVIRONMENT == "production"), # Always True in Production
         samesite="lax",
         max_age=60 * 60 * 24 * 7, # 1 minggu
+        path="/", # WAJIB agar terbaca di semua route (termasuk Middleware Next.js)
     )
 
     return {
@@ -47,9 +50,19 @@ def login(
 
 
 @router.post("/logout")
-def logout(response: Response):
-    response.delete_cookie(key="access_token")
-    return {"message": "Berhasil logout"}
+async def logout(response: Response):
+    """
+    Logout user by clearing the access_token cookie.
+    Attributes must match the ones used during login for reliable deletion.
+    """
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        httponly=True,
+        samesite="lax",
+        secure=False  # Set to True in production with HTTPS
+    )
+    return {"message": "Successfully logged out"}
 
 
 @router.get("/me", response_model=UserRead)
@@ -57,13 +70,13 @@ def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/register-admin", response_model=UserRead)
-def register_admin(
+@router.post("/users", response_model=UserRead)
+def create_user(
     user_in: UserCreate,
     session: Session = Depends(get_session),
     _: User = Depends(require_admin),
 ):
-    """Hanya admin yang bisa membuat user baru (termasuk penghuni)"""
+    """Admin can create new users (including tenants and other admins)"""
     existing = session.exec(select(User).where(User.email == user_in.email)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Email sudah terdaftar")

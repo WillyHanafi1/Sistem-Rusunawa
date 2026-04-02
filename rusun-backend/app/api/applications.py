@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
 from sqlmodel import Session, select
 from typing import List, Optional
+from app.core.config import settings
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
 from app.models.application import Application, ApplicationCreate, ApplicationRead, ApplicationUpdate, ApplicationStatus
@@ -159,11 +160,15 @@ def update_application_status(
         existing_user = session.exec(select(User).where(User.email == application.email)).first()
         if not existing_user:
             # Security Fix: Use a random generated password instead of NIK
+            # Buat user baru untuk login ke portal penghuni
             import secrets
             import string
-            temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
-            
-            # TODO: Send email to user with this temp_password
+            if settings.ENVIRONMENT == "development":
+                temp_password = application.nik 
+                print(f"\n{'='*50}\nDEBUG: Password akses portal adalah NIK pendaftar.\nNIK: {temp_password}\n{'='*50}\n")
+            else:
+                temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
+                print(f"\n{'='*50}\nDEBUG: Password acak untuk {application.email}: {temp_password}\nLakukan pengiriman email manual atau hubungi user.\n{'='*50}\n")
             print(f"[SECURITY] Generated initial password for {application.email}: {temp_password}")
             
             # Buat akun User baru

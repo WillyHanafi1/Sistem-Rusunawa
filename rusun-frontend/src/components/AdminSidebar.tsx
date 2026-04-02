@@ -36,24 +36,22 @@ const navItems: NavItem[] = [
             { href: "/admin/applications", label: "Pengajuan", icon: ClipboardList },
             { href: "/admin/tenants/interviews", label: "Wawancara", icon: Users },
             { href: "/admin/tenants", label: "Kontrak", icon: UserCheck },
-            { href: "/admin/checkouts", label: "Pengembalian (Refund)", icon: History },
+            { href: "/admin/checkouts", label: "Putus Kontrak", icon: History },
             { href: "/admin/tenants/history", label: "Riwayat / Alumni", icon: History }
         ]
     },
     {
-        label: "Tagihan",
-        icon: FileText,
+        label: "Keuangan & Tagihan",
+        icon: Wallet,
         children: [
-            { href: "/admin/invoices", label: "Semua Tagihan", icon: FileText },
-            { href: "/admin/invoices/rent", label: "Tagihan Sewa (SKRD)", icon: Wallet },
-            { href: "/admin/invoices/warnings", label: "Surat Teguran", icon: FileWarning }
+            { href: "/admin/invoices/rent", label: "Tagihan Bulanan", icon: FileText },
+            { href: "/admin/invoices/warnings", label: "Peringatan & Denda", icon: AlertTriangle }
         ]
     },
     {
         label: "Keluhan",
         icon: MessageSquare,
         children: [
-            { href: "/admin/tickets", label: "Semua Keluhan", icon: MessageSquare },
             { href: "/admin/tickets/open", label: "Perlu Tindakan", icon: AlertTriangle },
             { href: "/admin/tickets/closed", label: "Riwayat Selesai", icon: History }
         ]

@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.db import get_session
 from app.models.user import User, UserRole
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -40,8 +40,12 @@ def get_current_user(
     # First priority: Cookie (for browser requests)
     # Second priority: Authorization header (for API testing / mobile apps)
     actual_token = request.cookies.get("access_token") or token
+    
+    # DEBUG: Check if token is received
+    print(f"[BACKEND DEBUG] Token received: {actual_token[:10]}...{actual_token[-10:] if actual_token else ''}")
 
     if not actual_token:
+        print("[BACKEND DEBUG] No token found in cookies or header")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token tidak ditemukan",
@@ -50,19 +54,27 @@ def get_current_user(
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Token tidak valid atau sudah kadaluarsa",
+        detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         payload = jwt.decode(actual_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-        user_id: int = payload.get("sub")
+        user_id: str = payload.get("sub")
         if user_id is None:
+            print("[BACKEND DEBUG] Payload missing 'sub'")
             raise credentials_exception
-    except JWTError:
-        raise credentials_exception
+    except Exception as e:
+        print(f"[BACKEND DEBUG] JWT Decode error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Token tidak valid: {str(e)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     user = session.get(User, int(user_id))
     if not user or not user.is_active:
+        print(f"[BACKEND DEBUG] User not found or inactive: {user_id}")
         raise credentials_exception
     return user
 

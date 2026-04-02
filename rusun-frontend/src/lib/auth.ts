@@ -13,15 +13,24 @@ export async function login(email: string, password: string): Promise<LoginRespo
     form.append("username", email);
     form.append("password", password);
 
-    const res = await api.post<LoginResponse>("/auth/login", form, {
+    // fetch langsung ke Next.js API route — bypass axios/rewrite
+    const res = await fetch("/api/auth/login", {
+        method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+        credentials: "include",
     });
 
-    const data = res.data;
-    // access_token sudah diset otomatis oleh browser via HttpOnly Cookie (dari header Set-Cookie)
-    // Kita hapus setelan manual di sini agar tidak ada duplikasi di client-side cookie yang tidak aman
-    Cookies.set("user_role", data.role, { expires: 1, sameSite: "Lax", path: '/' });
-    Cookies.set("user_name", data.name, { expires: 1, sameSite: "Lax", path: '/' });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Email atau password salah");
+    }
+
+    const data: LoginResponse = await res.json();
+    
+    Cookies.set("user_role", data.role, { expires: 7, sameSite: "Lax", path: "/" });
+    Cookies.set("user_name", data.name, { expires: 7, sameSite: "Lax", path: "/" });
+    
     return data;
 }
 

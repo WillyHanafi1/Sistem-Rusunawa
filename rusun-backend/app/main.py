@@ -32,10 +32,17 @@ async def run_daily_overdue_processing():
             # Create a mock internal admin for the process
             mock_admin = User(role=UserRole.sadmin, name="System Automation")
             
-            print(f"[{datetime.now()}] Running automated overdue processing...")
-            # Use to_thread if the logic is synchronous SQLModel/SQLAlchemy
+            print(f"[{datetime.now()}] Running automated daily and monthly tasks...")
+            
+            # 1. Handle Monthly Generation (Only runs on day 01)
+            from app.api.tasks import handle_monthly_generation
+            await asyncio.to_thread(handle_monthly_generation, session, mock_admin)
+            
+            # 2. Handle Overdue Processing (STRD & Warnings)
+            from app.api.tasks import handle_overdue_processing
             await asyncio.to_thread(handle_overdue_processing, session, mock_admin)
-            print(f"[{datetime.now()}] Automated overdue processing completed.")
+            
+            print(f"[{datetime.now()}] Automated tasks completed.")
             
             # Wait 24 hours
             await asyncio.sleep(86400)

@@ -22,6 +22,8 @@ def list_invoices(
     tenant_id: Optional[int] = None,
     month: Optional[int] = None,
     year: Optional[int] = None,
+    status: Optional[InvoiceStatus] = None,
+    document_type: Optional[DocumentType] = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -51,6 +53,10 @@ def list_invoices(
         query = query.where(Invoice.period_month == month)
     if year is not None:
         query = query.where(Invoice.period_year == year)
+    if status is not None:
+        query = query.where(Invoice.status == status)
+    if document_type is not None:
+        query = query.where(Invoice.document_type == document_type)
     
     # Sort by building, floor, unit for better organization
     query = query.order_by(Room.building, Room.floor, Room.unit_number)
@@ -78,6 +84,83 @@ def list_invoices(
     return output
 
 
+
+def internal_mass_generate_invoices(
+    session: Session,
+    period_month: int,
+    period_year: int,
+    other_charge: Decimal = Decimal("0"),
+    notes: str = "Otomatisasi bulanan",
+) -> Dict[str, Any]:
+    """Logika inti pembuatan invoice massal."""
+    # 1. Ambil semua penghuni aktif
+    active_tenants = session.exec(select(Tenant).where(Tenant.is_active == True)).all()
+    if not active_tenants:
+        return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
+
+    # 2. Cari tagihan yang sudah ada untuk periode ini
+    existing_invoices = session.exec(
+        select(Invoice).where(
+            Invoice.period_month == period_month,
+            Invoice.period_year == period_year
+        )
+    ).all()
+    
+    # Kumpulan tenant_id yang sudah ditagih
+    billed_tenant_ids = {inv.tenant_id for inv in existing_invoices}
+
+    # 3. Ambil data kamar untuk base_rent
+    rooms = session.exec(select(Room)).all()
+    room_dict = {r.id: r for r in rooms}
+
+    # 4. Filter tenant yang belum ditagih dan siapkan object Invoice baru
+    new_invoices = []
+    
+    for tenant in active_tenants:
+        if tenant.id in billed_tenant_ids:
+            continue
+            
+        room = room_dict.get(tenant.room_id)
+        if not room:
+            continue
+
+        base_rent = room.price
+        parking_charge = MOTOR_RATE * Decimal(str(tenant.motor_count or 0))
+        # Default water/electricity to 0 in mass generate
+        water_charge = Decimal("0")
+        electricity_charge = Decimal("0")
+        
+        total = Decimal(str(base_rent)) + parking_charge + water_charge + electricity_charge + other_charge
+        
+        inv = Invoice(
+            tenant_id=tenant.id,
+            period_month=period_month,
+            period_year=period_year,
+            base_rent=base_rent,
+            water_charge=water_charge,
+            electricity_charge=electricity_charge,
+            parking_charge=parking_charge,
+            other_charge=other_charge,
+            total_amount=total,
+            notes=notes,
+            status=InvoiceStatus.unpaid,
+            document_type=DocumentType.skrd,
+        )
+        new_invoices.append(inv)
+
+    # 5. Bulk insert jika ada yang baru
+    count_generated = len(new_invoices)
+    if count_generated > 0:
+        session.add_all(new_invoices)
+        session.commit()
+
+    return {
+        "success": True, 
+        "generated": count_generated, 
+        "total_active": len(active_tenants),
+        "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids)} tagihan sudah ada/di-skip."
+    }
+
 @router.post("/mass-generate", status_code=201)
 def mass_generate_invoices(
     mass_in: InvoiceMassGenerate,
@@ -86,76 +169,13 @@ def mass_generate_invoices(
 ) -> Dict[str, Any]:
     """Generate tagihan bulanan untuk SEMUA penghuni aktif yang belum punya invoice di bulan/tahun tsb."""
     try:
-        # 1. Ambil semua penghuni aktif
-        active_tenants = session.exec(select(Tenant).where(Tenant.is_active == True)).all()
-        if not active_tenants:
-            return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
-
-        # 2. Cari tagihan yang sudah ada untuk periode ini (Gunakan Join daripada IN clause yang ada batas paramnya)
-        # Menghindari error SQLAlchemy (tenant_id_1_1, tenant_id_1_2, ... sampe > 2000 param)
-        existing_invoices = session.exec(
-            select(Invoice).where(
-                Invoice.period_month == mass_in.period_month,
-                Invoice.period_year == mass_in.period_year
-            )
-        ).all()
-        
-        # Kumpulan tenant_id yang sudah ditagih (Filter di Python saja, krn jumlahnya paling ribuan)
-        billed_tenant_ids = {inv.tenant_id for inv in existing_invoices}
-
-        # 3. Ambil data kamar untuk base_rent
-        # Karena jumlah kamar yang aktif juga ribuan, kita pakai chunking atau fetch all rooms
-        rooms = session.exec(select(Room)).all()
-        room_dict = {r.id: r for r in rooms}
-
-        # 4. Filter tenant yang belum ditagih dan siapkan object Invoice baru
-        new_invoices = []
-        
-        for tenant in active_tenants:
-            if tenant.id in billed_tenant_ids:
-                continue
-                
-            room = room_dict.get(tenant.room_id)
-            if not room:
-                continue # Abaikan jika data kamar hilang (anomali)
-
-            base_rent = room.price
-            parking_charge = MOTOR_RATE * Decimal(str(tenant.motor_count or 0)) # Safe parse
-            # Default water/electricity to 0 in mass generate
-            water_charge = Decimal("0")
-            electricity_charge = Decimal("0")
-            other_charge_safe = Decimal(str(mass_in.other_charge or 0))
-            
-            total = Decimal(str(base_rent)) + parking_charge + water_charge + electricity_charge + other_charge_safe
-
-            inv = Invoice(
-                tenant_id=tenant.id,
-                period_month=mass_in.period_month,
-                period_year=mass_in.period_year,
-                base_rent=base_rent,
-                water_charge=water_charge,
-                electricity_charge=electricity_charge,
-                parking_charge=parking_charge,
-                other_charge=other_charge_safe,
-                total_amount=total,
-                notes=mass_in.notes,
-                status=InvoiceStatus.unpaid,
-                document_type=DocumentType.skrd,
-            )
-            new_invoices.append(inv)
-
-        # 5. Bulk insert jika ada yang baru
-        count_generated = len(new_invoices)
-        if count_generated > 0:
-            session.add_all(new_invoices)
-            session.commit()
-
-        return {
-            "success": True, 
-            "generated": count_generated, 
-            "total_active": len(active_tenants),
-            "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids)} tagihan sudah ada/di-skip."
-        }
+        return internal_mass_generate_invoices(
+            session=session,
+            period_month=mass_in.period_month,
+            period_year=mass_in.period_year,
+            other_charge=Decimal(str(mass_in.other_charge or 0)),
+            notes=mass_in.notes or "Generate Massal"
+        )
     except Exception as e:
         import traceback
         traceback.print_exc()

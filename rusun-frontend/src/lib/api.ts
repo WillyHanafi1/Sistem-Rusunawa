@@ -1,8 +1,7 @@
 import axios from "axios";
 import Cookies from "js-cookie";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-const BASE_URL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
+const BASE_URL = "/api";
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -12,24 +11,39 @@ const api = axios.create({
 
 // Tidak lagi memerlukan penyuntikan token manual karena browser menanganinya via Cookie
 
+let isLoggingOut = false;
+
 api.interceptors.response.use(
   (res) => res,
-  (err) => {
+  async (err) => {
     // Jika 401 Unauthorized, artinya sesi habis atau token salah
-    if (err.response?.status === 401 && typeof window !== "undefined") {
-      // Sapu bersih semua kemungkinan cookie di berbagai path
-      const paths = ['/', '/admin', '/portal', '/login'];
-      paths.forEach(path => {
+    if (err.response?.status === 401 && typeof window !== "undefined" && !isLoggingOut) {
+      const currentPath = window.location.pathname;
+
+      // Jangan logout jika kita sudah di halaman login
+      if (currentPath === "/login") {
+        return Promise.reject(err);
+      }
+
+      isLoggingOut = true;
+      console.warn("Sesi tidak valid (401). Membersihkan sesi...");
+
+      try {
+        // Panggil route logout kita sendiri untuk hapus HttpOnly cookie di server-side Next.js
+        await fetch("/api/auth/logout", { method: "POST" });
+      } catch (e) {
+        console.error("Gagal membersihkan sesi (Server-side):", e);
+      }
+
+      // Bersihkan cookie client-side yang tersisa
+      const paths = ["/", "/admin", "/portal", "/login"];
+      paths.forEach((path) => {
         Cookies.remove("access_token", { path });
         Cookies.remove("user_role", { path });
         Cookies.remove("user_name", { path });
       });
-      
-      // Fallback tanpa path
-      Cookies.remove("access_token");
-      Cookies.remove("user_role");
-      Cookies.remove("user_name");
 
+      // Redirect ke login hanya jika belum di sana
       window.location.href = "/login";
     }
     return Promise.reject(err);

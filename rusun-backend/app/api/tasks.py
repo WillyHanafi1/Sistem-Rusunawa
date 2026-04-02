@@ -9,6 +9,7 @@ from app.core.security import require_admin
 from app.models.invoice import Invoice, InvoiceStatus, DocumentType
 from app.models.user import User
 from app.core.config import settings
+from app.api.invoices import internal_mass_generate_invoices
 
 router = APIRouter(prefix="/tasks", tags=["Automation Tasks"])
 
@@ -95,3 +96,30 @@ def handle_overdue_processing(
         "processed": processed_count,
         "message": f"Berhasil memproses {processed_count} dokumen penagihan."
     }
+
+@router.post("/process-monthly", status_code=200)
+def handle_monthly_generation(
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """
+    Otomatisasi pembuatan SKRD setiap tanggal 01.
+    """
+    now = datetime.now(timezone.utc)
+    if now.day != 1:
+        return {
+            "success": True,
+            "processed": 0,
+            "message": f"Hari ini tanggal {now.day}, bukan tanggal 01. Skip otomatisasi."
+        }
+    
+    # Panggil fungsi internal mass generate
+    result = internal_mass_generate_invoices(
+        session=session,
+        period_month=now.month,
+        period_year=now.year,
+        notes="Otomatisasi Sistem (Tanggal 01)"
+    )
+    
+    print(f"[{now}] Automated monthly generation: {result['message']}")
+    return result

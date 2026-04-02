@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
+import path from "path";
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   output: "standalone",
   images: {
     remotePatterns: [
@@ -10,6 +11,18 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  turbopack: {
+    root: process.cwd(),
+  },
+  async rewrites() {
+    return [
+      {
+        // Forward ke backend KECUALI /api/auth/* yang ditangani Next.js route.ts
+        source: "/api/:path((?!auth(?:/|$)).+)",
+        destination: "http://localhost:8000/api/:path*",
+      },
+    ];
+  },
 };
 
-export default nextConfig;
+export default nextConfig as any;

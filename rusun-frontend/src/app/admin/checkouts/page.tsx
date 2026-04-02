@@ -49,7 +49,7 @@ export default function CheckoutsPage() {
             }
         } catch (err) {
             console.error(err);
-            toast.error("Gagal mengambil data pengembalian");
+            toast.error("Gagal mengambil data putus kontrak");
         } finally {
             setLoading(false);
         }
@@ -69,7 +69,7 @@ export default function CheckoutsPage() {
             });
             
             if (res.ok) {
-                toast.success(status === "approved" ? "Pengembalian disetujui" : "Pengembalian ditolak");
+                toast.success(status === "approved" ? "Putus kontrak disetujui" : "Putus kontrak ditolak");
                 setSelectedCheckout(null);
                 setNotes("");
                 fetchCheckouts();
@@ -124,9 +124,9 @@ export default function CheckoutsPage() {
                         <div className="p-2.5 bg-blue-600 rounded-2xl shadow-lg shadow-blue-500/20 ring-4 ring-blue-50 dark:ring-blue-900/20">
                             <Banknote className="w-6 h-6 text-white" />
                         </div>
-                        Pengembalian Unit (Checkout)
+                        Pengembalian Unit / Putus Kontrak
                     </h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Manajemen permintaan keluar penghuni dan pengembalian uang jaminan.</p>
+                    <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Manajemen penghentian sewa penghuni dan pengembalian uang jaminan.</p>
                 </div>
                 
                 <button onClick={fetchCheckouts} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
@@ -210,8 +210,8 @@ export default function CheckoutsPage() {
                             <Info className="w-10 h-10 text-slate-300" />
                         </div>
                         <div>
-                            <p className="text-lg font-black text-slate-900 dark:text-white">Tidak Ada Permintaan</p>
-                            <p className="text-slate-500 max-w-xs mx-auto text-sm mt-1">Belum ada penghuni yang mengajukan checkout atau kriteria pencarian tidak cocok.</p>
+                            <p className="text-lg font-black text-slate-900 dark:text-white">Tidak Ada Pengajuan</p>
+                            <p className="text-slate-500 max-w-xs mx-auto text-sm mt-1">Belum ada penghuni yang mengajukan putus kontrak atau kriteria pencarian tidak cocok.</p>
                         </div>
                     </div>
                 ) : (
@@ -314,7 +314,7 @@ export default function CheckoutsPage() {
                         >
                             <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
                                 <div>
-                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">Tinjauan Checkout</h2>
+                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">Tinjauan Putus Kontrak</h2>
                                     <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{selectedCheckout.tenant_name} ({selectedCheckout.room_number})</p>
                                 </div>
                                 <button onClick={() => setSelectedCheckout(null)} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-full transition-colors"><XCircle className="w-5 h-5" /></button>
@@ -372,7 +372,7 @@ export default function CheckoutsPage() {
                                     <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl flex gap-3">
                                         <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0" />
                                         <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed">
-                                            <strong>PENTING:</strong> Menyetujui checkout akan otomatis menonaktifkan status hunian penghuni dan mengosongkan unit kamar di sistem. Pastikan dana jaminan sudah ditransfer manual.
+                                            <strong>PENTING:</strong> Menyetujui putus kontrak akan otomatis menonaktifkan status hunian penghuni dan mengosongkan unit kamar di sistem. Pastikan dana jaminan sudah ditransfer manual.
                                         </p>
                                     </div>
                                 )}
