@@ -1,0 +1,299 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Virtual Account Check Status SNAP",
+    "x-ibm-name": "virtual-account-check-status-snap",
+    "description": "API for Inquiry Check Status Transaction Virtual Account SNAP"
+  },
+  "servers": [
+    {
+      "url": "https://devapi.bankbjb.co.id/v1.0/transfer-va/status"
+    }
+  ],
+  "x-ibm-configuration": {
+    "cors": {
+      "enabled": true
+    },
+    "type": "rest",
+    "phase": "realized",
+    "enforced": true,
+    "testable": true,
+    "oauth-servers": {
+      "OAUTH-SNAP-PARTNER": {
+        "clientCredentials": {
+          "tokenUrls": [
+            "https://devapi.bankbjb.co.id/api/v1/access-token/b2b"
+          ],
+          "authorizationUrls": [],
+          "refreshUrls": []
+        }
+      }
+    }
+  },
+  "paths": {
+    "/": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResJSON"
+                },
+                "example": {
+                  "responseMessage": "Successful",
+                  "virtualAccountData": {
+                    "referenceNo": "",
+                    "sourceBankCode": "008",
+                    "paymentFlagStatus": "00",
+                    "additionalInfo": {
+                      "remark": "Pay VA test A01",
+                      "transferMethod": "",
+                      "sourceAccountNo": "",
+                      "sourceAccountName": "",
+                      "paymentInterface": "TEST-COB-A001"
+                    },
+                    "trxDateTime": "2023-09-21T10:08:11+07:00",
+                    "paidAmount": {
+                      "currency": "IDR",
+                      "value": "24600.000"
+                    },
+                    "inquiryRequestId": "230921-100811-916614"
+                  },
+                  "responseCode": "2002600"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-TIMESTAMP",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2024-03-08T10:55:00+07:00"
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0dfc9b5f9ad5770573cd42b525105996823dd4ac82bd0d03d94b5661e2ffc42eea0cd5b23498f20ec829d33f254abac6160ed2ff6c30e523f2f87143e85c2ab7"
+          },
+          {
+            "name": "ORIGIN",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "example": "wwww.bankbjb.co.id"
+          },
+          {
+            "name": "X-EXTERNAL-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 1704163477
+          },
+          {
+            "name": "CHANNEL-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 54321
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReqJSON"
+              },
+              "example": {
+                "partnerServiceId": "   18123",
+                "customerNo": "000020000000869",
+                "virtualAccountNo": "   18123000020000000869",
+                "inquiryRequestId": "230921-100811-916614"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "X-PARTNER-ID": [],
+            "OAUTH-SNAP-PARTNER": [
+              "default"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "X-PARTNER-ID": {
+        "type": "apiKey",
+        "x-key-type": "client_id",
+        "name": "X-PARTNER-ID",
+        "in": "header"
+      },
+      "OAUTH-SNAP-PARTNER": {
+        "type": "oauth2",
+        "x-ibm-oauth-provider": "oauth2-snap-partner",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://devapi.bankbjb.co.id/api/v1/access-token/b2b",
+            "scopes": {
+              "default": "Default scope For Direct Debit SNAP REST API"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {},
+    "schemas": {
+      "ReqJSON": {
+        "title": "ReqJSON",
+        "type": "object",
+        "description": "Request JSON Virtual Account Check Status",
+        "properties": {
+          "partnerServiceId": {
+            "type": "string",
+            "title": "partnerReferenceNo"
+          },
+          "customerNo": {
+            "title": "amount",
+            "type": "string"
+          },
+          "virtualAccountNo": {
+            "title": "feeAmount",
+            "type": "string"
+          },
+          "inquiryRequestId": {
+            "type": "string",
+            "title": "merchantId"
+          }
+        }
+      },
+      "additionalInfo": {
+        "title": "additionalInfo",
+        "type": "object",
+        "properties": {
+          "remark": {
+            "type": "string",
+            "title": "remark"
+          },
+          "transferMethod": {
+            "type": "string",
+            "title": "transferMethod"
+          },
+          "hashedSourceAccountNo": {
+            "type": "string",
+            "title": "sourceAccountNo"
+          },
+          "sourceAccountName": {
+            "type": "string",
+            "title": "sourceAccountName"
+          },
+          "paymentInterface": {
+            "type": "string",
+            "title": "paymentInterface"
+          }
+        }
+      },
+      "ResJSON": {
+        "title": "ResJSON",
+        "type": "object",
+        "description": "Response JSON Generate QR MPM",
+        "properties": {
+          "responseCode": {
+            "type": "string",
+            "title": "responseCode"
+          },
+          "responseMessage": {
+            "type": "string",
+            "title": "responseMessage"
+          },
+          "virtualAccountData": {
+            "$ref": "#/components/schemas/virtualAccountData",
+            "title": "virtualAccountData"
+          }
+        }
+      },
+      "virtualAccountData": {
+        "title": "virtualAccountData",
+        "type": "object",
+        "description": "Virtual Account Data",
+        "properties": {
+          "referenceNo": {
+            "type": "string",
+            "title": "referenceNo"
+          },
+          "sourceBankCode": {
+            "type": "string",
+            "title": "sourceBankCode"
+          },
+          "paymentFlagStatus": {
+            "type": "string",
+            "title": "paymentFlagStatus"
+          },
+          "trxDateTime": {
+            "type": "string",
+            "title": "trxDateTime"
+          },
+          "inquiryRequestId": {
+            "type": "string",
+            "title": "inquiryRequestId"
+          },
+          "paidAmount": {
+            "$ref": "#/components/schemas/paidAmount",
+            "title": "paidAmount"
+          },
+          "additionalInfo": {
+            "$ref": "#/components/schemas/additionalInfo",
+            "title": "additionalInfo"
+          }
+        }
+      },
+      "paidAmount": {
+        "title": "paidAmount",
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "title": "currency"
+          },
+          "value": {
+            "type": "string",
+            "title": "value"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "X-PARTNER-ID": [],
+      "OAUTH-SNAP-PARTNER": [
+        "default"
+      ]
+    }
+  ],
+  "x-ibm-endpoints": [
+    {
+      "url": "https://devapi.bankbjb.co.id/v1.0/transfer-va/status"
+    }
+  ]
+}

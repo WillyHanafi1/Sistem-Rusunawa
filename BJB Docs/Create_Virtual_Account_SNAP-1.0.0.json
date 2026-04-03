@@ -1,0 +1,347 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Create Virtual Account SNAP",
+    "x-ibm-name": "create-virtual-account",
+    "description": "API for Create Virtual Account BJB SNAP"
+  },
+  "servers": [
+    {
+      "url": "https://devapi.bankbjb.co.id/v1.0/transfer-va/create-va"
+    }
+  ],
+  "x-ibm-configuration": {
+    "cors": {
+      "enabled": false
+    },
+    "type": "rest",
+    "phase": "realized",
+    "enforced": true,
+    "testable": true,
+    "oauth-servers": {
+      "OAUTH-SNAP-PARTNER": {
+        "clientCredentials": {
+          "tokenUrls": [
+            "https://devapi.bankbjb.co.id/api/v1/access-token/b2b"
+          ],
+          "authorizationUrls": [],
+          "refreshUrls": []
+        }
+      }
+    }
+  },
+  "paths": {
+    "/": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResJSON"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-TIMESTAMP",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2024-03-08T10:55:00+07:00"
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0dfc9b5f9ad5770573cd42b525105996823dd4ac82bd0d03d94b5661e2ffc42eea0cd5b23498f20ec829d33f254abac6160ed2ff6c30e523f2f87143e85c2ab7"
+          },
+          {
+            "name": "ORIGIN",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "example": "bjb.co.id"
+          },
+          {
+            "name": "X-EXTERNAL-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 1704163477
+          },
+          {
+            "name": "CHANNEL-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 54321
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReqJSON"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "X-PARTNER-ID": [],
+            "OAUTH-SNAP-PARTNER": [
+              "default"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "X-PARTNER-ID": {
+        "type": "apiKey",
+        "x-key-type": "client_id",
+        "name": "X-PARTNER-ID",
+        "in": "header"
+      },
+      "OAUTH-SNAP-PARTNER": {
+        "type": "oauth2",
+        "x-ibm-oauth-provider": "oauth2-snap-partner",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://devapi.bankbjb.co.id/api/v1/access-token/b2b",
+            "scopes": {
+              "default": "Default scope For Direct Debit SNAP REST API"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ReqJSON": {
+        "title": "ReqJSON",
+        "type": "object",
+        "description": "Request JSON Create Virtual Account",
+        "properties": {
+          "partnerServiceId": {
+            "type": "string",
+            "title": "partnerServiceId",
+            "description": "partnerServiceId"
+          },
+          "customerNo": {
+            "type": "string",
+            "title": "customerNo",
+            "description": "customerNo"
+          },
+          "virtualAccountName": {
+            "type": "string",
+            "title": "virtualAccountName",
+            "description": "virtualAccountName"
+          },
+          "trxId": {
+            "type": "string",
+            "title": "trxId",
+            "description": "trxId"
+          },
+          "virtualAccountEmail": {
+            "type": "string",
+            "title": "virtualAccountEmail",
+            "description": "virtualAccountEmail"
+          },
+          "virtualAccountPhone": {
+            "type": "string",
+            "title": "virtualAccountPhone",
+            "description": "virtualAccountPhone"
+          },
+          "totalAmount": {
+            "$ref": "#/components/schemas/totalAmount",
+            "description": "totalAmount"
+          },
+          "expiredDate": {
+            "type": "string",
+            "title": "expiredDate",
+            "description": "expiredDate"
+          },
+          "additionalInfo": {
+            "$ref": "#/components/schemas/ReqAdditionalInfo",
+            "title": "additionalInfo",
+            "description": "additionalInfo"
+          }
+        }
+      },
+      "ResJSON": {
+        "title": "ResJSON",
+        "type": "object",
+        "description": "Response JSON Create Virtual Account",
+        "properties": {
+          "responseCode": {
+            "type": "string",
+            "title": "responseCode",
+            "description": "responseCode"
+          },
+          "responseMessage": {
+            "type": "string",
+            "title": "responseMessage",
+            "description": "responseMessage"
+          },
+          "virtualAccountData": {
+            "$ref": "#/components/schemas/virtualAccountData",
+            "description": "virtualAccountData"
+          }
+        }
+      },
+      "totalAmount": {
+        "title": "totalAmount",
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "value",
+            "description": "value"
+          },
+          "currency": {
+            "type": "string",
+            "title": "currency",
+            "description": "currency"
+          }
+        },
+        "description": "totalAmount"
+      },
+      "ReqAdditionalInfo": {
+        "title": "additionalInfo",
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "type",
+            "description": "description"
+          },
+          "productCode": {
+            "type": "string",
+            "title": "message",
+            "description": "productCode"
+          },
+          "billingType": {
+            "type": "string",
+            "title": "message",
+            "description": "billingType"
+          },
+          "vaType": {
+            "type": "string",
+            "title": "message",
+            "description": "vaType"
+          }
+        },
+        "description": "Request Additional Info"
+      },
+      "ResAdditionalInfo": {
+        "title": "additionalInfo",
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "type",
+            "description": "description"
+          },
+          "status": {
+            "type": "string",
+            "title": "type",
+            "description": "status"
+          },
+          "productCode": {
+            "type": "string",
+            "title": "message",
+            "description": "productCode"
+          },
+          "billingType": {
+            "type": "string",
+            "title": "message",
+            "description": "billingType"
+          },
+          "vaType": {
+            "type": "string",
+            "title": "message",
+            "description": "vaType"
+          }
+        },
+        "description": "Response Additional Info"
+      },
+      "virtualAccountData": {
+        "title": "virtualAccountData",
+        "type": "object",
+        "description": "virtualAccountData",
+        "properties": {
+          "partnerServiceId": {
+            "type": "string",
+            "title": "partnerServiceId",
+            "description": "partnerServiceId"
+          },
+          "customerNo": {
+            "type": "string",
+            "title": "customerNo",
+            "description": "customerNo"
+          },
+          "virtualAccountNo": {
+            "type": "string",
+            "title": "virtualAccountNo",
+            "description": "virtualAccountNo"
+          },
+          "virtualAccountName": {
+            "type": "string",
+            "title": "virtualAccountName",
+            "description": "virtualAccountName"
+          },
+          "trxId": {
+            "type": "string",
+            "title": "trxId",
+            "description": "trxId"
+          },
+          "totalAmount": {
+            "$ref": "#/components/schemas/totalAmount",
+            "description": "totalAmount"
+          },
+          "expiredDate": {
+            "type": "string",
+            "title": "expiredDate",
+            "description": "expiredDate"
+          },
+          "additionalInfo": {
+            "$ref": "#/components/schemas/ResAdditionalInfo",
+            "title": "additionalInfo",
+            "description": "additionalInfo"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "X-PARTNER-ID": [],
+      "OAUTH-SNAP-PARTNER": [
+        "default"
+      ]
+    }
+  ],
+  "x-ibm-endpoints": [
+    {
+      "url": "https://devapi.bankbjb.co.id/v1.0/transfer-va/create-va"
+    }
+  ]
+}

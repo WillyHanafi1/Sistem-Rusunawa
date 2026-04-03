@@ -11,12 +11,22 @@ venv/
 local_data/
 *.xlsx
 *.csv
+*.db
+*.sqlite3
 openapi.json
 
 # Log & Temp
 *.log
+result.txt
 backend_logs.txt
 tmp_*.md
+temp_*.py
+fix_*.py
+migrate_*.py
+drop_*.py
+reset_*.py
+add_*.py
+upgrade_*.py
 
 # Editor
 .vscode/

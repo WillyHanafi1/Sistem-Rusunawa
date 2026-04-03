@@ -1,0 +1,353 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "version": "1.0.0",
+    "title": "Generate QRIS MPM SNAP",
+    "x-ibm-name": "generate-qris-mpm-snap",
+    "description": "API for Generate QRIS Merchant SNAP"
+  },
+  "servers": [
+    {
+      "url": "https://devapi.bankbjb.co.id/v1.0/qr/qr-mpm-generate"
+    }
+  ],
+  "x-ibm-configuration": {
+    "cors": {
+      "enabled": false
+    },
+    "type": "rest",
+    "phase": "realized",
+    "enforced": true,
+    "testable": true,
+    "oauth-servers": {
+      "OAUTH-SNAP-PARTNER": {
+        "clientCredentials": {
+          "tokenUrls": [
+            "https://devapi.bankbjb.co.id/api/v1/access-token/b2b"
+          ],
+          "authorizationUrls": [],
+          "refreshUrls": []
+        }
+      }
+    }
+  },
+  "paths": {
+    "/": {
+      "post": {
+        "responses": {
+          "200": {
+            "description": "success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResJSON"
+                },
+                "example": {
+                  "responseCode": "2004700",
+                  "responseMessage": "Success",
+                  "referenceNo": "Test-Eliezer-0030",
+                  "partnerReferenceNo": "Test-Eliezer-0030",
+                  "qrContent": "00020101021226690017ID.CO.BANKBJB.WWW011893600110124282725402153543937239779840303UMI51440014ID.CO.QRIS.WWW0215ID10232764348430303UMI52040742530336054061000005502015802ID5916dicoba buat test6013JAKARTA PUSAT61051011062690117Test-Eliezer-0030071535439372397798408253rd party merchant paymen6304DCC1",
+                  "merchantName": "siapa",
+                  "terminalId": "213141251124",
+                  "additionalInfo": {
+                    "paymentId": 2,
+                    "merchantCode": "6287776007230",
+                    "currency": "IDR",
+                    "transId": "491010326899",
+                    "amount": "100001",
+                    "status": "Success",
+                    "nmid": "ID1023276434843"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-TIMESTAMP",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "2024-03-08T10:55:00+07:00"
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "0dfc9b5f9ad5770573cd42b525105996823dd4ac82bd0d03d94b5661e2ffc42eea0cd5b23498f20ec829d33f254abac6160ed2ff6c30e523f2f87143e85c2ab7"
+          },
+          {
+            "name": "ORIGIN",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "example": "wwww.bankbjb.co.id"
+          },
+          {
+            "name": "X-EXTERNAL-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 1704163477
+          },
+          {
+            "name": "CHANNEL-ID",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": 54321
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReqJSON"
+              },
+              "example": {
+                "partnerReferenceNo": "Test-Eliezer-0022",
+                "amount": {
+                  "value": "100000.00",
+                  "currency": "IDR"
+                },
+                "feeAmount": {
+                  "value": "1.00",
+                  "currency": "IDR"
+                },
+                "merchantId": "00007100010926",
+                "subMerchantId": "310928924949487",
+                "storeId": "abcd",
+                "terminalId": "213141251124",
+                "validityPeriod": "2009-07-03T12:08:56-07:00",
+                "additionalInfo": {
+                  "paymentId": "1",
+                  "merchantCode": "628999999951",
+                  "backendUrl": "https://bankbjb.co.id/backend",
+                  "transactionPurpose": "3rd party merchant payment",
+                  "channelId": "3"
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "X-PARTNER-ID": [],
+            "OAUTH-SNAP-PARTNER": [
+              "default"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "X-PARTNER-ID": {
+        "type": "apiKey",
+        "x-key-type": "client_id",
+        "name": "X-PARTNER-ID",
+        "in": "header"
+      },
+      "OAUTH-SNAP-PARTNER": {
+        "type": "oauth2",
+        "x-ibm-oauth-provider": "oauth2-snap-partner",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://devapi.bankbjb.co.id/api/v1/access-token/b2b",
+            "scopes": {
+              "default": "Default scope For Direct Debit SNAP REST API"
+            }
+          }
+        }
+      }
+    },
+    "parameters": {},
+    "schemas": {
+      "ReqJSON": {
+        "title": "ReqJSON",
+        "type": "object",
+        "description": "Request JSON Generate QR MPM",
+        "properties": {
+          "partnerReferenceNo": {
+            "type": "string",
+            "title": "partnerReferenceNo"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/amount",
+            "title": "amount"
+          },
+          "feeAmount": {
+            "$ref": "#/components/schemas/feeAmount",
+            "title": "feeAmount"
+          },
+          "merchantId": {
+            "type": "string",
+            "title": "merchantId"
+          },
+          "subMerchantId": {
+            "type": "string",
+            "title": "subMerchantId"
+          },
+          "storeId": {
+            "type": "string",
+            "title": "storeId"
+          },
+          "terminalId": {
+            "type": "string",
+            "title": "terminalId"
+          },
+          "validityPeriod": {
+            "type": "string",
+            "title": "validityPeriod"
+          },
+          "additionalInfo": {
+            "$ref": "#/components/schemas/additionalInfo",
+            "title": "additionalInfo"
+          }
+        }
+      },
+      "amount": {
+        "title": "amount",
+        "type": "object",
+        "description": "Amount QR MPM Object Schema",
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "value"
+          },
+          "currency": {
+            "type": "string",
+            "title": "currency"
+          }
+        }
+      },
+      "feeAmount": {
+        "title": "feeAmount",
+        "type": "object",
+        "description": "Fee Amount QR MPM Schema",
+        "properties": {
+          "value": {
+            "type": "string",
+            "title": "value"
+          },
+          "currency": {
+            "type": "string",
+            "title": "currency"
+          }
+        }
+      },
+      "additionalInfo": {
+        "title": "additionalInfo",
+        "type": "object",
+        "properties": {
+          "paymentId": {
+            "type": "string",
+            "title": "paymentId"
+          },
+          "merchantCode": {
+            "type": "string",
+            "title": "merchantCode"
+          },
+          "backendUrl": {
+            "type": "string",
+            "title": "backendUrl"
+          },
+          "transactionPurpose": {
+            "type": "string",
+            "title": "transactionPurpose"
+          },
+          "channelId": {
+            "type": "string",
+            "title": "channelId"
+          },
+          "currency": {
+            "type": "string",
+            "title": "currency"
+          },
+          "transId": {
+            "type": "string",
+            "title": "transId"
+          },
+          "amount": {
+            "type": "string",
+            "title": "amount"
+          },
+          "status": {
+            "type": "string",
+            "title": "status"
+          },
+          "nmid": {
+            "type": "string",
+            "title": "nmid"
+          }
+        }
+      },
+      "ResJSON": {
+        "title": "ResJSON",
+        "type": "object",
+        "description": "Response JSON Generate QR MPM",
+        "properties": {
+          "responseCode": {
+            "type": "string",
+            "title": "responseCode"
+          },
+          "responseMessage": {
+            "type": "string",
+            "title": "responseMessage"
+          },
+          "referenceNo": {
+            "type": "string",
+            "title": "referenceNo"
+          },
+          "partnerReferenceNo": {
+            "type": "string",
+            "title": "partnerReferenceNo"
+          },
+          "qrContent": {
+            "type": "string",
+            "title": "qrContent"
+          },
+          "merchantName": {
+            "type": "string",
+            "title": "merchantName"
+          },
+          "terminalId": {
+            "type": "string",
+            "title": "terminalId"
+          },
+          "additionalInfo": {
+            "$ref": "#/components/schemas/additionalInfo",
+            "title": "additionalInfo"
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "X-PARTNER-ID": [],
+      "OAUTH-SNAP-PARTNER": [
+        "default"
+      ]
+    }
+  ],
+  "x-ibm-endpoints": [
+    {
+      "url": "https://devapi.bankbjb.co.id/v1.0/qr/qr-mpm-generate"
+    }
+  ]
+}
