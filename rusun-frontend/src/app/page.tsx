@@ -30,7 +30,7 @@ export default function LandingPage() {
   useEffect(() => {
     async function fetchStaff() {
       try {
-        const res = await api.get("/management/");
+        const res = await api.get("/management/public");
         setStaff(res.data);
       } catch (error) {
         console.error("Failed to fetch staff:", error);
@@ -244,6 +244,7 @@ export default function LandingPage() {
                       src={topLeader.image_url || "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80"} 
                       alt={topLeader.name} 
                       fill 
+                      sizes="(max-width: 768px) 192px, 224px"
                       className="object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                   </div>
@@ -291,6 +292,7 @@ export default function LandingPage() {
                       src={leader.image_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80"} 
                       alt={leader.name} 
                       fill 
+                      sizes="(max-width: 768px) 176px, 208px"
                       className="object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                   </div>

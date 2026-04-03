@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X } from "lucide-react";
+import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface Application {
@@ -21,6 +21,11 @@ interface Application {
     kk_file_path: string | null;
     marriage_cert_file_path: string | null;
     is_documents_verified: boolean;
+    sku_file_path: string | null;
+    skck_file_path: string | null;
+    health_cert_file_path: string | null;
+    photo_file_path: string | null;
+    has_signed_statement: boolean;
     created_at: string;
 }
 
@@ -34,7 +39,17 @@ const EMPTY_FORM = {
     marital_status: "Belum Kawin",
     ktp_file: null as File | null,
     kk_file: null as File | null,
-    marriage_cert_file: null as File | null
+    marriage_cert_file: null as File | null,
+    sku_file: null as File | null,
+    skck_file: null as File | null,
+    health_cert_file: null as File | null,
+    photo_file: null as File | null
+};
+
+const SITE_ORDER: Record<string, number> = {
+    "Cigugur Tengah": 1,
+    "Cibeureum": 2,
+    "Leuwigajah": 3
 };
 
 export default function ApplicationsPage() {
@@ -115,7 +130,11 @@ export default function ApplicationsPage() {
             marital_status: app.marital_status || "Belum Kawin",
             ktp_file: null,
             kk_file: null,
-            marriage_cert_file: null
+            marriage_cert_file: null,
+            sku_file: null,
+            skck_file: null,
+            health_cert_file: null,
+            photo_file: null
         });
         setEditingId(app.id);
         setModalMode("edit");
@@ -143,6 +162,13 @@ export default function ApplicationsPage() {
                 payload.append("ktp_file", form.ktp_file);
                 if (form.kk_file) payload.append("kk_file", form.kk_file);
                 if (form.marriage_cert_file) payload.append("marriage_cert_file", form.marriage_cert_file);
+                if (form.sku_file) payload.append("sku_file", form.sku_file);
+                if (form.photo_file) payload.append("photo_file", form.photo_file);
+                if (form.skck_file) payload.append("skck_file", form.skck_file);
+                if (form.health_cert_file) payload.append("health_cert_file", form.health_cert_file);
+                // Admin manually creating also signs the statement by default if it's an admin bypass, 
+                // or we can add a toggle. For now, we follow backend requirement if needed.
+                payload.append("has_signed_statement", "true");
 
                 await api.post("/applications/", payload, {
                     headers: { "Content-Type": "multipart/form-data" }
@@ -209,10 +235,24 @@ export default function ApplicationsPage() {
         }
     };
 
-    const filteredApps = apps.filter(app =>
-        app.full_name.toLowerCase().includes(search.toLowerCase()) ||
-        app.nik.includes(search)
-    );
+    const filteredApps = React.useMemo(() => {
+        return apps
+            .filter(app =>
+                app.full_name.toLowerCase().includes(search.toLowerCase()) ||
+                app.nik.includes(search)
+            )
+            .sort((a, b) => {
+                const priorityA = SITE_ORDER[a.rusunawa_target] || 99;
+                const priorityB = SITE_ORDER[b.rusunawa_target] || 99;
+                
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
+                }
+                
+                // Secondary sort: Newest first
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+    }, [apps, search]);
 
     return (
         <div className="p-6 md:p-10 max-w-[1600px] mx-auto space-y-8">
@@ -493,8 +533,40 @@ export default function ApplicationsPage() {
                                             }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
                                         </div>
                                     )}
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">File SKU / Slip Gaji</label>
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setForm({...form, sku_file: e.target.files[0]});
+                                            }
+                                        }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">Pasfoto 3x4</label>
+                                        <input type="file" accept=".jpg,.jpeg,.png" onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setForm({...form, photo_file: e.target.files[0]});
+                                            }
+                                        }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">SKCK</label>
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setForm({...form, skck_file: e.target.files[0]});
+                                            }
+                                        }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-semibold text-slate-500 uppercase">Surat Ket. Sehat</label>
+                                        <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                                            if (e.target.files && e.target.files.length > 0) {
+                                                setForm({...form, health_cert_file: e.target.files[0]});
+                                            }
+                                        }} className="w-full file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-xs text-slate-500 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-950" />
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-slate-400">Hanya file gambar JPG/PNG, ukuran maksimal 2MB per file.</p>
+                                <p className="text-[10px] text-slate-400 font-medium">Berdasarkan Perwal 36/2017: KTP, KK, SKU, dan Pasfoto wajib dilampirkan (Administrasi Utama).</p>
                             </div>
 
                             <div className="flex gap-3 justify-end pt-5 border-t border-slate-100 dark:border-slate-800">
@@ -594,6 +666,109 @@ export default function ApplicationsPage() {
                                             {viewingDocsApp.marital_status === "Kawin" ? "Wajib diunggah" : "Tidak diperlukan"}
                                         </div>
                                     )}
+                                </div>
+
+                                {/* SKU */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">4</div>
+                                        SKU / Slip Gaji
+                                    </h3>
+                                    {viewingDocsApp.sku_file_path ? (
+                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.sku_file_path}`} 
+                                                alt="SKU" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.sku_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/2] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic">Belum diunggah</div>
+                                    )}
+                                </div>
+
+                                {/* SKCK */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">5</div>
+                                        SKCK
+                                    </h3>
+                                    {viewingDocsApp.skck_file_path ? (
+                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.skck_file_path}`} 
+                                                alt="SKCK" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.skck_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/2] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic">Belum diunggah</div>
+                                    )}
+                                </div>
+
+                                {/* Health Cert */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">6</div>
+                                        Surat Keterangan Sehat
+                                    </h3>
+                                    {viewingDocsApp.health_cert_file_path ? (
+                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.health_cert_file_path}`} 
+                                                alt="Surat Sehat" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                             />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.health_cert_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/2] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic">Belum diunggah</div>
+                                    )}
+                                </div>
+
+                                {/* Photo */}
+                                <div className="space-y-3">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">7</div>
+                                        Pasfoto 3x4
+                                    </h3>
+                                    {viewingDocsApp.photo_file_path ? (
+                                        <div className="aspect-[3/4] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group max-w-[150px] mx-auto">
+                                            <img 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.photo_file_path}`} 
+                                                alt="Pasfoto" 
+                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.photo_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="aspect-[3/4] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-400 text-xs italic max-w-[150px] mx-auto">Belum diunggah</div>
+                                    )}
+                                </div>
+
+                                {/* Digital Statement */}
+                                <div className="space-y-3 md:col-span-2">
+                                    <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                         <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs">8</div>
+                                        Surat Pernyataan Digital
+                                    </h3>
+                                    <div className={`p-4 rounded-2xl border-2 ${viewingDocsApp.has_signed_statement ? 'bg-green-50 border-green-100 text-green-700' : 'bg-red-50 border-red-100 text-red-700'} flex items-start gap-3`}>
+                                        <ShieldCheck className={`w-5 h-5 mt-0.5 ${viewingDocsApp.has_signed_statement ? 'text-green-600' : 'text-red-600'}`} />
+                                        <div>
+                                            <p className="text-sm font-bold">{viewingDocsApp.has_signed_statement ? 'Telah Disetujui' : 'Belum Disetujui'}</p>
+                                            <p className="text-xs opacity-70 leading-relaxed mt-1">Pemohon telah menyetujui pernyataan tidak memiliki rumah dan bersedia mematuhi Perwal No. 36/2017 secara digital saat pendaftaran.</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

@@ -1,8 +1,14 @@
-from fastapi import FastAPI
+import logging
+import os
+import secrets
+import string
+import asyncio
+
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from contextlib import asynccontextmanager
-import os
 from datetime import datetime, timezone
 from app.core.db import create_db_and_tables
 from app.core.config import settings
@@ -14,6 +20,8 @@ from sqlmodel import Session, select
 from app.core.db import engine, create_db_and_tables
 from app.core.security import hash_password
 from app.models.user import User, UserRole
+
+logger = logging.getLogger(__name__)
 
 
 # Simple background task for automatic penalty processing
@@ -35,7 +43,7 @@ async def run_daily_overdue_processing():
             # Create a mock internal admin for the process
             mock_admin = User(role=UserRole.sadmin, name="System Automation")
             
-            print(f"[{datetime.now()}] Running automated daily and monthly tasks...")
+            logger.info("Running automated daily and monthly tasks...")
             
             # 1. Handle Monthly Generation (Only runs on day 01)
             from app.api.tasks import handle_monthly_generation
@@ -45,14 +53,14 @@ async def run_daily_overdue_processing():
             from app.api.tasks import handle_overdue_processing
             await asyncio.to_thread(handle_overdue_processing, session, mock_admin)
             
-            print(f"[{datetime.now()}] Automated tasks completed.")
+            logger.info("Automated tasks completed.")
             
             # Wait 24 hours
             await asyncio.sleep(86400)
         except StopIteration:
             pass
         except Exception as e:
-            print(f"Error in automated overdue processing: {e}")
+            logger.error(f"Error in automated overdue processing: {e}")
             await asyncio.sleep(60) # Wait a minute before retrying on error
 
 def seed_admin():
@@ -62,20 +70,30 @@ def seed_admin():
         admin_exists = session.exec(statement).first()
         
         if not admin_exists:
-            print("[AUTO-SEED] Tidak ada admin ditemukan. Membuat akun default...")
+            logger.info("[AUTO-SEED] Tidak ada admin ditemukan. Membuat akun default...")
+            # Generate cryptographically secure password
+            admin_password = ''.join(
+                secrets.choice(string.ascii_letters + string.digits + "!@#$%^&*")
+                for _ in range(16)
+            )
             default_admin = User(
                 email="admin@rusunawa.com",
                 name="Super Admin",
                 phone="08123456789",
                 role=UserRole.sadmin,
                 is_active=True,
-                password_hash=hash_password("admin123!"),
+                password_hash=hash_password(admin_password),
             )
             session.add(default_admin)
             session.commit()
-            print("[AUTO-SEED] Akun Default: admin@rusunawa.com / admin123!")
+            # SECURITY: Password HANYA ditampilkan sekali saat pertama kali seed.
+            # Di production, kirim via channel aman (email/SMS), jangan log.
+            if settings.ENVIRONMENT == "development":
+                logger.warning(f"[AUTO-SEED] DEV ONLY — Admin: admin@rusunawa.com / {admin_password}")
+            else:
+                logger.info("[AUTO-SEED] Akun admin dibuat. Password dikirim via secure channel.")
         else:
-            print("[AUTO-SEED] Akun admin sudah ada.")
+            logger.info("[AUTO-SEED] Akun admin sudah ada.")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -90,13 +108,40 @@ async def lifespan(app: FastAPI):
     # Shutdown: tambahkan cleanup logic di sini jika diperlukan
 
 
+# --- Security Headers Middleware (LOW-01) ---
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if settings.ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+        return response
+
+
 app = FastAPI(
     title="Rusunawa API",
     description="Backend API untuk Sistem Manajemen Rumah Susun Sederhana Sewa",
     version="1.0.0",
     lifespan=lifespan,  # modern pattern (FastAPI >= 0.93)
     redirect_slashes=True, # Allow Next.js trailing slashes to match routes
+    # Disable docs in production (security hardening)
+    docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,
 )
+
+# CRIT-05: Register rate limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.api.auth import limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add Security Headers
+app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS - Robust development origins
 _default_origins = [
@@ -121,12 +166,16 @@ if settings.ENVIRONMENT == "development":
         if origin not in allow_origins:
             allow_origins.append(origin)
 
+# MED-05: Explicit methods/headers for production, wildcard for dev
+_allowed_methods = ["*"] if settings.ENVIRONMENT == "development" else ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"]
+_allowed_headers = ["*"] if settings.ENVIRONMENT == "development" else ["Content-Type", "Authorization", "Cookie"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=_allowed_methods,
+    allow_headers=_allowed_headers,
 )
 
 # Register routers

@@ -1,13 +1,55 @@
-name: Deploy to DigitalOcean
+name: CI/CD Pipeline to DigitalOcean
+
 on:
   push:
-    branches:
-      - master # Sesuaikan kalau branch utama kamu namanya 'main'
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ] # Jalankan tes saat ada Pull Request
 
 jobs:
-  deploy:
+  # TAHAP 1: Continuous Integration (CI)
+  test-and-lint:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
+      - name: Setup Node.js (Frontend)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'rusun-frontend/package.json'
+
+      - name: Install Frontend Dependencies
+        working-directory: ./rusun-frontend
+        run: npm ci
+
+      - name: Run Next.js Build Check (Validation)
+        working-directory: ./rusun-frontend
+        run: npm run build
+
+      - name: Setup Python (Backend)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Backend Dependencies
+        working-directory: ./rusun-backend
+        run: pip install -r requirements.txt
+
+      # Jika ada unit test, nyalakan bagian ini:
+      # - name: Run Pytest
+      #   working-directory: ./rusun-backend
+      #   run: pytest
+
+  # TAHAP 2: Continuous Deployment (CD)
+  # Hanya jalan JIKA tahap "test-and-lint" SUKSES
+  deploy:
+    needs: test-and-lint 
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
     steps:
       - name: Deploy to Droplet
         uses: appleboy/ssh-action@v1.0.3
@@ -17,18 +59,22 @@ jobs:
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
             cd /opt/rusunawa
-            git pull origin master
+            
+            # Reset changes and pull latest
+            git fetch origin master
+            git reset --hard origin/master
             
             # 1. Ensure DB is up and create compressed backup
             docker compose -f docker-compose.prod.yml up -d db
             mkdir -p backups
             docker exec rusunawa_db pg_dump -U rusun_user rusunawa | gzip > backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz
             # Keep only last 5 backups
-            ls -dt backups/* | tail -n +6 | xargs -d '\n' rm -f -- 2>/dev/null || true
+            ls -dt backups/* 2>/dev/null | tail -n +6 | xargs -r rm -f
             
             # 2. Build and migrate
+            # Hindari downtime saat rebuild dengan menaikkan cache
             docker compose -f docker-compose.prod.yml build
             docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
             
             # 3. Deploy
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans

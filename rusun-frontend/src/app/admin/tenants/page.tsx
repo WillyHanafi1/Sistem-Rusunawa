@@ -38,6 +38,12 @@ const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "S
 const ROMAN: Record<number, string> = { 1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII", 9: "IX", 10: "X" };
 const toRoman = (n: number) => ROMAN[n] || String(n);
 
+const SITE_ORDER: Record<string, number> = {
+    "Cigugur Tengah": 1,
+    "Cibeureum": 2,
+    "Leuwigajah": 3
+};
+
 const STATUS_BADGE: Record<string, string> = {
     kosong: "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
     isi: "bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30",
@@ -236,9 +242,21 @@ export default function ContractRoomPage() {
     };
 
     const filteredRooms = useMemo(() => {
-        let result = rooms;
+        let result = [...rooms];
         if (filterStatus) result = result.filter(r => r.status === filterStatus);
-        return result;
+        
+        // Custom Sort by Site Priority
+        return result.sort((a, b) => {
+            const priorityA = SITE_ORDER[a.rusunawa] || 99;
+            const priorityB = SITE_ORDER[b.rusunawa] || 99;
+            
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+            
+            // Secondary sort by Room Number for consistency
+            return a.room_number.localeCompare(b.room_number);
+        });
     }, [rooms, filterStatus]);
 
     const columnHelper = createColumnHelper<Room>();

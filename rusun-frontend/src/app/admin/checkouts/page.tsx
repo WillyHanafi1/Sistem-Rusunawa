@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { 
     Search, Filter, CheckCircle2, XCircle, Clock, Info, 
     ArrowRight, Loader2, Banknote, User, Home, Calendar,
@@ -24,6 +24,12 @@ interface Checkout {
     bank_account_number?: string;
     bank_account_holder?: string;
 }
+
+const SITE_ORDER: Record<string, number> = {
+    "Cigugur Tengah": 1,
+    "Cibeureum": 2,
+    "Leuwigajah": 3
+};
 
 export default function CheckoutsPage() {
     const [checkouts, setCheckouts] = useState<Checkout[]>([]);
@@ -70,12 +76,30 @@ export default function CheckoutsPage() {
         }
     };
 
-    const filteredCheckouts = checkouts.filter(c => {
-        const matchesSearch = (c.tenant_name?.toLowerCase().includes(search.toLowerCase()) || 
-                             c.room_number?.toLowerCase().includes(search.toLowerCase()));
-        const matchesStatus = statusFilter === "all" || c.status === statusFilter;
-        return matchesSearch && matchesStatus;
-    });
+    const filteredCheckouts = useMemo(() => {
+        return checkouts
+            .filter(c => {
+                const matchesSearch = (c.tenant_name?.toLowerCase().includes(search.toLowerCase()) || 
+                                     c.room_number?.toLowerCase().includes(search.toLowerCase()));
+                const matchesStatus = statusFilter === "all" || c.status === statusFilter;
+                return matchesSearch && matchesStatus;
+            })
+            .sort((a, b) => {
+                // Extract site from room_number "Site - Building Floor Unit"
+                const siteA = a.room_number?.split(" - ")[0] || "";
+                const siteB = b.room_number?.split(" - ")[0] || "";
+                
+                const priorityA = SITE_ORDER[siteA] || 99;
+                const priorityB = SITE_ORDER[siteB] || 99;
+                
+                if (priorityA !== priorityB) {
+                    return priorityA - priorityB;
+                }
+                
+                // Secondary sort: Newest first
+                return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+            });
+    }, [checkouts, search, statusFilter]);
 
     const getStatusIcon = (status: string) => {
         switch (status) {

@@ -22,7 +22,12 @@ class ApplicationBase(SQLModel):
     ktp_file_path: Optional[str] = None
     kk_file_path: Optional[str] = None
     marriage_cert_file_path: Optional[str] = None
+    sku_file_path: Optional[str] = None
+    skck_file_path: Optional[str] = None
+    health_cert_file_path: Optional[str] = None
+    photo_file_path: Optional[str] = None
     other_file_path: Optional[str] = None
+    has_signed_statement: bool = Field(default=False)
     is_documents_verified: bool = Field(default=False)
     notes: Optional[str] = None
     
@@ -56,6 +61,7 @@ class ApplicationCreate(SQLModel):
     email: str
     rusunawa_target: RusunawaSite
     family_members_count: int = 1
+    has_signed_statement: bool = False
     notes: Optional[str] = None
     
     # New Bio Fields
@@ -89,6 +95,15 @@ class ApplicationUpdate(SQLModel):
     
     # Doc Updates
     is_documents_verified: Optional[bool] = None
+    has_signed_statement: Optional[bool] = None
+    ktp_file_path: Optional[str] = None
+    kk_file_path: Optional[str] = None
+    marriage_cert_file_path: Optional[str] = None
+    sku_file_path: Optional[str] = None
+    skck_file_path: Optional[str] = None
+    health_cert_file_path: Optional[str] = None
+    photo_file_path: Optional[str] = None
+    
     sk_number: Optional[str] = None
     sk_date: Optional[date] = None
     ps_number: Optional[str] = None

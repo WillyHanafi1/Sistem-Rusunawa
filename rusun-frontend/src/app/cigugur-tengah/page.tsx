@@ -14,14 +14,25 @@ import api from "@/lib/api";
 export default function CigugurTengahPage() {
   const [formData, setFormData] = useState({
     lokasi: "Rusunawa Cigugur Tengah",
-    nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1, pasfoto: null as File | null
+    nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1, 
+    ktp_file: null as File | null,
+    kk_file: null as File | null,
+    sku_file: null as File | null,
+    skck_file: null as File | null,
+    health_cert_file: null as File | null,
+    photo_file: null as File | null,
+    has_signed_statement: false
   });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.pasfoto) {
-      alert("Mohon unggah file KTP / Pasfoto pendaftaran.");
+    if (!formData.ktp_file || !formData.kk_file) {
+      alert("Mohon lengkapi dokumen identitas wajib (KTP dan Kartu Keluarga).");
+      return;
+    }
+    if (!formData.has_signed_statement) {
+      alert("Anda harus menyetujui Surat Pernyataan untuk melanjutkan.");
       return;
     }
     setLoading(true);
@@ -33,13 +44,22 @@ export default function CigugurTengahPage() {
       payload.append("email", formData.email);
       payload.append("rusunawa_target", "Cigugur Tengah");
       payload.append("family_members_count", formData.jmlKeluarga.toString());
-      payload.append("ktp_file", formData.pasfoto);
+      payload.append("ktp_file", formData.ktp_file);
+      payload.append("kk_file", formData.kk_file);
+      if (formData.sku_file) payload.append("sku_file", formData.sku_file);
+      if (formData.skck_file) payload.append("skck_file", formData.skck_file);
+      if (formData.health_cert_file) payload.append("health_cert_file", formData.health_cert_file);
+      if (formData.photo_file) payload.append("photo_file", formData.photo_file);
+      payload.append("has_signed_statement", formData.has_signed_statement.toString());
 
       await api.post("/applications/", payload, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       alert("Pendaftaran berhasil dikirim! Silakan tunggu petugas kami menghubungi Anda.");
-      setFormData({ ...formData, nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1, pasfoto: null });
+      setFormData({ 
+        ...formData, nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1, 
+        ktp_file: null, kk_file: null, sku_file: null, photo_file: null, has_signed_statement: false 
+      });
     } catch (err: any) {
       alert(err.response?.data?.detail || "Terjadi kesalahan saat mengirim pendaftaran.");
     } finally {
@@ -250,9 +270,85 @@ export default function CigugurTengahPage() {
               </div>
               <input required type="file" accept=".jpg,.jpeg,.png" onChange={e => {
                 if (e.target.files && e.target.files.length > 0) {
-                  setFormData({...formData, pasfoto: e.target.files[0]});
+                  setFormData({...formData, ktp_file: e.target.files[0]});
                 }
               }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
+              <div className="md:w-1/4">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Upload KK <span className="text-red-500">*</span></label>
+                <span className="text-xs text-slate-500">Kartu Keluarga (Max 2MB)</span>
+              </div>
+              <input required type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFormData({...formData, kk_file: e.target.files[0]});
+                }
+              }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
+              <div className="md:w-1/4">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Upload SKU / Slip Gaji</label>
+                <span className="text-xs text-slate-500 italic">Dapat menyusul (Max 2MB)</span>
+              </div>
+              <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFormData({...formData, sku_file: e.target.files[0]});
+                }
+              }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
+              <div className="md:w-1/4">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Upload SKCK</label>
+                <span className="text-xs text-slate-500 italic">Dapat menyusul (Max 2MB)</span>
+              </div>
+              <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFormData({...formData, skck_file: e.target.files[0]});
+                }
+              }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
+              <div className="md:w-1/4">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Surat Keterangan Sehat</label>
+                <span className="text-xs text-slate-500 italic">Dapat menyusul (Max 2MB)</span>
+              </div>
+              <input type="file" accept=".jpg,.jpeg,.png,.pdf" onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFormData({...formData, health_cert_file: e.target.files[0]});
+                }
+              }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
+              <div className="md:w-1/4">
+                <label className="text-sm font-semibold text-slate-700 dark:text-slate-300 block mb-1">Pasfoto 3x4</label>
+                <span className="text-xs text-slate-500 italic">Dapat menyusul (Max 2MB)</span>
+              </div>
+              <input type="file" accept=".jpg,.jpeg,.png" onChange={e => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setFormData({...formData, photo_file: e.target.files[0]});
+                }
+              }} className="md:w-3/4 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer text-sm text-slate-500 border border-slate-300 dark:border-slate-700 rounded-lg w-full bg-white dark:bg-slate-950" />
+            </div>
+
+            <div className="flex flex-col gap-4 border-t border-slate-200 dark:border-white/5 pt-6 bg-blue-50/50 dark:bg-blue-900/10 p-6 rounded-xl">
+              <div className="flex items-start gap-3">
+                <input 
+                  id="statement"
+                  type="checkbox" 
+                  checked={formData.has_signed_statement}
+                  onChange={e => setFormData({...formData, has_signed_statement: e.target.checked})}
+                  className="mt-1 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <label htmlFor="statement" className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-medium">
+                  <strong>SURAT PERNYATAAN DIGITAL:</strong><br/>
+                  Saya menyatakan bahwa data yang saya masukkan adalah benar, saya belum memiliki rumah, dan bersedia mematuhi segala peraturan dan tata tertib penghunian Rusunawa sesuai Perwal No. 36 Tahun 2017.
+                </label>
+              </div>
             </div>
 
             <div className="flex justify-center pt-4">

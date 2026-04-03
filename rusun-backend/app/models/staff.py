@@ -20,6 +20,14 @@ class StaffCreate(StaffBase):
 class StaffRead(StaffBase):
     id: int
 
+class StaffPublicRead(SQLModel):
+    id: int
+    name: str
+    role: str
+    tier: int
+    image_url: Optional[str] = None
+    socials: Optional[Dict[str, str]] = None
+
 class StaffUpdate(SQLModel):
     name: Optional[str] = None
     role: Optional[str] = None

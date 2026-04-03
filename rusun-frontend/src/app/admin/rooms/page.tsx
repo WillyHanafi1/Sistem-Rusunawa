@@ -35,6 +35,12 @@ const STATUS_BADGE: Record<string, string> = {
 const EMPTY_FORM = { rusunawa: "Cigugur Tengah", building: "A", floor: 1, unit_number: 1, price: 750000, status: "kosong" };
 const EMPTY_BULK_FORM = { rusunawa: "Cigugur Tengah", building: "", floor: "", new_price: 500000 };
 
+const SITE_ORDER: Record<string, number> = {
+    "Cigugur Tengah": 1,
+    "Cibeureum": 2,
+    "Leuwigajah": 3
+};
+
 export default function RoomsPage() {
     const [rooms, setRooms] = useState<Room[]>([]);
     const [loading, setLoading] = useState(true);
@@ -120,6 +126,20 @@ export default function RoomsPage() {
         setSuccessMsg("Kamar berhasil dihapus selamanya.");
         fetch();
     };
+
+    const sortedRooms = useMemo(() => {
+        return [...rooms].sort((a, b) => {
+            const priorityA = SITE_ORDER[a.rusunawa] || 99;
+            const priorityB = SITE_ORDER[b.rusunawa] || 99;
+            
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+            
+            // Secondary sort by Room Number for consistency
+            return a.room_number.localeCompare(b.room_number);
+        });
+    }, [rooms]);
 
     const columnHelper = createColumnHelper<Room>();
 
@@ -268,7 +288,7 @@ export default function RoomsPage() {
     ], [filterRusunawa, filterBuilding, filterSearch]);
 
     const table = useReactTable({
-        data: rooms,
+        data: sortedRooms,
         columns,
         getCoreRowModel: getCoreRowModel(),
     });

@@ -2,8 +2,11 @@
 import { useEffect, useState, useMemo } from "react";
 import api from "@/lib/api";
 import { 
-    Plus, Loader2, X, Filter, Calendar, CreditCard, CheckCircle2, AlertTriangle, TrendingUp, Search
+    Plus, Loader2, X, Filter, Calendar, CreditCard, CheckCircle2, AlertTriangle, TrendingUp, Search,
+    CheckSquare, Square, Printer, Eye, ChevronRight, DollarSign, Wallet, ArrowUpRight, Percent,
+    FileText, User, Building2, MapPin, Hash, Sparkles
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Invoice {
     id: number;
@@ -11,6 +14,7 @@ interface Invoice {
     period_month: number;
     period_year: number;
     base_rent: number;
+    parking_charge: number; // Added
     total_amount: number;
     due_date: string;
     status: string;
@@ -24,16 +28,56 @@ interface Invoice {
     payment_url?: string;
     skrd_number?: string | null;
     skrd_date?: string | null;
-    teguran1_number?: string | null;
-    teguran1_date?: string | null;
-    teguran2_number?: string | null;
-    teguran2_date?: string | null;
-    teguran3_number?: string | null;
-    teguran3_date?: string | null;
+    document_type: string;
 }
 
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const SITE_ORDER: Record<string, number> = { "Cigugur Tengah": 1, "Cibeureum": 2, "Leuwigajah": 3 };
+
+// --- Premium UI Components ---
+
+const StatCard = ({ title, value, icon: Icon, color, sub, trend }: any) => (
+    <motion.div 
+        whileHover={{ y: -5, transition: { duration: 0.2 } }}
+        className="relative bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden group"
+    >
+        <div className={`absolute top-0 right-0 w-24 h-24 blur-[80px] -mr-8 -mt-8 opacity-20 bg-${color}-500 group-hover:opacity-40 transition-opacity`} />
+        <div className="flex flex-col gap-4 relative z-10">
+            <div className="flex items-start justify-between">
+                <div className={`w-12 h-12 bg-${color}-100 dark:bg-${color}-500/10 rounded-2xl flex items-center justify-center text-${color}-600 dark:text-${color}-400 ring-4 ring-${color}-50/50 dark:ring-0`}>
+                    <Icon className="w-6 h-6" />
+                </div>
+                {trend && (
+                    <div className="flex items-center gap-1 text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-1 rounded-full text-[10px] font-bold">
+                        <ArrowUpRight className="w-3 h-3" /> {trend}
+                    </div>
+                )}
+            </div>
+            <div>
+                <div className="text-slate-400 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest leading-none mb-1">{title}</div>
+                <div className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter tabular-nums">{value}</div>
+                <div className="text-[10px] text-slate-400 font-medium mt-1 flex items-center gap-1">
+                    {sub}
+                </div>
+            </div>
+        </div>
+    </motion.div>
+);
+
+const Badge = ({ children, status, glow }: any) => {
+    const variants: any = {
+        lunas: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30 shadow-emerald-500/5",
+        overdue: "bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400 border-rose-200 dark:border-rose-500/30",
+        unpaid: "bg-slate-100 text-slate-600 dark:bg-slate-500/20 dark:text-slate-400 border-slate-200 dark:border-slate-500/30",
+        skrd: "bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-400 border-blue-200 dark:border-blue-500/30",
+        strd: "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 border-amber-200 dark:border-amber-500/30",
+    };
+    return (
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border transition-all ${variants[status] || variants.unpaid} ${glow ? 'shadow-lg shadow-current/20' : ''}`}>
+            {children}
+        </span>
+    );
+};
 
 export default function RentInvoicesPage() {
     const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -50,8 +94,12 @@ export default function RentInvoicesPage() {
     // Modal states
     const [modalGen, setModalGen] = useState(false);
     const [modalPay, setModalPay] = useState<Invoice | null>(null);
+    const [modalBulkPay, setModalBulkPay] = useState(false);
     const [saving, setSaving] = useState(false);
     const [modalTab, setModalTab] = useState<"individu" | "massal">("individu");
+
+    const [selectedIds, setSelectedIds] = useState<number[]>([]);
+    const [bulkPaidAt, setBulkPaidAt] = useState(new Date().toISOString().split('T')[0]);
 
     const [form, setForm] = useState({
         tenant_id: 0,
@@ -83,355 +131,284 @@ export default function RentInvoicesPage() {
 
     useEffect(() => { fetchAll(); }, [filterMonth, filterYear]);
 
+    useEffect(() => {
+        const monthStr = filterMonth.toString().padStart(2, '0');
+        const defaultDue = `${filterYear}-${monthStr}-21`;
+        setForm(f => ({ ...f, period_month: filterMonth, period_year: filterYear, due_date: defaultDue }));
+    }, [filterMonth, filterYear]);
+
+    useEffect(() => {
+        if (form.period_month && form.period_year) {
+            const m = form.period_month.toString().padStart(2, '0');
+            const d = `${form.period_year}-${m}-21`;
+            setForm(f => ({ ...f, due_date: d }));
+        }
+    }, [form.period_month, form.period_year]);
+
     const handleGenerate = async () => {
         setSaving(true);
         try {
             if (modalTab === "individu") {
                 await api.post("/invoices/generate", { ...form, tenant_id: Number(form.tenant_id) });
-                setModalGen(false);
             } else {
-                const payload = {
-                    ...form,
-                    start_skrd_no: form.start_skrd_no ? Number(form.start_skrd_no) : null
-                };
+                const payload = { ...form, start_skrd_no: form.start_skrd_no ? Number(form.start_skrd_no) : null };
                 const res = await api.post("/invoices/mass-generate", payload);
                 alert(res.data.message);
-                setModalGen(false);
             }
+            setModalGen(false);
             fetchAll();
         } catch (e: any) {
             alert(e.response?.data?.detail || "Terjadi kesalahan");
-        } finally {
-            setSaving(false);
-        }
+        } finally { setSaving(false); }
     };
 
     const handleConfirmPayment = async () => {
         if (!modalPay) return;
         setSaving(true);
         try {
-            // Kita simulasikan memanggil midtrans / mencatat lunas manual di backend
-            // Jika backend belum punya endpoint pay manual khusus, kita update pakai PATCH
             await api.patch(`/invoices/${modalPay.id}`, { status: "paid", paid_at: new Date().toISOString() });
             setModalPay(null);
             fetchAll();
-        } catch (e: any) {
-            alert(e.response?.data?.detail || "Gagal mencatat pembayaran");
-        } finally {
-            setSaving(false);
+        } catch (e: any) { alert(e.response?.data?.detail || "Gagal mencatat pembayaran"); }
+        finally { setSaving(false); }
+    }
+
+    const handleBulkPay = async () => {
+        if (selectedIds.length === 0) return;
+        setSaving(true);
+        try {
+            await api.post("/invoices/bulk-pay", { invoice_ids: selectedIds, paid_at: bulkPaidAt });
+            setModalBulkPay(false);
+            setSelectedIds([]);
+            fetchAll();
+        } catch (e: any) { alert(e.response?.data?.detail || "Gagal mencatat pembayaran masal"); }
+        finally { setSaving(false); }
+    }
+
+    const toggleSelect = (id: number) => {
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    }
+
+    const toggleSelectAll = () => {
+        if (selectedIds.length === filtered.length) {
+            setSelectedIds([]);
+        } else {
+            setSelectedIds(filtered.map(i => i.id));
         }
     }
 
     const filtered = useMemo(() => {
-        let res = invoices;
+        let res = [...invoices];
         if (activeTab === "belum_lunas") res = res.filter(i => i.status === "unpaid" || i.status === "overdue");
         if (activeTab === "lunas") res = res.filter(i => i.status === "paid");
-        
         if (searchTerm) {
             const lower = searchTerm.toLowerCase();
-            res = res.filter(i => 
-                i.tenant_name.toLowerCase().includes(lower) || 
-                String(i.unit_number).includes(lower)
-            );
+            res = res.filter(i => i.tenant_name.toLowerCase().includes(lower) || String(i.unit_number).includes(lower));
         }
-        return res;
+        return res.sort((a, b) => {
+            const priorityA = SITE_ORDER[a.rusunawa] || 99;
+            const priorityB = SITE_ORDER[b.rusunawa] || 99;
+            if (priorityA !== priorityB) return priorityA - priorityB;
+            if (a.building !== b.building) return a.building.localeCompare(b.building);
+            if (a.floor !== b.floor) return a.floor - b.floor;
+            return a.unit_number - b.unit_number;
+        });
     }, [invoices, activeTab, searchTerm]);
 
-    // KPI Progress
-    const progress = useMemo(() => {
-        const total = invoices.reduce((acc, inv) => acc + Number(inv.total_amount), 0);
-        const collected = invoices.filter(i => i.status === "paid").reduce((acc, inv) => acc + Number(inv.total_amount), 0);
-        const percent = total === 0 ? 0 : Math.round((collected / total) * 100);
-        return { total, collected, percent };
-    }, [invoices]);
+    const stats = useMemo(() => {
+        const total = filtered.reduce((acc, inv) => acc + Number(inv.total_amount), 0);
+        const collected = filtered.filter(i => i.status === "paid").reduce((acc, inv) => acc + Number(inv.total_amount), 0);
+        return { total, collected, unpaid: total - collected, count: filtered.length };
+    }, [filtered]);
+
+    const progressPercent = stats.total === 0 ? 0 : Math.round((stats.collected / stats.total) * 100);
 
     return (
-        <div className="p-4 md:p-8 pb-20">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-                <div>
-                    <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Tagihan Sewa</h1>
-                    <p className="text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2">
-                        <CreditCard className="w-4 h-4" /> Kelola tagihan bulanan dan penerimaan kas
-                    </p>
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 md:p-6 pb-32 w-full">
+            {/* Header section remains premium... */}
+            <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-900 dark:bg-white rounded-2xl flex items-center justify-center text-white dark:text-slate-900 shadow-xl">
+                            <Sparkles className="w-5 h-5" />
+                        </div>
+                        <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Tagihan Sewa</h1>
+                    </div>
+                    <p className="text-slate-400 dark:text-slate-500 font-medium ml-13">Pengelolaan retribusi hunian terpadu.</p>
                 </div>
-                
-                <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 p-1.5 rounded-xl shadow-sm">
-                        <div className="flex items-center gap-2 px-3 text-slate-400"><Calendar className="w-4 h-4" /></div>
-                        <select 
-                            value={filterMonth} 
-                            onChange={e => setFilterMonth(Number(e.target.value))}
-                            className="bg-transparent text-sm font-bold focus:outline-none pr-2 cursor-pointer text-slate-700 dark:text-slate-200"
-                        >
+                {/* Filters, buttons... */}
+                <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 p-1.5 rounded-2xl shadow-sm">
+                        <select value={filterMonth} onChange={e => setFilterMonth(Number(e.target.value))} className="bg-transparent text-xs font-black focus:outline-none px-3 text-slate-900 dark:text-slate-200 uppercase">
                             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                         </select>
-                        <div className="w-px h-4 bg-slate-200 dark:bg-slate-700" />
-                        <input 
-                            type="number" 
-                            value={filterYear} 
-                            onChange={e => setFilterYear(Number(e.target.value))}
-                            className="w-16 bg-transparent text-sm font-bold focus:outline-none px-2 text-slate-700 dark:text-slate-200"
-                        />
+                        <div className="w-px h-4 bg-slate-200 dark:bg-slate-800" />
+                        <input type="number" value={filterYear} onChange={e => setFilterYear(Number(e.target.value))} className="w-20 bg-transparent text-xs font-black focus:outline-none px-3 text-slate-900 dark:text-slate-200" />
                     </div>
-
-                    <button onClick={() => setModalGen(true)}
-                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-blue-500/20 transition-all hover:-translate-y-0.5">
-                        <Plus className="w-4 h-4" /> Generate Tagihan
-                    </button>
+                    <motion.button onClick={() => setModalGen(true)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-blue-500/30 flex items-center gap-2">
+                        <Plus className="w-4 h-4" /> New Invoice
+                    </motion.button>
                 </div>
-            </div>
+            </header>
 
-            {/* Progress Bar Kas */}
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-3xl p-6 md:p-8 mb-8 shadow-2xl shadow-slate-900/20 border border-white/10 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 opacity-10 transform translate-x-1/4 -translate-y-1/4 group-hover:scale-110 transition-transform duration-700">
-                    <TrendingUp className="w-64 h-64 text-white" />
-                </div>
-                
-                <div className="relative z-10">
-                    <h3 className="text-slate-300 text-sm font-bold tracking-wider uppercase mb-1">Kolektabilitas {MONTHS[filterMonth - 1]} {filterYear}</h3>
-                    <div className="flex items-end gap-3 mb-6">
-                        <h2 className="text-4xl md:text-5xl font-black text-white">Rp {progress.collected.toLocaleString("id-ID")}</h2>
-                        <span className="text-slate-400 font-medium pb-2">/ Rp {progress.total.toLocaleString("id-ID")}</span>
+            {/* Dashboards... */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+                <StatCard title="Target Retribusi" value={`Rp ${stats.total.toLocaleString("id-ID")}`} icon={Wallet} color="blue" sub={`${stats.count} Dokumen`} />
+                <StatCard title="Kas Masuk" value={`Rp ${stats.collected.toLocaleString("id-ID")}`} icon={CheckCircle2} color="emerald" trend={`${progressPercent}%`} sub="Terealisasi" />
+                <StatCard title="Piutang Tertunda" value={`Rp ${stats.unpaid.toLocaleString("id-ID")}`} icon={AlertTriangle} color="rose" sub="Segera Tagih" />
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-200 dark:border-white/10 shadow-sm flex flex-col justify-between">
+                    <div className="flex justify-between items-start">
+                        <div className="text-slate-900 dark:text-white font-black text-xl tabular-nums">{progressPercent}%</div>
+                        <Percent className="w-4 h-4 text-slate-300" />
                     </div>
-
-                    <div className="h-3 w-full bg-slate-950/50 rounded-full overflow-hidden border border-white/5">
-                        <div 
-                            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-1000 ease-out relative"
-                            style={{ width: `${progress.percent}%` }}
-                        >
-                            <div className="absolute top-0 left-0 right-0 bottom-0 overflow-hidden rounded-full">
-                                <div className="w-full h-full bg-white/20 -skew-x-12 translate-x-[-100%] animate-[shimmer_2s_infinite]"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="mt-3 flex justify-between text-xs font-bold text-slate-400">
-                        <span>Penerimaan Kas</span>
-                        <span className="text-emerald-400">{progress.percent}% Masuk</span>
+                    <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-auto">
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${progressPercent}%` }} className="h-full bg-gradient-to-r from-blue-500 to-emerald-500" />
                     </div>
                 </div>
             </div>
 
-            {/* Tabs & Search */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-                <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-xl w-full md:w-auto">
-                    {[
-                        { id: "belum_lunas", label: "Belum Lunas", count: invoices.filter(i => i.status === "unpaid" || i.status === "overdue").length },
-                        { id: "lunas", label: "Lunas", count: invoices.filter(i => i.status === "paid").length },
-                        { id: "semua", label: "Semua", count: invoices.length }
-                    ].map(t => (
-                        <button key={t.id} onClick={() => setActiveTab(t.id as any)}
-                            className={`flex-1 md:flex-none px-6 py-2.5 text-xs sm:text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-2 ${activeTab === t.id ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm" : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"}`}
-                        >
-                            {t.label} <span className={`px-2 py-0.5 rounded-full text-[10px] ${activeTab === t.id ? "bg-blue-100 dark:bg-blue-500/20" : "bg-slate-200 dark:bg-slate-700"}`}>{t.count}</span>
+            {/* Search & Tabs... */}
+            <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+                <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit">
+                    {["semua", "lunas", "belum_lunas"].map((t: any) => (
+                        <button key={t} onClick={() => setActiveTab(t)} className={`px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${activeTab === t ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-lg" : "text-slate-400"}`}>
+                            {t.replace("_", " ")}
                         </button>
                     ))}
                 </div>
-
-                <div className="relative w-full md:w-80">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input 
-                        type="text"
-                        placeholder="Cari Penghuni / Unit..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all text-slate-900 dark:text-white font-medium shadow-sm"
-                    />
+                <div className="relative flex-1 max-w-md group">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                    <input type="text" placeholder="Cari penghuni atau unit..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-12 pr-6 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs font-bold outline-none" />
                 </div>
             </div>
 
-            {/* Data Table */}
-            {loading ? (
-                <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4">
-                    <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
-                    <p className="text-sm font-medium">Memuat data tagihan...</p>
-                </div>
-            ) : filtered.length === 0 ? (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl py-20 text-center shadow-sm">
-                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Filter className="w-8 h-8 text-slate-400" />
-                    </div>
-                    <h3 className="text-slate-900 dark:text-white font-bold text-lg">Tidak ada data</h3>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Tidak ditemukan tagihan dengan filter tersebut.</p>
-                </div>
-            ) : (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-xl shadow-slate-200/50 dark:shadow-none rounded-3xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-white/10 uppercase">
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Unit & Penghuni</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">No. SKRD</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Sewa Pokok</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Total Tagihan</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Status</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider text-right">Aksi</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                                {filtered.map(row => (
-                                    <tr key={row.id} className="hover:bg-blue-50/50 dark:hover:bg-blue-500/5 transition-colors group">
-                                        <td className="px-6 py-4">
-                                            <div className="font-bold text-slate-900 dark:text-white">{row.tenant_name}</div>
-                                            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Gd. {row.building} - Unit <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px]">{row.unit_number}</span></div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {/* Priority: show the current document's number based on status column logic or model field */}
-                                            {row.skrd_number || row.teguran1_number || row.teguran2_number || row.teguran3_number ? (
-                                                <div className="flex flex-col gap-1">
-                                                    {row.skrd_number && (
-                                                        <div className="text-[10px] font-mono text-slate-400">SKRD: {row.skrd_number}</div>
-                                                    )}
-                                                    {row.teguran1_number && (
-                                                        <div className="text-[10px] font-mono text-blue-500 font-bold">T1: {row.teguran1_number}</div>
-                                                    )}
-                                                    {row.teguran2_number && (
-                                                        <div className="text-[10px] font-mono text-amber-600 font-bold">T2: {row.teguran2_number}</div>
-                                                    )}
-                                                    {row.teguran3_number && (
-                                                        <div className="text-[10px] font-mono text-red-600 font-bold">T3: {row.teguran3_number}</div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <span className="text-[10px] text-slate-400 italic">Belum ada No.</span>
+            {/* --- REFINED COMPACT TABLE (Excel Style) --- */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[2rem] overflow-hidden shadow-sm">
+                <div className="overflow-x-auto scrollbar-hide">
+                    <table className="w-full text-left border-collapse text-nowrap">
+                        <thead className="bg-slate-50 dark:bg-white/[0.02]">
+                            <tr className="border-b border-slate-100 dark:border-white/5">
+                                <th className="py-2 px-3 w-8 text-center text-nowrap border-r border-slate-100 dark:border-white/5">
+                                    <button onClick={toggleSelectAll} className="w-4 h-4 rounded-md border-2 border-slate-200 flex items-center justify-center transition-all bg-white">
+                                        {selectedIds.length === filtered.length && filtered.length > 0 && <CheckSquare className="w-full h-full bg-blue-600 text-white p-0.5" />}
+                                    </button>
+                                </th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-nowrap border-r border-slate-100 dark:border-white/5">Nama</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-nowrap border-r border-slate-100 dark:border-white/5">Rusunawa</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-nowrap text-center border-r border-slate-100 dark:border-white/5">Gd</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-nowrap text-center border-r border-slate-100 dark:border-white/5">Lt</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-nowrap text-center border-r border-slate-100 dark:border-white/5">Unit</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right text-nowrap border-r border-slate-100 dark:border-white/5">Sewa Hunian</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right text-nowrap border-r border-slate-100 dark:border-white/5">Parkir</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right text-nowrap border-r border-slate-100 dark:border-white/5">Total</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-nowrap border-r border-slate-100 dark:border-white/5">Status Pembayaran</th>
+                                <th className="py-2 px-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right text-nowrap">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50 dark:divide-white/5">
+                            {filtered.map((row) => (
+                                <tr key={row.id} className={`group hover:bg-blue-50/30 dark:hover:bg-white/[0.02] transition-colors ${selectedIds.includes(row.id) ? "bg-blue-50/50 dark:bg-blue-500/5 text-blue-600" : ""}`}>
+                                    <td className="py-1 px-3 text-center border-r border-slate-50 dark:border-white/5">
+                                        <button onClick={() => toggleSelect(row.id)} className={`w-4 h-4 rounded-md border-2 mx-auto flex items-center justify-center transition-all ${selectedIds.includes(row.id) ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-200 bg-white dark:bg-slate-800'}`}>
+                                            {selectedIds.includes(row.id) && <CheckSquare className="w-full h-full p-0.5" />}
+                                        </button>
+                                    </td>
+                                    <td className="py-1 px-3 text-[11px] font-black uppercase text-slate-900 dark:text-white truncate max-w-[200px] border-r border-slate-50 dark:border-white/5">{row.tenant_name}</td>
+                                    <td className="py-1 px-3 text-[10px] font-bold text-slate-400 uppercase border-r border-slate-50 dark:border-white/5">{row.rusunawa}</td>
+                                    <td className="py-1 px-3 text-[11px] font-black text-slate-800 dark:text-slate-300 text-center border-r border-slate-50 dark:border-white/5">{row.building}</td>
+                                    <td className="py-1 px-3 text-[11px] font-black text-slate-800 dark:text-slate-300 text-center border-r border-slate-50 dark:border-white/5">{row.floor}</td>
+                                    <td className="py-1 px-3 text-[11px] font-black text-slate-900 dark:text-white tabular-nums text-center border-r border-slate-50 dark:border-white/5">{row.unit_number}</td>
+                                    <td className="py-1 px-3 text-[11px] font-black text-slate-700 dark:text-slate-400 text-right tabular-nums border-r border-slate-50 dark:border-white/5">Rp {Number(row.base_rent).toLocaleString("id-ID")}</td>
+                                    <td className="py-1 px-3 text-[11px] font-black text-slate-700 dark:text-slate-400 text-right tabular-nums border-r border-slate-50 dark:border-white/5">Rp {Number(row.parking_charge || 0).toLocaleString("id-ID")}</td>
+                                    <td className="py-1 px-3 text-[12px] font-black text-slate-900 dark:text-white text-right tabular-nums border-r border-slate-50 dark:border-white/5">Rp {Number(row.total_amount).toLocaleString("id-ID")}</td>
+                                    <td className="py-1 px-3 border-r border-slate-50 dark:border-white/5">
+                                        {row.status === 'paid' ? (
+                                            <span className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-1"><CheckCircle2 className="w-3 h-3"/> {new Date(row.paid_at!).toLocaleDateString('id-ID')}</span>
+                                        ) : (
+                                            <Badge status={row.status}>{row.status === 'overdue' ? 'Jatuh Tempo' : 'Belum Lunas'}</Badge>
+                                        )}
+                                    </td>
+                                    <td className="py-1 px-3 text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors"><Eye className="w-3.5 h-3.5" /></button>
+                                            {row.status !== 'paid' && (
+                                                <button onClick={() => setModalPay(row)} className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter">Lunas</button>
                                             )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="font-mono text-slate-600 dark:text-slate-400">Rp {Number(row.base_rent).toLocaleString("id-ID")}</span>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="font-black text-slate-900 dark:text-white">Rp {Number(row.total_amount).toLocaleString("id-ID")}</div>
-                                            {(row.status === "unpaid" || row.status === "overdue") && (
-                                                <div className="text-[10px] text-red-500 font-bold mt-0.5 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Jatuh Tempo: {new Date(row.due_date).toLocaleDateString('id-ID')}</div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {row.status === "paid" ? (
-                                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20">
-                                                    <CheckCircle2 className="w-3.5 h-3.5" /> Lunas
-                                                </span>
-                                            ) : (
-                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold border ${row.status === "overdue" ? "bg-red-50 border-red-200 text-red-600 dark:bg-red-500/10 dark:border-red-500/20" : "bg-amber-50 border-amber-200 text-amber-600 dark:bg-amber-500/10 dark:border-amber-500/20"}`}>
-                                                    {row.status === "overdue" ? "Jatuh Tempo" : "Belum Bayar"}
-                                                </span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {row.status !== "paid" && (
-                                                <button onClick={() => setModalPay(row)} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-600/20 hover:-translate-y-0.5">
-                                                    Set Lunas
-                                                </button>
-                                            )}
-                                            {row.status === "paid" && (
-                                                <span className="text-xs text-slate-400 font-medium italic">Telah dibayar</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Quick Pay (Slide over imitation in center) */}
-            {modalPay && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="bg-emerald-500 p-6 text-white text-center relative overflow-hidden">
-                            <div className="absolute -right-4 -top-4 opacity-20"><CheckCircle2 className="w-24 h-24" /></div>
-                            <h2 className="text-xl font-bold relative z-10">Konfirmasi Pembayaran</h2>
-                            <p className="text-emerald-100 text-xs mt-1 relative z-10">Pencatatan pelunasan manual</p>
-                        </div>
-                        <div className="p-6">
-                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 border border-slate-100 dark:border-white/5 mb-6 text-center">
-                                <div className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase mb-1">Total Tagihan</div>
-                                <div className="text-3xl font-black text-slate-900 dark:text-white">Rp {Number(modalPay.total_amount).toLocaleString("id-ID")}</div>
-                                <div className="text-[10px] mt-2 font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 inline-block px-2 py-0.5 rounded">
-                                    {modalPay.tenant_name} • Unit {modalPay.unit_number}
-                                </div>
-                            </div>
-                            <button onClick={handleConfirmPayment} disabled={saving}
-                                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3.5 rounded-2xl text-sm font-bold flex items-center justify-center gap-2 shadow-xl shadow-emerald-600/20 transition-all disabled:opacity-50">
-                                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Memproses...</> : "Konfirmasi Lunas"}
-                            </button>
-                            <button onClick={() => setModalPay(null)} className="w-full mt-2 py-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-sm font-bold transition-colors">
-                                Batal
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Modal Generate is kept similar, avoiding bloat here for brevity but fully functioning based on states added */}
-            {modalGen && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                        <div className="p-6">
-                            <div className="flex items-center justify-between mb-6">
-                                <div>
-                                    <h2 className="text-xl font-bold text-slate-900 dark:text-white">Generate Tagihan</h2>
-                                    <p className="text-slate-500 text-xs mt-1">Buat invoice bulanan penghuni</p>
-                                </div>
-                                <button onClick={() => setModalGen(false)} className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full text-slate-400 hover:text-slate-600">
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-
-                            <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-6">
-                                <button onClick={() => setModalTab("individu")} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${modalTab === "individu" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-sm" : "text-slate-500"}`}>Individu</button>
-                                <button onClick={() => setModalTab("massal")} className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${modalTab === "massal" ? "bg-white dark:bg-slate-700 text-blue-600 shadow-sm" : "text-slate-500"}`}>Massal (Semua)</button>
-                            </div>
-
-                            <div className="space-y-4">
-                                {modalTab === "individu" && (
-                                    <div>
-                                        <label className="block text-slate-500 text-[10px] font-bold uppercase mb-1.5 ml-1">Penghuni</label>
-                                        <select value={form.tenant_id} onChange={e => setForm((f: any) => ({ ...f, tenant_id: Number(e.target.value) }))}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                                            <option value={0}>-- Pilih Penghuni --</option>
-                                            {tenants.map((t: any) => <option key={t.id} value={t.id}>Penghuni #{t.id}</option>)}
-                                        </select>
-                                    </div>
-                                )}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-slate-500 text-[10px] font-bold uppercase mb-1.5 ml-1">Jatuh Tempo</label>
-                                        <input type="date" value={form.due_date} onChange={e => setForm((f: any) => ({ ...f, due_date: e.target.value }))}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-[11px] focus:outline-none font-bold" />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="block text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1.5 ml-1">Lain-lain (Rp)</label>
-                                        <input type="number" value={form.other_charge} onChange={e => setForm((f: any) => ({ ...f, other_charge: Number(e.target.value) }))}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono" />
-                                    </div>
-                                    {modalTab === "massal" && (
-                                        <div className="col-span-2">
-                                            <div className="h-px bg-slate-100 dark:bg-slate-800 my-2" />
-                                            <label className="block text-blue-500 text-[10px] font-black uppercase tracking-widest mb-1.5 ml-1">Penomoran SKRD Otomatis</label>
-                                            <input 
-                                                type="number" 
-                                                placeholder="Contoh: 2363 (Kosongkan jika tidak ingin menomori)"
-                                                value={form.start_skrd_no} 
-                                                onChange={e => setForm((f: any) => ({ ...f, start_skrd_no: e.target.value }))}
-                                                className="w-full bg-blue-50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-2xl px-4 py-3 text-sm text-blue-600 dark:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-bold placeholder:italic placeholder:font-normal" 
-                                            />
-                                            <p className="text-[10px] text-slate-400 mt-2 px-1">Nomor akan di-generate berurutan: 974/SKRD/[KODE].[NO]/UPTD.RSN/[BULAN]/[TAHUN]</p>
                                         </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-                        <div className="bg-slate-50 dark:bg-slate-800/50 p-6 flex gap-3">
-                            <button onClick={handleGenerate} disabled={saving || (!form.due_date)}
-                                className="w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50">
-                                {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Diproses</> : "Generate Tagihan"}
-                            </button>
+            {/* Modals and other bulk bars remain functional as defined perviously... */}
+             <AnimatePresence>
+                {selectedIds.length > 0 && (
+                    <motion.div initial={{ y: 100, x: "-50%", opacity: 0 }} animate={{ y: 0, x: "-50%", opacity: 1 }} exit={{ y: 100, x: "-50%", opacity: 0 }} className="fixed bottom-12 left-1/2 z-50 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-2xl flex items-center gap-6 border border-white/10 w-fit">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white"><CheckSquare className="w-4 h-4" /></div>
+                            <div className="flex flex-col"><span className="text-sm font-black">{selectedIds.length} <span className="text-[10px] opacity-60">Terpilih</span></span></div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setModalBulkPay(true)} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">Set Lunas Terpilih</button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Payment Modals... */}
+            <AnimatePresence>
+                {modalPay && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-6">
+                        <div className="bg-white dark:bg-slate-950 border border-white/20 rounded-[2rem] shadow-2xl w-full max-w-[200px] overflow-hidden p-6 text-center scale-90">
+                            <h2 className="text-sm font-black uppercase tracking-widest mb-2">Confirm</h2>
+                            <div className="text-xl font-black mb-6">Rp {Number(modalPay.total_amount).toLocaleString("id-ID")}</div>
+                            <button onClick={handleConfirmPayment} className="w-full bg-emerald-500 text-white py-3 rounded-xl text-[10px] font-black uppercase">Yes</button>
+                            <button onClick={() => setModalPay(null)} className="mt-3 text-slate-400 text-[10px] font-black uppercase">Cancel</button>
                         </div>
                     </div>
-                </div>
-            )}
-
-        </div>
+                )}
+                {modalBulkPay && (
+                    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl flex items-center justify-center z-[60] p-6 text-center">
+                        <div className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 w-full max-w-[250px] scale-90 text-center">
+                            <h2 className="text-lg font-black uppercase mb-4">Lunas Masal</h2>
+                            <input type="date" value={bulkPaidAt} onChange={(e) => setBulkPaidAt(e.target.value)} className="w-full bg-slate-100 dark:bg-slate-800 rounded-xl px-4 py-2 text-xs font-black mb-6 outline-none" />
+                            <button onClick={handleBulkPay} className="w-full bg-blue-600 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-blue-500/20">Set Lunas</button>
+                            <button onClick={() => setModalBulkPay(false)} className="mt-3 text-slate-400 text-[10px] font-black uppercase">Cancel</button>
+                        </div>
+                    </div>
+                )}
+                {modalGen && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex items-center justify-center z-50 p-6">
+                        <div className="bg-white dark:bg-slate-900 rounded-[3rem] p-10 w-full max-w-md">
+                            <div className="flex items-center justify-between mb-10">
+                                <h2 className="text-2xl font-black uppercase">Generate</h2>
+                                <button onClick={() => setModalGen(false)} className="bg-slate-100 dark:bg-slate-800 p-2 rounded-xl"><X className="w-5 h-5" /></button>
+                            </div>
+                            <div className="flex p-1.5 bg-slate-100 dark:bg-slate-800 rounded-2xl mb-10">
+                                <button onClick={() => setModalTab("individu")} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl ${modalTab === "individu" ? "bg-white dark:bg-slate-700 shadow-lg" : "text-slate-400"}`}>Single</button>
+                                <button onClick={() => setModalTab("massal")} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-xl ${modalTab === "massal" ? "bg-white dark:bg-slate-700 shadow-lg" : "text-slate-400"}`}>Mass</button>
+                            </div>
+                            <div className="space-y-6">
+                                {modalTab === "individu" && (
+                                    <select value={form.tenant_id} onChange={e => setForm((f: any) => ({ ...f, tenant_id: Number(e.target.value) }))} className="w-full bg-slate-50 dark:bg-slate-800 rounded-2xl px-6 py-4 text-xs font-bold outline-none">
+                                        <option value={0}>Select Target...</option>
+                                        {tenants.map((t: any) => <option key={t.id} value={t.id}>{t.name} (Unit {t.unit_number})</option>)}
+                                    </select>
+                                )}
+                                <div className="grid grid-cols-2 gap-6">
+                                    <input type="date" value={form.due_date} onChange={e => setForm((f: any) => ({ ...f, due_date: e.target.value }))} className="bg-slate-50 dark:bg-slate-800 rounded-2xl px-6 py-4 text-xs font-black outline-none" />
+                                    <input type="number" placeholder="Lain-lain" value={form.other_charge} onChange={e => setForm((f: any) => ({ ...f, other_charge: Number(e.target.value) }))} className="bg-slate-50 dark:bg-slate-800 rounded-2xl px-6 py-4 text-xs font-black outline-none" />
+                                    {modalTab === "massal" && <input type="text" placeholder="Start SKRD No (e.g. 2363)" value={form.start_skrd_no} onChange={e => setForm((f: any) => ({ ...f, start_skrd_no: e.target.value }))} className="col-span-2 bg-blue-50 dark:bg-blue-500/10 text-blue-600 rounded-2xl px-6 py-5 text-sm font-black outline-none" />}
+                                </div>
+                                <button onClick={handleGenerate} className="w-full bg-blue-600 text-white py-5 rounded-2xl text-[11px] font-black uppercase tracking-[0.2em] shadow-xl shadow-blue-600/30">Execute</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </motion.div>
     );
 }

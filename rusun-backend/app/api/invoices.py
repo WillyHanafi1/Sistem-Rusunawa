@@ -4,12 +4,13 @@ from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
-from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom
+from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
 from app.models.tenant import Tenant
 from app.models.room import Room
 from app.models.user import User, UserRole
 from app.core.config import settings
 import midtransclient
+import calendar
 from datetime import datetime, date
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -60,6 +61,10 @@ def list_invoices(
     
     # Sort by building, floor, unit for better organization
     query = query.order_by(Room.building, Room.floor, Room.unit_number)
+    
+    # MED-02: Validate pagination bounds
+    limit = min(max(limit, 1), 100)
+    skip = max(skip, 0)
     
     results = session.exec(query.offset(skip).limit(limit)).all()
     
@@ -129,6 +134,15 @@ def internal_mass_generate_invoices(
         if tenant.id in billed_tenant_ids:
             continue
             
+        # 3. Check Overlap Kontrak
+        _, last_day = calendar.monthrange(period_year, period_month)
+        start_of_period = date(period_year, period_month, 1)
+        end_of_period = date(period_year, period_month, last_day)
+        
+        # Jika kontrak mulai SETELAH periode ini berakhir, atau kontrak selesai SEBELUM periode ini mulai -> SKIP
+        if tenant.contract_start > end_of_period or tenant.contract_end < start_of_period:
+            continue
+
         room = room_dict.get(tenant.room_id)
         if not room:
             continue
@@ -166,6 +180,11 @@ def internal_mass_generate_invoices(
             
             skrd_number = f"974/SKRD/{code}.{seq_no}/UPTD.RSN/{month_rom}/{period_year}"
 
+        # 4b. Tentukan jenis dokumen: Jika sudah lewat jatuh tempo -> STRD (Tagihan)
+        doc_type = DocumentType.skrd
+        if due_date < date.today():
+            doc_type = DocumentType.strd
+
         inv = Invoice(
             tenant_id=tenant.id,
             period_month=period_month,
@@ -179,7 +198,7 @@ def internal_mass_generate_invoices(
             total_amount=total,
             notes=notes,
             status=InvoiceStatus.unpaid,
-            document_type=DocumentType.skrd,
+            document_type=doc_type,
             skrd_number=skrd_number,
             skrd_date=due_date, # Default tanggal SKRD sama dengan batas bayar atau hari ini? User request: Tanggal 01 APRIL
         )
@@ -195,7 +214,7 @@ def internal_mass_generate_invoices(
         "success": True, 
         "generated": count_generated, 
         "total_active": len(active_tenants),
-        "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids)} tagihan sudah ada/di-skip."
+        "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids) + (len(active_tenants) - count_generated - len(billed_tenant_ids))} tagihan sudah ada/di-skip."
     }
 
 @router.post("/mass-generate", status_code=201)
@@ -307,9 +326,28 @@ def update_invoice(
     invoice = session.get(Invoice, invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+    
+    # HIGH-02: Explicit field whitelist — prevent status/amount manipulation
+    ALLOWED_UPDATE_FIELDS = {
+        "water_charge", "electricity_charge", "other_charge", 
+        "notes", "due_date", "parking_charge"
+    }
     update_data = invoice_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
-        setattr(invoice, key, value)
+        if key in ALLOWED_UPDATE_FIELDS:
+            setattr(invoice, key, value)
+    
+    # Recalculate total if charges changed
+    if any(k in update_data for k in ["water_charge", "electricity_charge", "other_charge", "parking_charge"]):
+        invoice.total_amount = (
+            invoice.base_rent +
+            invoice.water_charge +
+            invoice.electricity_charge +
+            invoice.parking_charge +
+            invoice.other_charge +
+            (invoice.penalty_amount or 0)
+        )
+    
     session.add(invoice)
     session.commit()
     session.refresh(invoice)
@@ -382,3 +420,27 @@ def pay_invoice_midtrans(
         return invoice
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Gagal generate pembayaran Midtrans: {str(e)}")
+@router.post("/bulk-pay")
+def bulk_pay_invoices(
+    req: InvoiceBulkPay,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Menandai beberapa tagihan sebagai lunas sekaligus."""
+    if not req.invoice_ids:
+        raise HTTPException(status_code=400, detail="Pilih minimal satu tagihan")
+        
+    invoices = session.exec(
+        select(Invoice).where(Invoice.id.in_(req.invoice_ids))
+    ).all()
+    
+    count = 0
+    for inv in invoices:
+        if inv.status != InvoiceStatus.paid:
+            inv.status = InvoiceStatus.paid
+            inv.paid_at = req.paid_at
+            session.add(inv)
+            count += 1
+            
+    session.commit()
+    return {"success": True, "updated_count": count}

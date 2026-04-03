@@ -11,13 +11,19 @@ from app.models.family_member import FamilyMember, FamilyMemberCreate
 from app.core.security import hash_password
 import os
 import shutil
+import logging
 from datetime import datetime
 import uuid
 import re
 
+logger = logging.getLogger(__name__)
+
 # Base direktori untuk menyimpan file upload
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# HIGH-03: Maximum file size (5 MB)
+MAX_FILE_SIZE = 5 * 1024 * 1024
 
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
@@ -53,6 +59,11 @@ async def create_application(
     ktp_file: UploadFile = File(...),
     kk_file: Optional[UploadFile] = File(None),
     marriage_cert_file: Optional[UploadFile] = File(None),
+    sku_file: Optional[UploadFile] = File(None),
+    skck_file: Optional[UploadFile] = File(None),
+    health_cert_file: Optional[UploadFile] = File(None),
+    photo_file: Optional[UploadFile] = File(None),
+    has_signed_statement: bool = Form(False),
     session: Session = Depends(get_session),
 ):
     # Cek apakah NIK ini sudah pernah daftar tapi masih pending
@@ -85,15 +96,22 @@ async def create_application(
                 detail=f"Tipe file '.{ext}' tidak diizinkan. Gunakan JPG, PNG, atau PDF."
             )
 
-        # 2. Basic Content Type Validation (Signature/Magic Bytes)
-        # Reading first 2048 bytes to check signature
-        content = file.file.read(2048)
+        # 2. HIGH-03: File Size Validation
+        content = file.file.read()
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=413, 
+                detail=f"Ukuran file melebihi batas maksimal {MAX_FILE_SIZE // (1024*1024)} MB."
+            )
         file.file.seek(0) # Reset file pointer for saving
         
+        # 3. Content Type Validation (Signature/Magic Bytes)
+        header_bytes = content[:2048]
+        
         # Simple signature checks
-        is_pdf = content.startswith(b"%PDF")
-        is_png = content.startswith(b"\x89PNG")
-        is_jpg = content.startswith(b"\xff\xd8")
+        is_pdf = header_bytes.startswith(b"%PDF")
+        is_png = header_bytes.startswith(b"\x89PNG")
+        is_jpg = header_bytes.startswith(b"\xff\xd8")
         
         if ext == "pdf" and not is_pdf:
             raise HTTPException(status_code=400, detail="File PDF tidak valid (Header mismatch)")
@@ -116,6 +134,10 @@ async def create_application(
     ktp_path = save_file(ktp_file, "ktp")
     kk_path = save_file(kk_file, "kk") if kk_file else None
     marriage_path = save_file(marriage_cert_file, "marriage") if marriage_cert_file else None
+    sku_path = save_file(sku_file, "sku") if sku_file else None
+    skck_path = save_file(skck_file, "skck") if skck_file else None
+    health_path = save_file(health_cert_file, "health") if health_cert_file else None
+    photo_path = save_file(photo_file, "photo") if photo_file else None
 
     application = Application(
         nik=nik,
@@ -128,6 +150,11 @@ async def create_application(
         ktp_file_path=ktp_path,
         kk_file_path=kk_path,
         marriage_cert_file_path=marriage_path,
+        sku_file_path=sku_path,
+        skck_file_path=skck_path,
+        health_cert_file_path=health_path,
+        photo_file_path=photo_path,
+        has_signed_statement=has_signed_statement,
         is_documents_verified=False
     )
     
@@ -164,12 +191,11 @@ def update_application_status(
             import secrets
             import string
             if settings.ENVIRONMENT == "development":
-                temp_password = application.nik 
-                print(f"\n{'='*50}\nDEBUG: Password akses portal adalah NIK pendaftar.\nNIK: {temp_password}\n{'='*50}\n")
+                temp_password = application.nik
+                logger.info(f"[DEV] User account created for {application.email} (password = NIK)")
             else:
                 temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
-                print(f"\n{'='*50}\nDEBUG: Password acak untuk {application.email}: {temp_password}\nLakukan pengiriman email manual atau hubungi user.\n{'='*50}\n")
-            print(f"[SECURITY] Generated initial password for {application.email}: {temp_password}")
+                logger.info(f"User account created for {application.email}. Send password via secure channel.")
             
             # Buat akun User baru
             new_user = User(
@@ -338,8 +364,7 @@ def submit_interview(
                 import secrets
                 import string
                 temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
-                
-                print(f"[SECURITY] Generated initial password for {application.email}: {temp_password}")
+                logger.info(f"User account created for {application.email}. Send password via secure channel.")
 
                 new_user = User(
                     email=application.email,

@@ -20,7 +20,7 @@ services:
     restart: always
     environment:
       - DATABASE_URL=postgresql://rusun_user:rusun_pass@db:5432/rusunawa
-      - JWT_SECRET=supersecret
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET env var required}
     ports:
       - "8100:8000"
     depends_on:
@@ -44,8 +44,8 @@ services:
     container_name: rusunawa_pgadmin
     restart: always
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@rusun.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@rusun.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?PGADMIN_PASSWORD env var required}
     ports:
       - "5050:80"
     depends_on:

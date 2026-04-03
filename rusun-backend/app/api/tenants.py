@@ -74,6 +74,10 @@ def list_tenants(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
+    # MED-02: Validate pagination bounds
+    limit = min(max(limit, 1), 100)
+    skip = max(skip, 0)
+    
     if current_user.role == UserRole.penghuni:
         # Penghuni hanya bisa lihat data dirinya sendiri
         tenants = session.exec(

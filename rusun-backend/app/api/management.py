@@ -2,14 +2,23 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from typing import List
 from app.core.db import get_session
-from app.models.staff import Staff, StaffRead, StaffCreate, StaffUpdate
-from app.core.security import require_super_admin
+from app.models.staff import Staff, StaffRead, StaffCreate, StaffUpdate, StaffPublicRead
+from app.core.security import require_super_admin, get_current_user
 from app.models.user import User
 
 router = APIRouter(prefix="/management", tags=["Management"])
 
+@router.get("/public", response_model=List[StaffPublicRead])
+def get_public_management_team(session: Session = Depends(get_session)):
+    """Fetch active management team for public display (omits sensitive data like NIP)."""
+    statement = select(Staff).where(Staff.is_active == True).order_by(Staff.tier, Staff.id)
+    return session.exec(statement).all()
+
 @router.get("/", response_model=List[StaffRead])
-def get_management_team(session: Session = Depends(get_session)):
+def get_management_team(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),  # MED-03: Require authentication
+):
     """Fetch all active management/staff members, sorted by tier."""
     statement = select(Staff).where(Staff.is_active == True).order_by(Staff.tier, Staff.id)
     results = session.exec(statement).all()

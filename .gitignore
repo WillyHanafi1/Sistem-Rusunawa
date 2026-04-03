@@ -2,6 +2,10 @@ node_modules/
 .next/
 __pycache__/
 .env
+rusun-backend/.env
+rusun-frontend/.env.local
+rusun-frontend/.env.production
+*.env
 *.pyc
 venv/
 .venv/

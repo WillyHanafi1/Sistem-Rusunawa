@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { decodeJwt } from "jose";
+import { jwtVerify } from "jose";
+
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "");
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
@@ -16,17 +18,16 @@ export async function proxy(request: NextRequest) {
 
     if (token) {
         try {
-            // Decode payload WITHOUT full signature verification for now to avoid the loop
-            // Signature mismatch is handled by backend + our new logic below
-            const payload = decodeJwt(token);
-            const now = Math.floor(Date.now() / 1000);
+            // MED-04 FIX: Full signature verification instead of just decoding
+            const { payload } = await jwtVerify(token, JWT_SECRET, {
+                algorithms: ["HS256"],
+            });
             
-            if (payload.exp && payload.exp > now) {
-                isTokenValid = true;
-                role = payload.role as string;
-            }
+            isTokenValid = true;
+            role = payload.role as string;
         } catch (err) {
-            console.error(`Middleware: Failed to decode token:`, err);
+            // Token invalid or expired — check if we should try refresh
+            // Don't log the full error to avoid noise from expired tokens
         }
     }
 
@@ -37,8 +38,6 @@ export async function proxy(request: NextRequest) {
 
     // 2. IMPORTANT: DO NOT automatically redirect from /login to dashboard! 
     // This breaks the loop when the backend returns 401 but the cookie is still there.
-    // If the user already has a valid-looking session at /login, we let them stay there
-    // and they can click "Login" again which will refresh the token.
 
     // 3. Role-based protection: /admin is restricted to admin & sadmin roles
     if (isAdminPage && (role !== "admin" && role !== "sadmin")) {

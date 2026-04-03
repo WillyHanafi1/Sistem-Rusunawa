@@ -116,3 +116,8 @@ class InvoiceReadWithRoom(InvoiceRead):
     tenant_name: str
     contract_start: date
     contract_end: date
+
+
+class InvoiceBulkPay(SQLModel):
+    invoice_ids: list[int]
+    paid_at: datetime

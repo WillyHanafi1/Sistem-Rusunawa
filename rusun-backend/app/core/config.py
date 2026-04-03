@@ -6,7 +6,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://rusun_user:rusun_pass@localhost:5432/rusunawa"
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 10080
+    JWT_EXPIRE_MINUTES: int = 30  # Access token: 30 minutes
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 10080  # Refresh token: 7 days
     XENDIT_SECRET_KEY: str = ""
     XENDIT_WEBHOOK_TOKEN: str = ""
     MIDTRANS_SERVER_KEY: str = ""
