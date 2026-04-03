@@ -245,7 +245,7 @@ export default function InterviewsPage() {
                 const RawLinks = parts[1] || "";
                 const parsedLinks = RawLinks.split("\n").map((line: string) => {
                     const [label, path] = line.split(": ");
-                    return { label, url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${path}` };
+                    return { label, url: `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${path}` };
                 });
                 setInterviewResult({ success: true, links: parsedLinks });
             } else {

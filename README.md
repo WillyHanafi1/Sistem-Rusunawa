@@ -514,6 +514,12 @@ Sistem menggunakan `docx2pdf` untuk konversi dokumen ke PDF.
 *   **Windows**: Membutuhkan Microsoft Word terinstall untuk hasil terbaik.
 *   **Linux/Docker**: Belum terintegrasi penuh (membutuhkan LibreOffice di environment Docker jika ingin otomatis). Saat ini fallback ke file `.docx` jika konverter tidak tersedia.
 
+### 15. Standardisasi API & Port Conflict (April 2026)
+
+*   **Port Conflict (8100)**: Port `8000` seringkali digunakan oleh proses sistem (seperti `com.docker.backend.exe`), menyebabkan backend gagal start secara diam-diam. Memindahkan port ke `8100` adalah solusi stabil untuk Windows.
+*   **Wajib `withCredentials`**: Penggunaan `fetch` mentah di Next.js (Client Component) tidak mengirimkan cookie `httpOnly`. Selalu gunakan instance `api` (Axios) yang dikonfigurasi dengan `withCredentials: true` agar session `access_token` terkirim dengan benar ke backend.
+*   **Trailing Slash (404)**: Next.js dev server seringkali memaksa redirect pada trailing slash. Pastikan FastAPI diinisialisasi dengan `redirect_slashes=True` agar request dari frontend tidak berakhir di error `404 Not Found`.
+
 ---
 
 ## License

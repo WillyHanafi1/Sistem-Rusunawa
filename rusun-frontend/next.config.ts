@@ -14,12 +14,12 @@ const nextConfig = {
   turbopack: {
     root: process.cwd(),
   },
+  trailingSlash: true,
   async rewrites() {
     return [
       {
-        // Forward ke backend KECUALI /api/auth/* yang ditangani Next.js route.ts
         source: "/api/:path((?!auth(?:/|$)).+)",
-        destination: "http://127.0.0.1:8000/api/:path*",
+        destination: "http://localhost:8100/api/:path*",
       },
     ];
   },

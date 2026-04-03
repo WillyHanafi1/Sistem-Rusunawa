@@ -191,7 +191,7 @@ export default function ApplicationsPage() {
 
     const handleDownloadFile = (filePath: string) => {
         const safePath = filePath.replace(/\\/g, '/');
-        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${safePath}`;
+        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${safePath}`;
         window.open(url, '_blank');
     }
 
@@ -537,7 +537,7 @@ export default function ApplicationsPage() {
                                     {viewingDocsApp.ktp_file_path ? (
                                         <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
                                             <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${viewingDocsApp.ktp_file_path}`} 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.ktp_file_path}`} 
                                                 alt="KTP" 
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
@@ -559,7 +559,7 @@ export default function ApplicationsPage() {
                                     {viewingDocsApp.kk_file_path ? (
                                         <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
                                             <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${viewingDocsApp.kk_file_path}`} 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.kk_file_path}`} 
                                                 alt="KK" 
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
@@ -581,7 +581,7 @@ export default function ApplicationsPage() {
                                     {viewingDocsApp.marriage_cert_file_path ? (
                                         <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
                                             <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${viewingDocsApp.marriage_cert_file_path}`} 
+                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.marriage_cert_file_path}`} 
                                                 alt="Surat Nikah" 
                                                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />

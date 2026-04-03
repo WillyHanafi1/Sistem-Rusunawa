@@ -18,7 +18,7 @@ api.interceptors.response.use(
   async (err) => {
     // Check if it's a network error (no response)
     if (!err.response) {
-      console.error("Backend Error: Server Rusunawa tidak dapat dihubungi. Pastikan backend di http://localhost:8000 sudah menyala.");
+      console.error("Backend Error: Server Rusunawa tidak dapat dihubungi. Pastikan backend di http://localhost:8100 sudah menyala.");
     }
     // Jika 401 Unauthorized, artinya sesi habis atau token salah
     if (err.response?.status === 401 && typeof window !== "undefined" && !isLoggingOut) {
@@ -28,6 +28,7 @@ api.interceptors.response.use(
       const isProtectedRoute = currentPath.startsWith("/admin") || currentPath.startsWith("/portal");
       
       if (!isProtectedRoute) {
+        // console.warn("401 on public route, avoiding global logout.");
         return Promise.reject(err);
       }
 

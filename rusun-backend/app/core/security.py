@@ -40,17 +40,19 @@ def get_current_user(
     # First priority: Cookie (for browser requests)
     # Second priority: Authorization header (for API testing / mobile apps)
     actual_token = request.cookies.get("access_token") or token
+    # Log all headers if debugging (optional)
+    # print(f"[BACKEND DEBUG] Headers: {request.headers}")
     
-    # DEBUG: Check if token is received
-    print(f"[BACKEND DEBUG] Token received: {actual_token[:10]}...{actual_token[-10:] if actual_token else ''}")
-
     if not actual_token:
-        print("[BACKEND DEBUG] No token found in cookies or header")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token tidak ditemukan",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        # print("[BACKEND DEBUG] No token found in cookies or header")
+        return None
+    
+    # Safe check for actual_token before slicing
+    try:
+        token_preview = f"{actual_token[:10]}..." if len(actual_token) > 10 else actual_token
+        # print(f"[BACKEND DEBUG] Token received preview: {token_preview}")
+    except Exception:
+        pass
 
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

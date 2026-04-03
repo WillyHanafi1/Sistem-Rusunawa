@@ -1,4 +1,4 @@
-import Cookies from "js-cookie";
+import api from "./api";
 
 export interface PaymentCallbacks {
     onSuccess?: (result: unknown) => void;
@@ -16,24 +16,8 @@ export async function initiatePayment(
     callbacks: PaymentCallbacks,
     fallback: FallbackState
 ): Promise<void> {
-    const token = Cookies.get("access_token");
-    if (!token) {
-        throw new Error("Sesi habis, silakan login ulang.");
-    }
-
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/invoices/${invoiceId}/pay`, {
-        method: "POST",
-        headers: {
-            "Authorization": `Bearer ${token}`,
-        },
-    });
-
-    if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Gagal membuat tagihan pembayaran.");
-    }
-
-    const data = await res.json();
+    const res = await api.post(`/invoices/${invoiceId}/pay`);
+    const data = res.data;
     
     // Panggil Midtrans Snap Pop-up
     if (data.payment_id && window.snap) {

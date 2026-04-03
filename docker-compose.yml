@@ -22,7 +22,7 @@ services:
       - DATABASE_URL=postgresql://rusun_user:rusun_pass@db:5432/rusunawa
       - JWT_SECRET=supersecret
     ports:
-      - "8001:8000"
+      - "8100:8000"
     depends_on:
       - db
 
@@ -35,7 +35,7 @@ services:
   #    ports:
   #      - "3000:3000"
   #    environment:
-  #      - NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+  #      - NEXT_PUBLIC_API_URL=http://127.0.0.1:8100
   #    depends_on:
   #      - backend
 

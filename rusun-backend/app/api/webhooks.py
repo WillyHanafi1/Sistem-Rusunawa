@@ -8,7 +8,7 @@ Setup:
   Contoh: https://yourdomain.com/api/webhooks/midtrans
 
 Testing lokal:
-  1. jalankan: ngrok http 8000
+  1. jalankan: ngrok http 8100
   2. copy URL ngrok ke Payment Notification URL di Midtrans Sandbox Dashboard
 """
 import hashlib

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { ThemeToggle } from "@/components/ThemeToggle"; // Adjust path if needed
+import api from "@/lib/api";
 
 interface Staff {
   id: number;
@@ -29,12 +30,8 @@ export default function LandingPage() {
   useEffect(() => {
     async function fetchStaff() {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "";
-        const res = await fetch(`${apiUrl}/api/management/`);
-        if (res.ok) {
-          const data = await res.json();
-          setStaff(data);
-        }
+        const res = await api.get("/management/");
+        setStaff(res.data);
       } catch (error) {
         console.error("Failed to fetch staff:", error);
       } finally {

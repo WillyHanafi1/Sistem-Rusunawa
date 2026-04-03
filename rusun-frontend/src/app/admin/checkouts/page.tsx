@@ -7,8 +7,8 @@ import {
     MessageSquare, AlertCircle, RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import Cookies from "js-cookie";
 import { toast } from "react-hot-toast";
+import api from "@/lib/api";
 
 interface Checkout {
     id: string;
@@ -39,14 +39,8 @@ export default function CheckoutsPage() {
     const fetchCheckouts = async () => {
         setLoading(true);
         try {
-            const token = Cookies.get("access_token");
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/checkouts/`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setCheckouts(data);
-            }
+            const res = await api.get("/checkouts/");
+            setCheckouts(res.data);
         } catch (err) {
             console.error(err);
             toast.error("Gagal mengambil data putus kontrak");
@@ -62,23 +56,15 @@ export default function CheckoutsPage() {
     const handleAction = async (id: string, status: "approved" | "rejected") => {
         setProcessingId(id);
         try {
-            const token = Cookies.get("access_token");
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/checkouts/${id}?status=${status}&notes=${encodeURIComponent(notes)}`, {
-                method: "PATCH",
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            await api.patch(`/checkouts/${id}?status=${status}&notes=${encodeURIComponent(notes)}`);
             
-            if (res.ok) {
-                toast.success(status === "approved" ? "Putus kontrak disetujui" : "Putus kontrak ditolak");
-                setSelectedCheckout(null);
-                setNotes("");
-                fetchCheckouts();
-            } else {
-                const error = await res.json();
-                toast.error(error.detail || "Gagal memproses");
-            }
-        } catch (err) {
-            toast.error("Terjadi kesalahan sistem");
+            toast.success(status === "approved" ? "Putus kontrak disetujui" : "Putus kontrak ditolak");
+            setSelectedCheckout(null);
+            setNotes("");
+            fetchCheckouts();
+        } catch (err: any) {
+            const errorMsg = err.response?.data?.detail || "Gagal memproses";
+            toast.error(errorMsg);
         } finally {
             setProcessingId(null);
         }

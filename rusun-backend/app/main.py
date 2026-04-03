@@ -95,6 +95,7 @@ app = FastAPI(
     description="Backend API untuk Sistem Manajemen Rumah Susun Sederhana Sewa",
     version="1.0.0",
     lifespan=lifespan,  # modern pattern (FastAPI >= 0.93)
+    redirect_slashes=True, # Allow Next.js trailing slashes to match routes
 )
 
 # CORS - Robust development origins
@@ -105,7 +106,7 @@ _default_origins = [
     "http://127.0.0.1:3000",
     "http://[::1]:3000", # IPv6 support
     "http://localhost:3001",
-    "http://127.0.0.1:8000",
+    "http://127.0.0.1:8100",
 ]
 _env_origins = settings.ALLOWED_ORIGINS
 allow_origins = (

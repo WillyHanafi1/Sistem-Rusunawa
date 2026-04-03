@@ -199,7 +199,7 @@ export default function ContractRoomPage() {
         const contractPath = contractMatch ? contractMatch[1] : null;
         if (contractPath) {
             const safePath = contractPath.replace(/\\/g, '/');
-            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/api/${safePath}`;
+            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${safePath}`;
             window.open(url, '_blank');
         } else {
             alert("File kontrak tidak ditemukan.");
