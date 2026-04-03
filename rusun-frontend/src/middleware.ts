@@ -4,7 +4,13 @@ import { jwtVerify } from "jose";
 
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "");
 
-export async function proxy(request: NextRequest) {
+/**
+ * Next.js Edge Middleware — runs on EVERY matched request before page render.
+ * Handles authentication gating and role-based access control.
+ *
+ * IMPORTANT: Function MUST be named `middleware` (not `proxy`) for Next.js to recognize it.
+ */
+export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     const isAuthPage = pathname.startsWith("/login");
@@ -22,12 +28,11 @@ export async function proxy(request: NextRequest) {
             const { payload } = await jwtVerify(token, JWT_SECRET, {
                 algorithms: ["HS256"],
             });
-            
+
             isTokenValid = true;
             role = payload.role as string;
         } catch (err) {
-            // Token invalid or expired — check if we should try refresh
-            // Don't log the full error to avoid noise from expired tokens
+            // Token invalid or expired — don't log full error to avoid noise
         }
     }
 
@@ -36,7 +41,7 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    // 2. IMPORTANT: DO NOT automatically redirect from /login to dashboard! 
+    // 2. IMPORTANT: DO NOT automatically redirect from /login to dashboard!
     // This breaks the loop when the backend returns 401 but the cookie is still there.
 
     // 3. Role-based protection: /admin is restricted to admin & sadmin roles

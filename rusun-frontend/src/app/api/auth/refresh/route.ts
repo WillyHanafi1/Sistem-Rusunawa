@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8100";
+const BACKEND_URL = process.env.API_INTERNAL_URL || "http://127.0.0.1:8100";
 
 export async function POST(request: Request) {
     // 1. Get the refresh token from cookies

@@ -50,6 +50,8 @@ services:
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
       - API_INTERNAL_URL=http://backend:8000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ALGORITHM=HS256
     depends_on:
       - backend
     networks:

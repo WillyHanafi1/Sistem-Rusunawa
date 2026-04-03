@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const BACKEND_URL = process.env.API_INTERNAL_URL || "http://127.0.0.1:8100";
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.text(); // Ambil form data as-is
 
     // Forward ke backend FastAPI yang asli
-    const backendRes = await fetch("http://localhost:8100/api/auth/login", {
+    const backendRes = await fetch(`${BACKEND_URL}/api/auth/login`, {
       method: "POST",
-      headers: { 
+      headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body,
@@ -22,17 +24,14 @@ export async function POST(req: NextRequest) {
     // Buat response Next.js
     const response = NextResponse.json(data);
 
-    // Forward Set-Cookie header dari backend jika ada
-    const setCookieHeader = backendRes.headers.get("set-cookie");
-    if (setCookieHeader) {
-      // Backend sudah mengirim HttpOnly cookie — forward langsung
-      response.headers.set("set-cookie", setCookieHeader);
+    // Forward ALL Set-Cookie headers dari backend
+    const backendCookies = backendRes.headers.getSetCookie?.() || [];
+    for (const cookie of backendCookies) {
+      response.headers.append("Set-Cookie", cookie);
     }
 
     // Juga set cookie dari Next.js server-side sebagai fallback
     // (jika backend cookie tidak di-forward karena beda domain/port)
-    // Kita perlu token dari cookie backend, bukan dari response body
-    const backendCookies = backendRes.headers.getSetCookie?.() || [];
     const tokenCookie = backendCookies.find(c => c.startsWith("access_token="));
     if (tokenCookie) {
       const tokenValue = tokenCookie.split("=")[1]?.split(";")[0];
@@ -56,4 +55,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
