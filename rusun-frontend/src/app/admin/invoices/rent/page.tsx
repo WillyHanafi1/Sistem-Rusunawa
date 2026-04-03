@@ -22,6 +22,14 @@ interface Invoice {
     unit_number: number;
     tenant_name: string;
     payment_url?: string;
+    skrd_number?: string | null;
+    skrd_date?: string | null;
+    teguran1_number?: string | null;
+    teguran1_date?: string | null;
+    teguran2_number?: string | null;
+    teguran2_date?: string | null;
+    teguran3_number?: string | null;
+    teguran3_date?: string | null;
 }
 
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -54,6 +62,7 @@ export default function RentInvoicesPage() {
         other_charge: 0,
         due_date: "",
         notes: "",
+        start_skrd_no: "",
     });
 
     const fetchAll = async () => {
@@ -81,7 +90,11 @@ export default function RentInvoicesPage() {
                 await api.post("/invoices/generate", { ...form, tenant_id: Number(form.tenant_id) });
                 setModalGen(false);
             } else {
-                const res = await api.post("/invoices/mass-generate", form);
+                const payload = {
+                    ...form,
+                    start_skrd_no: form.start_skrd_no ? Number(form.start_skrd_no) : null
+                };
+                const res = await api.post("/invoices/mass-generate", payload);
                 alert(res.data.message);
                 setModalGen(false);
             }
@@ -247,6 +260,7 @@ export default function RentInvoicesPage() {
                             <thead>
                                 <tr className="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-white/10 uppercase">
                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Unit & Penghuni</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">No. SKRD</th>
                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Sewa Pokok</th>
                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Total Tagihan</th>
                                     <th className="px-6 py-4 text-[10px] font-black text-slate-400 tracking-wider">Status</th>
@@ -259,6 +273,27 @@ export default function RentInvoicesPage() {
                                         <td className="px-6 py-4">
                                             <div className="font-bold text-slate-900 dark:text-white">{row.tenant_name}</div>
                                             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Gd. {row.building} - Unit <span className="font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-[10px]">{row.unit_number}</span></div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {/* Priority: show the current document's number based on status column logic or model field */}
+                                            {row.skrd_number || row.teguran1_number || row.teguran2_number || row.teguran3_number ? (
+                                                <div className="flex flex-col gap-1">
+                                                    {row.skrd_number && (
+                                                        <div className="text-[10px] font-mono text-slate-400">SKRD: {row.skrd_number}</div>
+                                                    )}
+                                                    {row.teguran1_number && (
+                                                        <div className="text-[10px] font-mono text-blue-500 font-bold">T1: {row.teguran1_number}</div>
+                                                    )}
+                                                    {row.teguran2_number && (
+                                                        <div className="text-[10px] font-mono text-amber-600 font-bold">T2: {row.teguran2_number}</div>
+                                                    )}
+                                                    {row.teguran3_number && (
+                                                        <div className="text-[10px] font-mono text-red-600 font-bold">T3: {row.teguran3_number}</div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <span className="text-[10px] text-slate-400 italic">Belum ada No.</span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4">
                                             <span className="font-mono text-slate-600 dark:text-slate-400">Rp {Number(row.base_rent).toLocaleString("id-ID")}</span>
@@ -369,6 +404,20 @@ export default function RentInvoicesPage() {
                                         <input type="number" value={form.other_charge} onChange={e => setForm((f: any) => ({ ...f, other_charge: Number(e.target.value) }))}
                                             className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-2xl px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-mono" />
                                     </div>
+                                    {modalTab === "massal" && (
+                                        <div className="col-span-2">
+                                            <div className="h-px bg-slate-100 dark:bg-slate-800 my-2" />
+                                            <label className="block text-blue-500 text-[10px] font-black uppercase tracking-widest mb-1.5 ml-1">Penomoran SKRD Otomatis</label>
+                                            <input 
+                                                type="number" 
+                                                placeholder="Contoh: 2363 (Kosongkan jika tidak ingin menomori)"
+                                                value={form.start_skrd_no} 
+                                                onChange={e => setForm((f: any) => ({ ...f, start_skrd_no: e.target.value }))}
+                                                className="w-full bg-blue-50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-2xl px-4 py-3 text-sm text-blue-600 dark:text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-bold placeholder:italic placeholder:font-normal" 
+                                            />
+                                            <p className="text-[10px] text-slate-400 mt-2 px-1">Nomor akan di-generate berurutan: 974/SKRD/[KODE].[NO]/UPTD.RSN/[BULAN]/[TAHUN]</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

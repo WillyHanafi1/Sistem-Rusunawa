@@ -37,6 +37,14 @@ class InvoiceBase(SQLModel):
     status: InvoiceStatus = InvoiceStatus.unpaid
     document_type: DocumentType = DocumentType.skrd
     document_status_updated_at: Optional[datetime] = None
+    skrd_number: Optional[str] = None
+    skrd_date: Optional[date] = None
+    teguran1_number: Optional[str] = None
+    teguran1_date: Optional[date] = None
+    teguran2_number: Optional[str] = None
+    teguran2_date: Optional[date] = None
+    teguran3_number: Optional[str] = None
+    teguran3_date: Optional[date] = None
     notes: Optional[str] = None
 
 
@@ -67,6 +75,7 @@ class InvoiceMassGenerate(SQLModel):
     period_year: int
     other_charge: Decimal = Decimal("0")
     due_date: date
+    start_skrd_no: Optional[int] = Field(default=None, description="Nomor urut SKRD awal (misal: 2363)")
     notes: Optional[str] = None
 
 

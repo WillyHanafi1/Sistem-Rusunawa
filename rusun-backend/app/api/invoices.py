@@ -10,7 +10,7 @@ from app.models.room import Room
 from app.models.user import User, UserRole
 from app.core.config import settings
 import midtransclient
-from datetime import datetime
+from datetime import datetime, date
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
@@ -89,12 +89,21 @@ def internal_mass_generate_invoices(
     session: Session,
     period_month: int,
     period_year: int,
+    due_date: date,
     other_charge: Decimal = Decimal("0"),
+    start_skrd_no: Optional[int] = None,
     notes: str = "Otomatisasi bulanan",
 ) -> Dict[str, Any]:
     """Logika inti pembuatan invoice massal."""
-    # 1. Ambil semua penghuni aktif
-    active_tenants = session.exec(select(Tenant).where(Tenant.is_active == True)).all()
+    # 1. Ambil semua penghuni aktif, urutkan agar penomoran rapi
+    # Kita urutkan berdasarkan Site (id), Building, Floor, Unit supaya numbering sekuensial konsisten per gedung
+    query = (
+        select(Tenant)
+        .join(Room, Tenant.room_id == Room.id)
+        .where(Tenant.is_active == True)
+        .order_by(Room.rusunawa, Room.building, Room.floor, Room.unit_number)
+    )
+    active_tenants = session.exec(query).all()
     if not active_tenants:
         return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
 
@@ -132,10 +141,36 @@ def internal_mass_generate_invoices(
         
         total = Decimal(str(base_rent)) + parking_charge + water_charge + electricity_charge + other_charge
         
+        # 4a. Logic Penomoran SKRD
+        skrd_number = None
+        if start_skrd_no is not None:
+            # Mapping Site Code
+            site_codes = {
+                "Cigugur Tengah": "01",
+                "Cibeureum": "02",
+                "Leuwigajah": "03"
+            }
+            # Cermat: Cibeureum A/B/C/D semua kodenya 02? 
+            # Per user request: 02 = Cibeureum.
+            site_key = room.rusunawa.value if hasattr(room.rusunawa, 'value') else str(room.rusunawa)
+            code = site_codes.get(site_key, "00")
+            
+            # Map Month to Roman
+            romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+            month_rom = romans[period_month - 1] if 1 <= period_month <= 12 else str(period_month)
+            
+            # current_no = start_skrd_no + index_in_batch
+            # Kita hitung index dari total yang SUDAH digenerate di loop ini
+            current_idx = len(new_invoices)
+            seq_no = start_skrd_no + current_idx
+            
+            skrd_number = f"974/SKRD/{code}.{seq_no}/UPTD.RSN/{month_rom}/{period_year}"
+
         inv = Invoice(
             tenant_id=tenant.id,
             period_month=period_month,
             period_year=period_year,
+            due_date=due_date,
             base_rent=base_rent,
             water_charge=water_charge,
             electricity_charge=electricity_charge,
@@ -145,6 +180,8 @@ def internal_mass_generate_invoices(
             notes=notes,
             status=InvoiceStatus.unpaid,
             document_type=DocumentType.skrd,
+            skrd_number=skrd_number,
+            skrd_date=due_date, # Default tanggal SKRD sama dengan batas bayar atau hari ini? User request: Tanggal 01 APRIL
         )
         new_invoices.append(inv)
 
@@ -173,7 +210,9 @@ def mass_generate_invoices(
             session=session,
             period_month=mass_in.period_month,
             period_year=mass_in.period_year,
+            due_date=mass_in.due_date,
             other_charge=Decimal(str(mass_in.other_charge or 0)),
+            start_skrd_no=mass_in.start_skrd_no,
             notes=mass_in.notes or "Generate Massal"
         )
     except Exception as e:

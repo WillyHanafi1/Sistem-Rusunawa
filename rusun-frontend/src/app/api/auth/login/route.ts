@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
     const body = await req.text(); // Ambil form data as-is
 
     // Forward ke backend FastAPI yang asli
-    const backendRes = await fetch("http://localhost:8000/api/auth/login", {
+    const backendRes = await fetch("http://127.0.0.1:8000/api/auth/login", {
       method: "POST",
       headers: { 
         "Content-Type": "application/x-www-form-urlencoded",

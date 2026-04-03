@@ -10,6 +10,10 @@ from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applicati
 from app.models.application import Application
 from app.models.staff import Staff
 from app.models.family_member import FamilyMember
+from sqlmodel import Session, select
+from app.core.db import engine, create_db_and_tables
+from app.core.security import hash_password
+from app.models.user import User, UserRole
 
 
 # Simple background task for automatic penalty processing
@@ -19,7 +23,6 @@ async def run_daily_overdue_processing():
     """Runs every 24 hours to transition documents and calculate penalties."""
     from app.api.tasks import handle_overdue_processing
     from app.core.db import get_session
-    from app.models.user import User, UserRole
 
     while True:
         try:
@@ -52,11 +55,35 @@ async def run_daily_overdue_processing():
             print(f"Error in automated overdue processing: {e}")
             await asyncio.sleep(60) # Wait a minute before retrying on error
 
+def seed_admin():
+    """Memastikan setidaknya ada satu akun admin di sistem."""
+    with Session(engine) as session:
+        statement = select(User).where(User.role.in_([UserRole.admin, UserRole.sadmin]))
+        admin_exists = session.exec(statement).first()
+        
+        if not admin_exists:
+            print("[AUTO-SEED] Tidak ada admin ditemukan. Membuat akun default...")
+            default_admin = User(
+                email="admin@rusunawa.com",
+                name="Super Admin",
+                phone="08123456789",
+                role=UserRole.sadmin,
+                is_active=True,
+                password_hash=hash_password("admin123!"),
+            )
+            session.add(default_admin)
+            session.commit()
+            print("[AUTO-SEED] Akun Default: admin@rusunawa.com / admin123!")
+        else:
+            print("[AUTO-SEED] Akun admin sudah ada.")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager (menggantikan @on_event yang deprecated)."""
     # Startup: buat semua tabel jika belum ada
     create_db_and_tables()
+    # Seeding otomatis akun admin jika kosong
+    seed_admin()
     # Start background task
     asyncio.create_task(run_daily_overdue_processing())
     yield
@@ -70,13 +97,15 @@ app = FastAPI(
     lifespan=lifespan,  # modern pattern (FastAPI >= 0.93)
 )
 
-# CORS - Baca dari env var ALLOWED_ORIGINS (comma-separated) atau gunakan default localhost
+# CORS - Robust development origins
 _default_origins = [
     "http://localhost",
     "http://127.0.0.1",
     "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://[::1]:3000", # IPv6 support
     "http://localhost:3001",
-    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 _env_origins = settings.ALLOWED_ORIGINS
 allow_origins = (
@@ -84,6 +113,12 @@ allow_origins = (
     if _env_origins
     else _default_origins
 )
+
+# Merge defaults into env-provided origins for robustness in dev
+if settings.ENVIRONMENT == "development":
+    for origin in _default_origins:
+        if origin not in allow_origins:
+            allow_origins.append(origin)
 
 app.add_middleware(
     CORSMiddleware,

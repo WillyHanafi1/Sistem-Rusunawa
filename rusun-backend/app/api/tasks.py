@@ -10,8 +10,35 @@ from app.models.invoice import Invoice, InvoiceStatus, DocumentType
 from app.models.user import User
 from app.core.config import settings
 from app.api.invoices import internal_mass_generate_invoices
+from app.models.sequence import SystemSequence
+from app.models.room import Room
+from app.models.tenant import Tenant
 
 router = APIRouter(prefix="/tasks", tags=["Automation Tasks"])
+
+def get_next_sequence_value(session: Session, key: str, year: int) -> int:
+    """Mengambil nomor urut berikutnya dari database."""
+    seq = session.exec(
+        select(SystemSequence).where(
+            SystemSequence.key == key,
+            SystemSequence.year == year
+        )
+    ).first()
+    
+    if not seq:
+        seq = SystemSequence(key=key, year=year, last_value=1)
+        session.add(seq)
+        return 1
+    
+    seq.last_value += 1
+    session.add(seq)
+    return seq.last_value
+
+def format_teguran_number(code: str, type_label: str, seq_no: int, month: int, year: int) -> str:
+    """Format: 974/[T1/T2/T3]/[CODE].[NO]/UPTD.RSN/[MONTH_ROMAN]/[YEAR]"""
+    romans = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"]
+    month_rom = romans[month - 1] if 1 <= month <= 12 else str(month)
+    return f"974/{type_label}/{code}.{seq_no}/UPTD.RSN/{month_rom}/{year}"
 
 @router.post("/process-overdue", status_code=200)
 def handle_overdue_processing(
@@ -70,16 +97,32 @@ def handle_overdue_processing(
             days_passed = (today - last_update).days
             
             if days_passed >= settings.WARNING_INTERVAL_DAYS:
+                # Ambil data kamar untuk Site Code
+                room_stmt = select(Room).join(Tenant, Tenant.room_id == Room.id).where(Tenant.id == inv.tenant_id)
+                room = session.exec(room_stmt).first()
+                site_codes = {"Cigugur Tengah": "01", "Cibeureum": "02", "Leuwigajah": "03"}
+                site_key = room.rusunawa.value if room and hasattr(room.rusunawa, 'value') else str(room.rusunawa)
+                code = site_codes.get(site_key, "00")
+                
+                # Shared sequence pool for all teguran types
+                next_seq = get_next_sequence_value(session, "teguran_seq", now.year)
+                
                 if inv.document_type == DocumentType.strd:
                     inv.document_type = DocumentType.teguran1
+                    inv.teguran1_number = format_teguran_number(code, "T1", next_seq, now.month, now.year)
+                    inv.teguran1_date = now.date()
                     inv.document_status_updated_at = now
                     changed = True
                 elif inv.document_type == DocumentType.teguran1:
                     inv.document_type = DocumentType.teguran2
+                    inv.teguran2_number = format_teguran_number(code, "T2", next_seq, now.month, now.year)
+                    inv.teguran2_date = now.date()
                     inv.document_status_updated_at = now
                     changed = True
                 elif inv.document_type == DocumentType.teguran2:
                     inv.document_type = DocumentType.teguran3
+                    inv.teguran3_number = format_teguran_number(code, "T3", next_seq, now.month, now.year)
+                    inv.teguran3_date = now.date()
                     inv.document_status_updated_at = now
                     changed = True
         

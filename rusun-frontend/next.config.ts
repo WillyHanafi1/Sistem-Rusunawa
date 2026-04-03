@@ -19,7 +19,7 @@ const nextConfig = {
       {
         // Forward ke backend KECUALI /api/auth/* yang ditangani Next.js route.ts
         source: "/api/:path((?!auth(?:/|$)).+)",
-        destination: "http://localhost:8000/api/:path*",
+        destination: "http://127.0.0.1:8000/api/:path*",
       },
     ];
   },

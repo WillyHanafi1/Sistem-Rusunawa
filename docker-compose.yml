@@ -20,9 +20,9 @@ services:
     restart: always
     environment:
       - DATABASE_URL=postgresql://rusun_user:rusun_pass@db:5432/rusunawa
-      - JWT_SECRET=ganti-dengan-secret-key-yang-panjang-dan-acak
+      - JWT_SECRET=supersecret
     ports:
-      - "8000:8000"
+      - "8001:8000"
     depends_on:
       - db
 
@@ -35,7 +35,7 @@ services:
   #    ports:
   #      - "3000:3000"
   #    environment:
-  #      - NEXT_PUBLIC_API_URL=http://localhost:8000
+  #      - NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
   #    depends_on:
   #      - backend
 

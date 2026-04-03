@@ -16,12 +16,18 @@ let isLoggingOut = false;
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
+    // Check if it's a network error (no response)
+    if (!err.response) {
+      console.error("Backend Error: Server Rusunawa tidak dapat dihubungi. Pastikan backend di http://localhost:8000 sudah menyala.");
+    }
     // Jika 401 Unauthorized, artinya sesi habis atau token salah
     if (err.response?.status === 401 && typeof window !== "undefined" && !isLoggingOut) {
       const currentPath = window.location.pathname;
 
-      // Jangan logout jika kita sudah di halaman login
-      if (currentPath === "/login") {
+      // Jangan logout jika kita di halaman publik (selain /admin atau /portal)
+      const isProtectedRoute = currentPath.startsWith("/admin") || currentPath.startsWith("/portal");
+      
+      if (!isProtectedRoute) {
         return Promise.reject(err);
       }
 
@@ -43,8 +49,8 @@ api.interceptors.response.use(
         Cookies.remove("user_name", { path });
       });
 
-      // Redirect ke login hanya jika belum di sana
-      window.location.href = "/login";
+      // Redirect ke login
+      window.location.href = "/login?redirect=" + encodeURIComponent(currentPath);
     }
     return Promise.reject(err);
   }

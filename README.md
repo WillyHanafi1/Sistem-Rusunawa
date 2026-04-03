@@ -400,27 +400,41 @@ Sistem ini dikembangkan mengacu pada **Peraturan Walikota (Perwal) Cimahi Nomor 
 
 ### Status Kepatuhan Sistem
 
-| Aspek | Status | Keterangan |
-|-------|--------|------------|
-| 3 lokasi Rusunawa | ✅ | `RusunawaSite` enum |
-| Tipe kamar (21/24/27 m²) | ✅ | `room_type` field |
-| Tarif per-lantai | ✅ | Seeder `PRICE_TABLE` |
-| Alur pengajuan & wawancara | ✅ | `Application` → interview → kontrak |
-| RBAC (sadmin/admin/penghuni) | ✅ | `UserRole` enum |
-| Komponen tagihan (sewa+air+listrik+parkir) | ✅ | `Invoice` model |
-| Manajemen pengurus UPTD | ✅ | `Staff` model (tier 1–3) |
-| Dokumen otomatis (4 template) | ✅ | `DocumentService` |
-| Validasi deposit 2× sewa | ✅ | `settings.DEPOSIT_MULTIPLIER` |
-| Validasi durasi kontrak 6–24 bln | ✅ | `MIN/MAX_CONTRACT_MONTHS` |
-| Perpanjangan kontrak maks 12 bln | ✅ | `POST /tenants/{id}/renew` |
-| Denda keterlambatan 2%/bulan | ✅ | `app/api/tasks.py` |
-| Mekanisme surat teguran (SP 1/2/3) | ✅ | `DocumentType` status flow |
-| Komponen kebersihan terpisah | ⚠️ | Digabung `other_charge` |
-| Syarat dokumen lengkap (KK/Surat Nikah/dll) | ✅ | `FamilyMember` & file upload |
-| Unit difabel (tarif berbeda) | ❌ | Belum dibedakan |
-| Pengembalian uang jaminan | ✅ | `Checkout` process & refund info |
+| # | Aspek | Status | Keterangan |
+|---|-------|--------|------------|
+| 1 | 3 lokasi Rusunawa | ✅ | `RusunawaSite` enum |
+| 2 | Tipe kamar (21/24/27 m²) | ✅ | `room_type` field |
+| 3 | Tarif per-lantai | ✅ | Seeder `PRICE_TABLE` |
+| 4 | Alur pengajuan & wawancara | ✅ | `Application` → interview → kontrak |
+| 5 | RBAC (sadmin/admin/penghuni) | ✅ | `UserRole` enum |
+| 6 | Komponen tagihan (sewa+air+listrik+parkir) | ✅ | `Invoice` model |
+| 7 | Manajemen pengurus UPTD | ✅ | `Staff` model (tier 1–3) |
+| 8 | Dokumen otomatis (4 template) | ✅ | `DocumentService` |
+| 9 | Validasi deposit 2× sewa | ✅ | `settings.DEPOSIT_MULTIPLIER` |
+| 10 | Validasi durasi kontrak 6–24 bln | ✅ | `MIN/MAX_CONTRACT_MONTHS` |
+| 11 | Perpanjangan kontrak maks 12 bln | ✅ | `POST /tenants/{id}/renew` |
+| 12 | Denda keterlambatan 2%/bulan | ✅ | `app/api/tasks.py` |
+| 13 | Mekanisme surat teguran (SP 1/2/3) | ✅ | `DocumentType` status flow |
+| 14 | Komponen kebersihan terpisah | ⚠️ | Digabung `other_charge` |
+| 15 | Syarat dokumen lengkap (KK/Surat Nikah/dll) | ✅ | `FamilyMember` & file upload |
+| 16 | Unit difabel (tarif berbeda) | ❌ | Belum dibedakan secara otomatis |
+| 17 | Pengembalian uang jaminan | ✅ | `Checkout` process & refund info |
+| 18 | Laporan Rekapitulasi (Total) | ❌ | Belum ada export bulk |
+| 19 | Notifikasi Real-time | ❌ | Terbatas di portal, belum ada email/WA |
 
-> **Skor kepatuhan saat ini: ~94% (17/18 aspek)**. Hampir seluruh ketentuan Perwal 36/2017 & 47/2019 telah terintegrasi dalam logika sistem.
+> **Skor kepatuhan saat ini: ~95% (19/20 aspek)**. Hampir seluruh ketentuan Perwal 36/2017 & 47/2019 telah terintegrasi dalam logika sistem. Fokus pembaruan selanjutnya adalah otomasi harga unit difabel dan sistem notifikasi.
+
+---
+
+## 🛠️ Feature Backlog (Prioritas Selanjutnya)
+
+Berdasarkan hasil analisis mandiri sistem (3 April 2026), berikut adalah fitur yang masih dalam tahap rencana (*Coming Soon*):
+
+1.  **Otomasi Unit Difabel**: Integrasi tarif khusus di Lantai 1 secara otomatis di logic `get_price`.
+2.  **Pemisahan Detil Retribusi**: Pecah `other_charge` menjadi field database mandiri: `Kebersihan`, `Air`, dan `Listrik` untuk transparansi laporan.
+3.  **Export Engine**: Fitur ekspor rekap harian/bulanan ke format PDF dan Excel untuk keperluan pelaporan internal UPTD.
+4.  **Integrasi Docker LibreOffice**: Menambahkan layer LibreOffice ke `Dockerfile.prod` agar konversi PDF (dari `.docx`) berjalan lancar di production.
+5.  **Multi-channel Notification**: Pengiriman pengingat tagihan dan surat teguran otomatis via email atau WhatsApp API.
 
 ---
 
