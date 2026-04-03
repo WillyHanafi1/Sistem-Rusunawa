@@ -58,6 +58,7 @@ jobs:
           username: ${{ secrets.DROPLET_USERNAME }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           script: |
+            set -e
             cd /opt/rusunawa
             
             # Reset changes and pull latest
