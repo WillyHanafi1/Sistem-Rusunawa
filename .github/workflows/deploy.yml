@@ -65,19 +65,33 @@ jobs:
             git fetch origin master
             git reset --hard origin/master
             
-            # 1. Ensure DB is up and create compressed backup
+            # 1. Load variables and Ensure DB is up
+            if [ -f .env ]; then
+              export $(grep -v '^#' .env | xargs)
+            fi
+            
+            echo "--- Tahap 1: Persiapan Database ---"
             docker compose -f docker-compose.prod.yml up -d db
             mkdir -p backups
-            docker exec rusunawa_db pg_dump -U rusun_user rusunawa | gzip > backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz
+            
+            echo "--- Membuat Backup Database ---"
+            # Pastikan pg_dump tidak macet menunggu password
+            docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" rusunawa_db pg_dump -U "${POSTGRES_USER:-rusun_user}" "${POSTGRES_DB:-rusunawa}" | gzip > backups/backup_$(date +%Y%m%d_%H%M%S).sql.gz
             # Keep only last 5 backups
             ls -dt backups/* 2>/dev/null | tail -n +6 | xargs -r rm -f
             
             # 2. Build and migrate
-            # Hindari downtime saat rebuild dengan menaikkan cache
+            echo "--- Tahap 2: Rebuild & Migrasi ---"
             docker compose -f docker-compose.prod.yml build
+            
             # Tutup koneksi aktif agar tidak ada lock saat migrasi (perbaikan masalah loading terus)
-            docker exec rusunawa_db psql -U rusun_user -d rusunawa -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'rusunawa' AND pid <> pg_backend_pid();" || true
+            echo "--- Menutup Koneksi Database Aktif (Pembersihan Lock) ---"
+            docker exec rusunawa_db psql -U "${POSTGRES_USER:-rusun_user}" -d "${POSTGRES_DB:-rusunawa}" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${POSTGRES_DB:-rusunawa}' AND pid <> pg_backend_pid();" || true
+            
+            echo "--- Menjalankan Alembic Upgrade ---"
             docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
             
             # 3. Deploy
+            echo "--- Tahap 3: Peluncuran Kontainer Baru ---"
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            echo "--- DEPLOY BERHASIL ---"
