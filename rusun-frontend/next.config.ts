@@ -18,8 +18,12 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/:path((?!auth(?:/|$)).+)",
-        destination: `${process.env.API_INTERNAL_URL || "http://127.0.0.1:8100"}/api/:path*`,
+        source: "/api/:path((?!auth/).*)", // Match /api/xxx but NOT /api/auth/xxx
+        destination: `${process.env.API_INTERNAL_URL || "http://localhost:8100"}/api/:path*`,
+      },
+      {
+        source: "/api", // Special case for exact root /api if needed
+        destination: `${process.env.API_INTERNAL_URL || "http://localhost:8100"}/api`,
       },
     ];
   },

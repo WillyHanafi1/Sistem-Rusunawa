@@ -98,8 +98,8 @@ def seed_admin():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager (menggantikan @on_event yang deprecated)."""
-    # Startup: buat semua tabel jika belum ada
-    create_db_and_tables()
+    # Startup: buat semua tabel jika belum ada (handled by alembic)
+    # create_db_and_tables() 
     # Seeding otomatis akun admin jika kosong
     seed_admin()
     # Start background task

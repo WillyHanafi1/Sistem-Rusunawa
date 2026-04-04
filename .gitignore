@@ -38,3 +38,5 @@ upgrade_*.py
 # AI Rules & Documentation
 GEMINI.md
 docs/
+*.db.*
+rusun-backend/verify_db.py

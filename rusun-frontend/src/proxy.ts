@@ -5,10 +5,10 @@ import { jwtVerify } from "jose";
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "");
 
 /**
- * Next.js Edge Proxy — renamed from middleware.ts to proxy.ts per framework update.
- * Handles authentication gating and role-based access control.
- *
- * IMPORTANT: Function is now named `proxy` to comply with new standards.
+ * Next.js 16 Proxy — handles network boundaries and role-based access.
+ * 
+ * Replaces the deprecated middleware.ts convention.
+ * Runtime: nodejs (Edge not supported in proxy.ts)
  */
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
