@@ -68,9 +68,19 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
         if (disabled) {
             return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-300 dark:text-slate-600 cursor-not-allowed";
         }
+
+        const end = contractEnd ? new Date(contractEnd) : null;
+        // Check if this month is after contract end
+        const isAfterContract = end ? (new Date(year, month - 1, 1) > end) : false;
+
         if (!invoice) {
+            if (isAfterContract) {
+                // Pink style for expired contract but no invoice yet
+                return "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-400 dark:text-rose-500/70 hover:-translate-y-0.5 hover:shadow-sm cursor-pointer";
+            }
             return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500 cursor-not-allowed";
         }
+
         if (invoice.status === "paid") {
             return "bg-emerald-100 dark:bg-emerald-500/20 border-emerald-400 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-500/20";
         }
@@ -84,9 +94,11 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
             return "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 cursor-pointer";
         }
         return "";
-    }, [disabled, invoice]);
+    }, [disabled, invoice, contractEnd, month, year]);
 
-    const isClickable = !disabled && !!invoice;
+    const end = contractEnd ? new Date(contractEnd) : null;
+    const isAfterContract = end ? (new Date(year, month - 1, 1) > end) : false;
+    const isClickable = !disabled && (!!invoice || isAfterContract);
 
     return (
         <button
@@ -359,14 +371,23 @@ export default function ContractRoomPage() {
                 </div>
             ),
             cell: info => {
+                const r = info.row.original;
                 const val = info.getValue();
                 if (val) {
+                    const isExpired = r.contract_end ? new Date() > new Date(r.contract_end) : false;
                     return (
                         <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center text-[10px] font-bold uppercase shrink-0">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold uppercase shrink-0 transition-colors ${
+                                isExpired 
+                                    ? "bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30" 
+                                    : "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                            }`}>
                                 {val.charAt(0)}
                             </div>
-                            <span className="font-bold text-slate-900 dark:text-slate-100 text-sm whitespace-nowrap">{val}</span>
+                            <span className={`font-bold text-sm whitespace-nowrap ${isExpired ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-slate-100"}`}>
+                                {val}
+                                {isExpired && <span className="ml-1.5 text-[10px] font-medium px-1.5 py-0.5 bg-rose-50 dark:bg-rose-500/10 rounded text-rose-500 border border-rose-100 dark:border-rose-500/20">Expired</span>}
+                            </span>
                         </div>
                     );
                 }
