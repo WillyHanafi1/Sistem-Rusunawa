@@ -68,19 +68,9 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
         if (disabled) {
             return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-300 dark:text-slate-600 cursor-not-allowed";
         }
-
-        const end = contractEnd ? new Date(contractEnd) : null;
-        // Check if this month is after contract end
-        const isAfterContract = end ? (new Date(year, month - 1, 1) > end) : false;
-
         if (!invoice) {
-            if (isAfterContract) {
-                // Pink style for expired contract but no invoice yet
-                return "bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-400 dark:text-rose-500/70 hover:-translate-y-0.5 hover:shadow-sm cursor-pointer";
-            }
             return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500 cursor-not-allowed";
         }
-
         if (invoice.status === "paid") {
             return "bg-emerald-100 dark:bg-emerald-500/20 border-emerald-400 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-500/20";
         }
@@ -94,11 +84,9 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
             return "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 cursor-pointer";
         }
         return "";
-    }, [disabled, invoice, contractEnd, month, year]);
+    }, [disabled, invoice]);
 
-    const end = contractEnd ? new Date(contractEnd) : null;
-    const isAfterContract = end ? (new Date(year, month - 1, 1) > end) : false;
-    const isClickable = !disabled && (!!invoice || isAfterContract);
+    const isClickable = !disabled && !!invoice;
 
     return (
         <button
