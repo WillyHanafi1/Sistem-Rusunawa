@@ -39,6 +39,8 @@ class InvoiceBase(SQLModel):
     document_status_updated_at: Optional[datetime] = None
     skrd_number: Optional[str] = None
     skrd_date: Optional[date] = None
+    strd_number: Optional[str] = None
+    strd_date: Optional[date] = None
     teguran1_number: Optional[str] = None
     teguran1_date: Optional[date] = None
     teguran2_number: Optional[str] = None
@@ -105,6 +107,20 @@ class InvoiceUpdate(SQLModel):
     payment_url: Optional[str] = None
     payment_id: Optional[str] = None
     midtrans_order_id: Optional[str] = None
+    document_type: Optional[DocumentType] = None
+    skrd_number: Optional[str] = None
+    skrd_date: Optional[date] = None
+    strd_number: Optional[str] = None
+    strd_date: Optional[date] = None
+    teguran1_number: Optional[str] = None
+    teguran1_date: Optional[date] = None
+    teguran2_number: Optional[str] = None
+    teguran2_date: Optional[date] = None
+    teguran3_number: Optional[str] = None
+    teguran3_date: Optional[date] = None
+    penalty_amount: Optional[Decimal] = None
+    total_amount: Optional[Decimal] = None
+    notes: Optional[str] = None
 
 
 class InvoiceReadWithRoom(InvoiceRead):

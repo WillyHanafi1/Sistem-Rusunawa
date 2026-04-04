@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
+import math
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
 from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
@@ -9,8 +11,10 @@ from app.models.tenant import Tenant
 from app.models.room import Room
 from app.models.user import User, UserRole
 from app.core.config import settings
+from app.core.document_service import DocumentService
 import midtransclient
 import calendar
+import os
 from datetime import datetime, date
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -88,6 +92,109 @@ def list_invoices(
         
     return output
 
+@router.patch("/{invoice_id}", response_model=InvoiceRead)
+def update_invoice(
+    invoice_id: int,
+    invoice_update: InvoiceUpdate,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    """Update metadata invoice (nomor surat, status, dll)."""
+    db_invoice = session.get(Invoice, invoice_id)
+    if not db_invoice:
+        raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+
+    obj_data = invoice_update.model_dump(exclude_unset=True)
+    for key, value in obj_data.items():
+        setattr(db_invoice, key, value)
+
+    # Update document_status_updated_at if document_type changed
+    if "document_type" in obj_data:
+        db_invoice.document_status_updated_at = datetime.now(timezone.utc)
+
+    session.add(db_invoice)
+    session.commit()
+    session.refresh(db_invoice)
+    return db_invoice
+
+
+@router.get("/{invoice_id}/print")
+def print_invoice(
+    invoice_id: int,
+    doc_type: Optional[DocumentType] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    # Fetch invoice with detailed info
+    query = (
+        select(
+            Invoice,
+            Room.room_number,
+            Room.rusunawa,
+            Room.building,
+            Room.floor,
+            Room.unit_number,
+            User.name.label("tenant_name"),
+            Tenant.nik,
+        )
+        .join(Tenant, Invoice.tenant_id == Tenant.id)
+        .join(Room, Tenant.room_id == Room.id)
+        .join(User, Tenant.user_id == User.id)
+        .where(Invoice.id == invoice_id)
+    )
+    result = session.exec(query).first()
+    if not result:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = result
+    
+    # Use current document_type if not specified
+    if not doc_type:
+        doc_type = inv_obj.document_type
+
+    # Format data for template
+    def fmt(val: Decimal):
+        if val is None: return "0"
+        return f"{val:,.0f}".replace(",", ".")
+
+    # Month mapping in Indonesian
+    months_id = {
+        1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
+        7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+    }
+
+    context = {
+        "nama_penyewa": t_name,
+        "nik": t_nik,
+        "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
+        "tanggal_surat": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d-%m-%Y"),
+        "unit": r_num,
+        "gedung": r_bu,
+        "lantai": str(r_fl),
+        "rusunawa": r_ru,
+        "total_tagihan": fmt(inv_obj.total_amount),
+        "denda": fmt(inv_obj.penalty_amount),
+        "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
+        "tahun_tagihan": str(inv_obj.period_year),
+        "total_bayar": fmt(inv_obj.total_amount + inv_obj.penalty_amount)
+    }
+
+    try:
+        file_path = DocumentService.generate_invoice_document(context, doc_type.value, invoice_id)
+        full_path = os.path.abspath(file_path)
+        
+        if not os.path.exists(full_path):
+            raise HTTPException(status_code=500, detail="Generated file not found")
+            
+        return FileResponse(
+            full_path, 
+            media_type="application/pdf", 
+            filename=f"{doc_type.value}_{invoice_id}.pdf"
+        )
+    except Exception as e:
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to generate document: {str(e)}")
 
 
 def internal_mass_generate_invoices(
@@ -185,10 +292,8 @@ def internal_mass_generate_invoices(
             
             skrd_number = f"974/SKRD/{code}.{seq_no}/UPTD.RSN/{month_rom}/{period_year}"
 
-        # 4b. Tentukan jenis dokumen: Jika sudah lewat jatuh tempo -> STRD (Tagihan)
+        # 4b. Tentukan jenis dokumen: Selalu SKRD saat pembuatan awal (sesuai request user)
         doc_type = DocumentType.skrd
-        if due_date < date.today():
-            doc_type = DocumentType.strd
 
         inv = Invoice(
             tenant_id=tenant.id,
@@ -205,7 +310,7 @@ def internal_mass_generate_invoices(
             status=InvoiceStatus.unpaid,
             document_type=doc_type,
             skrd_number=skrd_number,
-            skrd_date=due_date, # Default tanggal SKRD sama dengan batas bayar atau hari ini? User request: Tanggal 01 APRIL
+            skrd_date=due_date, # Default tanggal SKRD sama dengan batas bayar
         )
         new_invoices.append(inv)
 
@@ -358,6 +463,35 @@ def update_invoice(
     session.refresh(invoice)
     return invoice
 
+def _recalculate_penalty(invoice: Invoice, session: Session) -> bool:
+    """Helper: Menghitung ulang dan menyimpan denda jika tagihan jatuh tempo.
+    Return True jika ada perubahan total_amount."""
+    if invoice.status == InvoiceStatus.paid:
+        return False
+
+    base_total = (
+        (invoice.base_rent or Decimal(0))
+        + (invoice.water_charge or Decimal(0))
+        + (invoice.electricity_charge or Decimal(0))
+        + (invoice.parking_charge or Decimal(0))
+        + (invoice.other_charge or Decimal(0))
+    )
+
+    if invoice.due_date and invoice.due_date < date.today():
+        dynamic_penalty = base_total * Decimal("0.02")
+        db_penalty = invoice.penalty_amount or Decimal(0)
+        
+        # Selalu setel denda di angka 2% flat untuk menormalkan data legacy
+        # Jika berbeda dari DB, kita paksa simpan nilai 2% tersebut
+        if dynamic_penalty != db_penalty:
+            invoice.penalty_amount = dynamic_penalty
+            invoice.total_amount = base_total + dynamic_penalty
+            session.add(invoice)
+            session.commit()
+            session.refresh(invoice)
+            return True
+            
+    return False
 
 @router.post("/{invoice_id}/pay", response_model=InvoiceRead)
 def pay_invoice_midtrans(
@@ -380,9 +514,25 @@ def pay_invoice_midtrans(
     if invoice.status == InvoiceStatus.paid:
         raise HTTPException(status_code=400, detail="Tagihan sudah lunas")
 
+    # Update penalty dynamically before paying
+    amount_changed = _recalculate_penalty(invoice, session)
+
+    # Force generate ulang link Midtrans jika nominal berubah karena denda
+    if amount_changed:
+        invoice.payment_url = None
+        invoice.payment_id = None
+        session.add(invoice)
+        session.commit()
+
+    # Jika sudah punya payment_url dan status unpaid, cek apakah total_amount berubah.
+    # Namun jika kita update setiap hari, maka transaction yg belum dibayar bisa kedaluwarsa.
+    # Untuk simplifikasi, anggap saja kalau butuh update token, token lama tetap dipakai selama masih valid. 
+    # Idealnya jika nominal berubah, paksa generate ulang link. Namun di sini biarkan dulu.
+
     # Jika sudah punya payment_url dan status unpaid, kembalikan saja URL lama agar tidak generate ulang di Midtrans
     if invoice.payment_url and invoice.payment_id:
         return invoice
+
 
     tenant = session.get(Tenant, invoice.tenant_id)
     user = session.get(User, tenant.user_id) if tenant else None
@@ -442,10 +592,12 @@ def bulk_pay_invoices(
     count = 0
     for inv in invoices:
         if inv.status != InvoiceStatus.paid:
+            _recalculate_penalty(inv, session)
             inv.status = InvoiceStatus.paid
             inv.paid_at = req.paid_at
             session.add(inv)
             count += 1
+
             
     session.commit()
     return {"success": True, "updated_count": count}

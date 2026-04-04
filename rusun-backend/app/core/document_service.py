@@ -92,8 +92,70 @@ class DocumentService:
                         generated_docs[doc_type] = docx_path.replace("\\", "/")
                 else:
                     generated_docs[doc_type] = docx_path.replace("\\", "/")
-
             except Exception as e:
                 print(f"Error generating {doc_type}: {e}")
 
         return generated_docs
+
+    @classmethod
+    def generate_invoice_document(cls, context: dict, doc_type: str, invoice_id: int) -> str:
+        """
+        Generates a specific invoice document (SKRD, STRD, or Teguran).
+        Returns the relative path to the generated file.
+        """
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = uuid.uuid4().hex[:6]
+        
+        # Output directory for invoice documents
+        output_dir = os.path.join(cls.OUTPUT_BASE_DIR, "invoices", str(invoice_id))
+        os.makedirs(output_dir, exist_ok=True)
+
+        template_name = f"template_{doc_type}.docx"
+        template_path = os.path.join(cls.TEMPLATES_DIR, template_name)
+        
+        if not os.path.exists(template_path):
+            raise FileNotFoundError(f"Template not found: {template_name}")
+
+        filename_prefix = f"{doc_type}_{invoice_id}_{unique_id}"
+        docx_path = os.path.join(output_dir, f"{filename_prefix}.docx")
+        
+        # 1. Fill Template
+        try:
+            # Inject management data if missing
+            if "nama_kepala_uptd" not in context:
+                with Session(engine) as session:
+                    management_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
+                    kepala = next((s for s in management_staff if "kepala" in s.role.lower()), None)
+                    bendahara = next((s for s in management_staff if "bendahara" in s.role.lower()), None)
+                    if kepala:
+                        context["nama_kepala_uptd"] = kepala.name
+                        context["nip_kepala_uptd"] = kepala.nip
+                    if bendahara:
+                        context["nama_bendahara"] = bendahara.name
+                        context["nip_bendahara"] = bendahara.nip
+
+            # Add general context
+            context.update({
+                "tanggal_cetak": datetime.now().strftime("%d-%m-%Y"),
+                "tahun": datetime.now().year
+            })
+
+            doc = DocxTemplate(template_path)
+            doc.render(context)
+            doc.save(docx_path)
+            
+            # 2. Convert to PDF if possible
+            if HAS_PDF_CONVERTER:
+                try:
+                    pdf_path = docx_path.replace(".docx", ".pdf")
+                    convert(docx_path, pdf_path)
+                    return pdf_path.replace("\\", "/") # Web-accessible path
+                except Exception as e:
+                    print(f"Error converting to PDF: {e}")
+                    return docx_path.replace("\\", "/")
+            else:
+                return docx_path.replace("\\", "/")
+
+        except Exception as e:
+            print(f"Error generating {doc_type}: {e}")
+            raise e

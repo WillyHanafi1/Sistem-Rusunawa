@@ -44,8 +44,7 @@ const navItems: NavItem[] = [
         label: "Keuangan & Tagihan",
         icon: Wallet,
         children: [
-            { href: "/admin/invoices/rent", label: "Tagihan Bulanan", icon: FileText },
-            { href: "/admin/invoices/warnings", label: "Peringatan & Denda", icon: AlertTriangle }
+            { href: "/admin/invoices/rent", label: "Tagihan", icon: FileText },
         ]
     },
     {
