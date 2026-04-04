@@ -75,6 +75,8 @@ jobs:
             # 2. Build and migrate
             # Hindari downtime saat rebuild dengan menaikkan cache
             docker compose -f docker-compose.prod.yml build
+            # Tutup koneksi aktif agar tidak ada lock saat migrasi (perbaikan masalah loading terus)
+            docker exec rusunawa_db psql -U rusun_user -d rusunawa -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'rusunawa' AND pid <> pg_backend_pid();" || true
             docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
             
             # 3. Deploy
