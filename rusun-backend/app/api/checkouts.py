@@ -11,7 +11,7 @@ from app.models.user import User
 
 router = APIRouter(prefix="/checkouts", tags=["Checkouts"])
 
-@router.post("/", response_model=CheckoutRead)
+@router.post("", response_model=CheckoutRead)
 def request_checkout(
     req: CheckoutCreate,
     session: Session = Depends(get_session),
@@ -43,7 +43,7 @@ def request_checkout(
     session.refresh(checkout)
     return checkout
 
-@router.get("/", response_model=List[CheckoutRead])
+@router.get("", response_model=List[CheckoutRead])
 def list_checkouts(
     skip: int = 0,
     limit: int = 100,

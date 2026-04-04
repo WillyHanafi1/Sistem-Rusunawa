@@ -36,7 +36,7 @@ export default function OpenTicketsPage() {
     const fetchTickets = async () => {
         setLoading(true);
         try {
-            const res = await api.get("/tickets/?status=active&limit=999");
+            const res = await api.get("/tickets?status=active&limit=999");
             setTickets(res.data);
             if (res.data.length > 0 && !selectedTicket) {
                 setSelectedTicket(res.data[0]);

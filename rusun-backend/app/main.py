@@ -127,7 +127,7 @@ app = FastAPI(
     description="Backend API untuk Sistem Manajemen Rumah Susun Sederhana Sewa",
     version="1.0.0",
     lifespan=lifespan,  # modern pattern (FastAPI >= 0.93)
-    redirect_slashes=True, # Allow Next.js trailing slashes to match routes
+    redirect_slashes=False, # Allow Next.js trailing slashes to match routes
     # Disable docs in production (security hardening)
     docs_url="/docs" if settings.ENVIRONMENT == "development" else None,
     redoc_url="/redoc" if settings.ENVIRONMENT == "development" else None,

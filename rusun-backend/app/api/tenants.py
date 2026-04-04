@@ -67,7 +67,7 @@ async def import_tenants(
     return result
 
 
-@router.get("/", response_model=List[TenantRead])
+@router.get("", response_model=List[TenantRead])
 def list_tenants(
     skip: int = 0,
     limit: int = 100,
@@ -102,7 +102,7 @@ def get_tenant(
     return tenant
 
 
-@router.post("/", response_model=TenantRead, status_code=201)
+@router.post("", response_model=TenantRead, status_code=201)
 def create_tenant(
     tenant_in: TenantCreate,
     session: Session = Depends(get_session),

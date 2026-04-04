@@ -51,8 +51,8 @@ export default function WarningsPage() {
         try {
             // Fetch both unpaid (which might be late) and overdue
             const [unpaidRes, overdueRes] = await Promise.all([
-                api.get("/invoices/?status=unpaid&limit=9999"),
-                api.get("/invoices/?status=overdue&limit=9999"),
+                api.get("/invoices?status=unpaid&limit=9999"),
+                api.get("/invoices?status=overdue&limit=9999"),
             ]);
             
             // Combine and filter those that have document_type strd/teguran

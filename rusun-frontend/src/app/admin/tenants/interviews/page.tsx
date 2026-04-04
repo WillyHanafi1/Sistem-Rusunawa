@@ -105,8 +105,8 @@ export default function InterviewsPage() {
             setLoading(true);
             const status = statusMap[activeTab];
             const [appRes, roomRes] = await Promise.all([
-                api.get(`/applications/?status=${status}`),
-                api.get("/rooms/")
+                api.get(`/applications?status=${status}`),
+                api.get("/rooms")
             ]);
             setApps(appRes.data);
             setRooms(roomRes.data.filter((r: Room) => r.status === "kosong"));

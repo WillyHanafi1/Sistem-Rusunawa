@@ -18,6 +18,8 @@ from app.models.ticket import Ticket
 from app.models.application import Application
 from app.models.staff import Staff
 from app.models.family_member import FamilyMember
+from app.models.checkout import Checkout
+from app.models.sequence import SystemSequence
 from app.core.config import settings
 
 # this is the Alembic Config object, which provides

@@ -36,7 +36,7 @@ export default function TenantTicketsPage() {
 
     const fetchTickets = async () => {
         try {
-            const res = await api.get("/tickets/");
+            const res = await api.get("/tickets");
             setTickets(res.data);
         } catch (err) {
             console.error(err);
@@ -55,7 +55,7 @@ export default function TenantTicketsPage() {
         e.preventDefault();
         setSubmitting(true);
         try {
-            await api.post("/tickets/", { category, description });
+            await api.post("/tickets", { category, description });
             setIsModalOpen(false);
             setDescription("");
             fetchTickets();

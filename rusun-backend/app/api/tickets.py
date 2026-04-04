@@ -11,7 +11,7 @@ from app.models.room import Room
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
 
-@router.get("/", response_model=List[TicketReadWithDetails])
+@router.get("", response_model=List[TicketReadWithDetails])
 def list_tickets(
     status: Optional[str] = None,
     skip: int = 0,
@@ -66,7 +66,7 @@ def get_ticket(
     
     return ticket
 
-@router.post("/", response_model=TicketRead, status_code=201)
+@router.post("", response_model=TicketRead, status_code=201)
 def create_ticket(
     ticket_in: TicketCreate,
     session: Session = Depends(get_session),

@@ -35,7 +35,7 @@ export default function TariffsPage() {
     useEffect(() => {
         const fetchCurrentPrices = async () => {
              try {
-                  const res = await api.get('/rooms/?limit=1000');
+                  const res = await api.get('/rooms?limit=1000');
                   const rooms = res.data;
                   const newMatrix = { ...matrix };
                   let dataChanged = false;

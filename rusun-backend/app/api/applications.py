@@ -28,7 +28,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
-@router.get("/", response_model=List[ApplicationRead])
+@router.get("", response_model=List[ApplicationRead])
 def list_applications(
     status: Optional[ApplicationStatus] = None,
     skip: int = 0,
@@ -47,7 +47,7 @@ def list_applications(
     return applications
 
 
-@router.post("/", response_model=ApplicationRead, status_code=201)
+@router.post("", response_model=ApplicationRead, status_code=201)
 async def create_application(
     nik: str = Form(...),
     full_name: str = Form(...),

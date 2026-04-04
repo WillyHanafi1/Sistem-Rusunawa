@@ -14,7 +14,7 @@ router = APIRouter(prefix="/rooms", tags=["Rooms"])
 from datetime import date
 from sqlalchemy import func
 
-@router.get("/", response_model=List[RoomRead])
+@router.get("", response_model=List[RoomRead])
 def list_rooms(
     rusunawa: Optional[RusunawaSite] = None,
     building: Optional[str] = None,
@@ -183,7 +183,7 @@ def get_room(
     return room
 
 
-@router.post("/", response_model=RoomRead, status_code=201)
+@router.post("", response_model=RoomRead, status_code=201)
 def create_room(
     room_in: RoomCreate,
     session: Session = Depends(get_session),

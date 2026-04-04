@@ -52,7 +52,7 @@ export default function LeuwigajahPage() {
       if (formData.photo_file) payload.append("photo_file", formData.photo_file);
       payload.append("has_signed_statement", formData.has_signed_statement.toString());
 
-      await api.post("/applications/", payload, {
+      await api.post("/applications", payload, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       alert("Pendaftaran berhasil dikirim! Silakan tunggu petugas kami menghubungi Anda.");

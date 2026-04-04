@@ -14,7 +14,7 @@ def get_public_management_team(session: Session = Depends(get_session)):
     statement = select(Staff).where(Staff.is_active == True).order_by(Staff.tier, Staff.id)
     return session.exec(statement).all()
 
-@router.get("/", response_model=List[StaffRead])
+@router.get("", response_model=List[StaffRead])
 def get_management_team(
     session: Session = Depends(get_session),
     _: User = Depends(get_current_user),  # MED-03: Require authentication
@@ -25,7 +25,7 @@ def get_management_team(
     return results
 
 
-@router.post("/", response_model=StaffRead)
+@router.post("", response_model=StaffRead)
 def create_staff(
     *, session: Session = Depends(get_session), 
     staff_in: StaffCreate, 

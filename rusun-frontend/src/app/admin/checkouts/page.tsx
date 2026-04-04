@@ -45,7 +45,7 @@ export default function CheckoutsPage() {
     const fetchCheckouts = async () => {
         setLoading(true);
         try {
-            const res = await api.get("/checkouts/");
+            const res = await api.get("/checkouts");
             setCheckouts(res.data);
         } catch (err) {
             console.error(err);

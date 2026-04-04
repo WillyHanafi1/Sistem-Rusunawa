@@ -14,7 +14,7 @@ const nextConfig = {
   turbopack: {
     root: process.cwd(),
   },
-  trailingSlash: true,
+  trailingSlash: false,
   async rewrites() {
     return [
       {

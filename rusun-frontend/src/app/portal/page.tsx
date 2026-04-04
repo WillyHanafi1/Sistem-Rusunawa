@@ -51,7 +51,7 @@ export default function PortalPage() {
 
     const loadInvoices = () => {
         setLoading(true);
-        api.get("/invoices/")
+        api.get("/invoices")
             .then(res => setInvoices(res.data))
             .catch(err => {
                 console.error("Gagal mengambil tagihan:", err);
@@ -91,7 +91,7 @@ export default function PortalPage() {
         e.preventDefault();
         setSubmittingCheckout(true);
         try {
-            await api.post("/checkouts/", checkoutForm);
+            await api.post("/checkouts", checkoutForm);
             toast.success("Permintaan checkout berhasil diajukan");
             setShowCheckoutModal(false);
             loadCheckoutStatus();

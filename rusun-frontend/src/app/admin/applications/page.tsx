@@ -73,7 +73,7 @@ export default function ApplicationsPage() {
     const fetchApplications = async () => {
         try {
             setLoading(true);
-            const { data } = await api.get("/applications/");
+            const { data } = await api.get("/applications");
             setApps(data);
         } catch (error) {
             console.error("Failed fetching applications:", error);
@@ -170,7 +170,7 @@ export default function ApplicationsPage() {
                 // or we can add a toggle. For now, we follow backend requirement if needed.
                 payload.append("has_signed_statement", "true");
 
-                await api.post("/applications/", payload, {
+                await api.post("/applications", payload, {
                     headers: { "Content-Type": "multipart/form-data" }
                 });
                 alert("Pengajuan berhasil ditambahkan.");

@@ -108,7 +108,7 @@ export default function RoomsPage() {
                 await api.patch(`/rooms/${editing.id}`, form);
                 setSuccessMsg(`Pembaruan data kamar ${editing.room_number} berhasil disimpan.`);
             } else {
-                await api.post("/rooms/", form);
+                await api.post("/rooms", form);
                 setSuccessMsg(`Kamar baru berhasil ditambahkan.`);
             }
             setModal(false);

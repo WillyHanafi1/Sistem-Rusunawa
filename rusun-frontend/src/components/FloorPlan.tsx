@@ -73,7 +73,7 @@ export function FloorPlan({ locationName }: FloorPlanProps) {
     setError("");
     try {
       const apiLocationName = locationName.replace("Rusunawa ", "");
-      const res = await api.get(`/rooms/?rusunawa=${encodeURIComponent(apiLocationName)}`);
+      const res = await api.get(`/rooms?rusunawa=${encodeURIComponent(apiLocationName)}`);
       setRooms(res.data);
     } catch (err: any) {
       console.error("Failed to fetch rooms for floor plan:", err);

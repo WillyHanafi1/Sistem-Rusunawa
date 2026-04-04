@@ -117,8 +117,8 @@ export default function RentInvoicesPage() {
         setLoading(true);
         try {
             const [inv, ten] = await Promise.all([
-                api.get(`/invoices/?month=${filterMonth}&year=${filterYear}&limit=9999`), 
-                api.get("/tenants/")
+                api.get(`/invoices?month=${filterMonth}&year=${filterYear}&limit=9999`), 
+                api.get("/tenants")
             ]);
             setInvoices(inv.data);
             setTenants(ten.data.filter((t: any) => t.is_active));

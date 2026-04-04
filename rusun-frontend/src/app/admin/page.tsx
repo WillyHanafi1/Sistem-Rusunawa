@@ -27,9 +27,9 @@ export default function AdminDashboard() {
         const fetchStats = async () => {
             try {
                 const [rooms, tenants, invoices] = await Promise.all([
-                    api.get("/rooms/"),
-                    api.get("/tenants/"),
-                    api.get("/invoices/"),
+                    api.get("/rooms"),
+                    api.get("/tenants"),
+                    api.get("/invoices"),
                 ]);
                 const now = new Date();
                 setStats({

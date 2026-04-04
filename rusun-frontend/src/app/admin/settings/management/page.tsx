@@ -51,7 +51,7 @@ export default function StaffManagementPage() {
 
     const fetchStaff = async () => {
         try {
-            const res = await api.get("/management/");
+            const res = await api.get("/management");
             setStaff(res.data);
         } catch (err: any) {
             setError("Gagal mengambil data staff");
@@ -101,7 +101,7 @@ export default function StaffManagementPage() {
             if (editingStaff) {
                 await api.put(`/management/${editingStaff.id}`, formData);
             } else {
-                await api.post("/management/", formData);
+                await api.post("/management", formData);
             }
             await fetchStaff();
             setShowModal(false);

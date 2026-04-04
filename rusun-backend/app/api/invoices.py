@@ -16,7 +16,7 @@ from datetime import datetime, date
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 
-@router.get("/", response_model=List[InvoiceReadWithRoom])
+@router.get("", response_model=List[InvoiceReadWithRoom])
 def list_invoices(
     skip: int = 0,
     limit: int = 100,
