@@ -34,3 +34,7 @@ upgrade_*.py
 
 # Editor
 .vscode/
+
+# AI Rules & Documentation
+GEMINI.md
+docs/
