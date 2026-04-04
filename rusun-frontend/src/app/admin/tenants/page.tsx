@@ -245,17 +245,23 @@ export default function ContractRoomPage() {
         let result = [...rooms];
         if (filterStatus) result = result.filter(r => r.status === filterStatus);
         
-        // Custom Sort by Site Priority
+        // Multi-level sort: Rusunawa > Building > Floor > Unit
         return result.sort((a, b) => {
+            // 1. Rusunawa (Site) Priority
             const priorityA = SITE_ORDER[a.rusunawa] || 99;
             const priorityB = SITE_ORDER[b.rusunawa] || 99;
+            if (priorityA !== priorityB) return priorityA - priorityB;
             
-            if (priorityA !== priorityB) {
-                return priorityA - priorityB;
-            }
+            // 2. Building (A, B, C...)
+            const buildingA = (a.building || "").toUpperCase();
+            const buildingB = (b.building || "").toUpperCase();
+            if (buildingA !== buildingB) return buildingA.localeCompare(buildingB);
             
-            // Secondary sort by Room Number for consistency
-            return a.room_number.localeCompare(b.room_number);
+            // 3. Floor (Numeric)
+            if (a.floor !== b.floor) return a.floor - b.floor;
+            
+            // 4. Unit (Numeric)
+            return a.unit_number - b.unit_number;
         });
     }, [rooms, filterStatus]);
 

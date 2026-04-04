@@ -62,8 +62,8 @@ def list_invoices(
     # Sort by building, floor, unit for better organization
     query = query.order_by(Room.building, Room.floor, Room.unit_number)
     
-    # MED-02: Validate pagination bounds
-    limit = min(max(limit, 1), 100)
+    # Increase limit for admin multi-month views (especially the payment matrix)
+    limit = min(max(limit, 1), 5000)
     skip = max(skip, 0)
     
     results = session.exec(query.offset(skip).limit(limit)).all()
