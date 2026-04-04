@@ -161,16 +161,19 @@ export default function ContractRoomPage() {
     const fetchInvoicesForYear = async (year: number) => {
         setLoadingInvoices(true);
         try {
-            const res = await api.get(`/invoices/?year=${year}&limit=9999`);
+            const res = await api.get(`/invoices?year=${year}&limit=9999`);
             const invoices: InvoiceDetail[] = res.data;
+            
+            console.log(`[Matrix Debug] Loaded ${invoices.length} invoices for year ${year}`);
 
             // Build Map<tenant_id, Map<month, Invoice>>
             const map = new Map<number, Map<number, InvoiceDetail>>();
             for (const inv of invoices) {
-                if (!map.has(inv.tenant_id)) {
-                    map.set(inv.tenant_id, new Map());
+                const tId = Number(inv.tenant_id);
+                if (!map.has(tId)) {
+                    map.set(tId, new Map());
                 }
-                map.get(inv.tenant_id)!.set(inv.period_month, inv);
+                map.get(tId)!.set(inv.period_month, inv);
             }
             setInvoiceMap(map);
         } catch (err) {
@@ -448,8 +451,9 @@ export default function ContractRoomPage() {
                         </div>
                     );
                 }
-
-                const tenantInvoices = invoiceMap.get(r.tenant_id) ?? new Map<number, InvoiceDetail>();
+                
+                const tid = Number(r.tenant_id);
+                const tenantInvoices = invoiceMap.get(tid) ?? new Map<number, InvoiceDetail>();
                 const contractStartDate = r.contract_start ? new Date(r.contract_start) : null;
                 const contractStartYear = contractStartDate?.getFullYear() ?? filterYear;
                 const contractStartMonth = contractStartDate ? contractStartDate.getMonth() + 1 : 1; // 1-indexed

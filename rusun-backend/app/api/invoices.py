@@ -109,6 +109,7 @@ def internal_mass_generate_invoices(
         .order_by(Room.rusunawa, Room.building, Room.floor, Room.unit_number)
     )
     active_tenants = session.exec(query).all()
+    print(f"[Mass Generate] Period: {period_month}/{period_year}, Found {len(active_tenants)} active tenants.")
     if not active_tenants:
         return {"success": True, "generated": 0, "message": "Tidak ada penghuni aktif"}
 
@@ -132,6 +133,7 @@ def internal_mass_generate_invoices(
     
     for tenant in active_tenants:
         if tenant.id in billed_tenant_ids:
+            print(f"  - Skipping Tenant ID {tenant.id}: Already billed for {period_month}/{period_year}")
             continue
             
         # 3. Check Overlap Kontrak
@@ -141,6 +143,7 @@ def internal_mass_generate_invoices(
         
         # Jika kontrak mulai SETELAH periode ini berakhir, atau kontrak selesai SEBELUM periode ini mulai -> SKIP
         if tenant.contract_start > end_of_period or tenant.contract_end < start_of_period:
+            print(f"  - Skipping Tenant ID {tenant.id}: Contract ({tenant.contract_start} to {tenant.contract_end}) does not overlap with {period_month}/{period_year}")
             continue
 
         room = room_dict.get(tenant.room_id)
