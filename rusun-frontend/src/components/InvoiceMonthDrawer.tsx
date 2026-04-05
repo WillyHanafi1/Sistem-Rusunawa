@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import api from "@/lib/api";
+import api, { handleDownload, previewPdf } from "@/lib/api";
 import { X, CheckCircle2, AlertCircle, Clock, Ban, CreditCard, Wallet, Car, ReceiptText, Printer, FileText, AlertTriangle, Banknote, Loader2, Droplets, Zap, Pencil, Save } from "lucide-react";
 import { initiatePayment } from "@/lib/payment";
 import PaymentFallbackModal from "@/components/PaymentFallbackModal";
@@ -113,6 +113,7 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
     const [editingKey, setEditingKey] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
     const [isSaving, setIsSaving] = useState(false);
+    const [isPrinting, setIsPrinting] = useState(false);
     
     if (!invoice) return null;
 
@@ -174,9 +175,16 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
         }
     };
 
-    const handlePrint = (docType: string) => {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8100";
-        window.open(`${baseUrl}/api/invoices/${invoice.id}/print?doc_type=${docType}`, "_blank");
+
+    const handlePrint = async (docType: string) => {
+        setIsPrinting(true);
+        try {
+            await previewPdf(`/invoices/${invoice.id}/print?doc_type=${docType}`);
+        } catch (error: any) {
+            alert(error.message || "Gagal membuka dokumen. Silakan coba lagi.");
+        } finally {
+            setIsPrinting(false);
+        }
     };
 
     const handleSaveManualNumber = async (field: string) => {
@@ -333,10 +341,11 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
                                                 {canPrint && !isEditing ? (
                                                     <button
                                                         onClick={() => handlePrint(doc.key)}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-200 dark:border-blue-500/20 transition-all opacity-80 group-hover:opacity-100"
+                                                        disabled={isPrinting}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold rounded-lg bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-500/20 border border-blue-200 dark:border-blue-500/20 transition-all opacity-80 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
-                                                        <Printer className="w-3 h-3" />
-                                                        Cetak
+                                                        {isPrinting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Printer className="w-3 h-3" />}
+                                                        {isPrinting ? "Memproses..." : "Cetak"}
                                                     </button>
                                                 ) : (!canPrint && !isEditing && isUnpaidOrOverdue && !isSkrd && !hasDocument && (
                                                     <span className="flex items-center gap-1 px-2 py-1 text-[9px] font-bold text-slate-400 uppercase tracking-tighter bg-slate-100 dark:bg-slate-800 rounded">

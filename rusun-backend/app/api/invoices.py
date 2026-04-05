@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
@@ -15,9 +15,27 @@ from app.core.document_service import DocumentService
 import midtransclient
 import calendar
 import os
-from datetime import datetime, date
+from pypdf import PdfWriter
+import secrets
+from datetime import datetime, date, timezone, timedelta
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
+
+# In-memory storage for preview tokens (One-time use)
+# Storage format: {token: {"type": "single|bulk", "data": {...}, "expires_at": datetime}}
+_preview_tokens: Dict[str, Any] = {}
+
+def _cleanup_expired_tokens():
+    """Removes expired tokens from the in-memory dictionary."""
+    now = datetime.now(timezone.utc)
+    expired = [k for k, v in _preview_tokens.items() if now > v["expires_at"]]
+    for k in expired:
+        _preview_tokens.pop(k, None)
+
+def fmt_decimal(val: Decimal):
+    """Helper to format currency in Indonesian format."""
+    if val is None: return "0"
+    return f"{val:,.0f}".replace(",", ".")
 
 
 @router.get("", response_model=List[InvoiceReadWithRoom])
@@ -34,15 +52,8 @@ def list_invoices(
 ):
     query = (
         select(
-            Invoice,
-            Room.room_number,
-            Room.rusunawa,
-            Room.building,
-            Room.floor,
-            Room.unit_number,
-            User.name.label("tenant_name"),
-            Tenant.contract_start,
-            Tenant.contract_end,
+            Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+            User.name.label("tenant_name"), Tenant.contract_start, Tenant.contract_end,
         )
         .join(Tenant, Invoice.tenant_id == Tenant.id)
         .join(Room, Tenant.room_id == Room.id)
@@ -63,60 +74,112 @@ def list_invoices(
     if document_type is not None:
         query = query.where(Invoice.document_type == document_type)
     
-    # Sort by building, floor, unit for better organization
     query = query.order_by(Room.building, Room.floor, Room.unit_number)
-    
-    # Increase limit for admin multi-month views (especially the payment matrix)
     limit = min(max(limit, 1), 5000)
     skip = max(skip, 0)
     
     results = session.exec(query.offset(skip).limit(limit)).all()
     
-    # Map results to InvoiceReadWithRoom
     output = []
     for row in results:
         inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, c_start, c_end = row
-        # Convert Invoice ORM to dict and add extra fields
         inv_dict = inv_obj.model_dump()
         inv_dict.update({
-            "room_number": r_num,
-            "rusunawa": r_ru,
-            "building": r_bu,
-            "floor": r_fl,
-            "unit_number": r_un,
-            "tenant_name": t_name,
-            "contract_start": c_start,
-            "contract_end": c_end
+            "room_number": r_num, "rusunawa": r_ru, "building": r_bu,
+            "floor": r_fl, "unit_number": r_un, "tenant_name": t_name,
+            "contract_start": c_start, "contract_end": c_end
         })
         output.append(InvoiceReadWithRoom(**inv_dict))
-        
     return output
 
-@router.patch("/{invoice_id}", response_model=InvoiceRead)
-def update_invoice(
-    invoice_id: int,
-    invoice_update: InvoiceUpdate,
+@router.get("/print-bulk")
+def print_bulk_invoices(
+    month: int,
+    year: int,
+    doc_type: Optional[DocumentType] = None,
     session: Session = Depends(get_session),
     _: User = Depends(require_admin),
 ):
-    """Update metadata invoice (nomor surat, status, dll)."""
-    db_invoice = session.get(Invoice, invoice_id)
-    if not db_invoice:
-        raise HTTPException(status_code=404, detail="Invoice tidak ditemukan")
+    """Cetak massal invoice untuk periode tertentu."""
+    query = (
+        select(
+            Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+            User.name.label("tenant_name"), Tenant.nik,
+        )
+        .join(Tenant, Invoice.tenant_id == Tenant.id)
+        .join(Room, Tenant.room_id == Room.id)
+        .join(User, Tenant.user_id == User.id)
+        .where(Invoice.period_month == month)
+        .where(Invoice.period_year == year)
+    )
+    if doc_type:
+        query = query.where(Invoice.document_type == doc_type)
+    
+    query = query.order_by(Room.building, Room.floor, Room.unit_number)
+    results = session.exec(query).all()
+    if not results:
+        raise HTTPException(status_code=404, detail="Tidak ada tagihan yang ditemukan untuk periode ini")
+    
+    return _get_bulk_invoice_pdf_response(results, month, year, doc_type)
 
-    obj_data = invoice_update.model_dump(exclude_unset=True)
-    for key, value in obj_data.items():
-        setattr(db_invoice, key, value)
+@router.get("/bulk-token")
+def get_bulk_print_token(
+    month: int,
+    year: int,
+    doc_type: Optional[DocumentType] = None,
+    building: Optional[str] = None,
+    current_user: User = Depends(require_admin),
+):
+    """Generates a one-time use token for BULK PDF preview."""
+    token = secrets.token_urlsafe(32)
+    _preview_tokens[token] = {
+        "type": "bulk",
+        "params": {"month": month, "year": year, "doc_type": doc_type, "building": building},
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
+    }
+    return {"token": token}
 
-    # Update document_status_updated_at if document_type changed
-    if "document_type" in obj_data:
-        db_invoice.document_status_updated_at = datetime.now(timezone.utc)
+@router.get("/preview/{token}")
+def preview_by_token(token: str, session: Session = Depends(get_session)):
+    """Public endpoint that serves PDF based on a valid one-time token."""
+    _cleanup_expired_tokens()
+    
+    token_data = _preview_tokens.get(token)
+    if not token_data:
+        raise HTTPException(status_code=410, detail="Token kadaluarsa atau tidak valid")
+    
+    if datetime.now(timezone.utc) > token_data["expires_at"]:
+        _preview_tokens.pop(token, None)
+        raise HTTPException(status_code=410, detail="Token sudah kadaluarsa")
 
-    session.add(db_invoice)
-    session.commit()
-    session.refresh(db_invoice)
-    return db_invoice
+    # Do NOT pop the token immediately! Native browser PDF viewers 
+    # often make multiple byte-range or chunk requests.
+    # We rely on `_cleanup_expired_tokens` to remove it after TTL (60s / 5m).
+    # _preview_tokens.pop(token)
 
+    if token_data["type"] == "single":
+        invoice_id = token_data["invoice_id"]
+        doc_type = token_data["doc_type"]
+        query = (
+            select(
+                Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+                User.name.label("tenant_name"), Tenant.nik,
+            )
+            .join(Tenant, Invoice.tenant_id == Tenant.id)
+            .join(Room, Tenant.room_id == Room.id)
+            .join(User, Tenant.user_id == User.id)
+            .where(Invoice.id == invoice_id)
+        )
+        result = session.exec(query).first()
+        if not result:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        return _get_single_invoice_pdf(result, invoice_id, doc_type)
+        
+    elif token_data["type"] == "bulk":
+        p = token_data["params"]
+        return _get_bulk_invoice_pdf(session, p["month"], p["year"], p["doc_type"], p["building"])
+    
+    raise HTTPException(status_code=400, detail="Invalid token type")
 
 @router.get("/{invoice_id}/print")
 def print_invoice(
@@ -125,17 +188,10 @@ def print_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
-    # Fetch invoice with detailed info
     query = (
         select(
-            Invoice,
-            Room.room_number,
-            Room.rusunawa,
-            Room.building,
-            Room.floor,
-            Room.unit_number,
-            User.name.label("tenant_name"),
-            Tenant.nik,
+            Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+            User.name.label("tenant_name"), Tenant.nik,
         )
         .join(Tenant, Invoice.tenant_id == Tenant.id)
         .join(Room, Tenant.room_id == Room.id)
@@ -145,19 +201,32 @@ def print_invoice(
     result = session.exec(query).first()
     if not result:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
+    return _get_single_invoice_pdf(result, invoice_id, doc_type)
+
+@router.get("/{invoice_id}/token")
+def get_print_token(
+    invoice_id: int,
+    doc_type: Optional[DocumentType] = None,
+    current_user: User = Depends(require_admin),
+):
+    """Generates a one-time use token for PDF preview that expires in 60 seconds."""
+    token = secrets.token_urlsafe(32)
+    _preview_tokens[token] = {
+        "type": "single",
+        "invoice_id": invoice_id,
+        "doc_type": doc_type,
+        "expires_at": datetime.now(timezone.utc) + timedelta(seconds=60)
+    }
+    return {"token": token}
+
+
+# Helpers
+def _get_single_invoice_pdf(result: Any, invoice_id: int, doc_type: Optional[DocumentType] = None) -> Response:
     inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = result
     
-    # Use current document_type if not specified
     if not doc_type:
         doc_type = inv_obj.document_type
 
-    # Format data for template
-    def fmt(val: Decimal):
-        if val is None: return "0"
-        return f"{val:,.0f}".replace(",", ".")
-
-    # Month mapping in Indonesian
     months_id = {
         1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
         7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
@@ -168,34 +237,113 @@ def print_invoice(
         "nik": t_nik,
         "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
         "tanggal_surat": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d-%m-%Y"),
-        "unit": r_num,
-        "gedung": r_bu,
-        "lantai": str(r_fl),
-        "rusunawa": r_ru,
-        "total_tagihan": fmt(inv_obj.total_amount),
-        "denda": fmt(inv_obj.penalty_amount),
+        "unit": r_num, "gedung": r_bu, "lantai": str(r_fl), "rusunawa": r_ru,
+        "total_tagihan": fmt_decimal(inv_obj.total_amount),
+        "denda": fmt_decimal(inv_obj.penalty_amount),
         "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
         "tahun_tagihan": str(inv_obj.period_year),
-        "total_bayar": fmt(inv_obj.total_amount + inv_obj.penalty_amount)
+        "total_bayar": fmt_decimal(inv_obj.total_amount + inv_obj.penalty_amount)
     }
 
     try:
         file_path = DocumentService.generate_invoice_document(context, doc_type.value, invoice_id)
         full_path = os.path.abspath(file_path)
-        
         if not os.path.exists(full_path):
             raise HTTPException(status_code=500, detail="Generated file not found")
-            
-        return FileResponse(
-            full_path, 
-            media_type="application/pdf", 
-            filename=f"{doc_type.value}_{invoice_id}.pdf"
+        if not full_path.lower().endswith(".pdf"):
+            raise HTTPException(status_code=500, detail="Konversi PDF gagal.")
+        
+        with open(full_path, "rb") as f:
+            pdf_content = f.read()
+        return Response(
+            content=pdf_content, media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{doc_type.value}_{invoice_id}.pdf"',
+                "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store",
+            }
         )
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to generate document: {str(e)}")
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=f"Gagal memproses dokumen: {str(e)}")
 
+def _get_bulk_invoice_pdf(
+    session: Session, month: int, year: int, doc_type: Optional[DocumentType] = None, building: Optional[str] = None
+) -> Response:
+    query = (
+        select(
+            Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+            User.name.label("tenant_name"), Tenant.nik,
+        )
+        .join(Tenant, Invoice.tenant_id == Tenant.id)
+        .join(Room, Tenant.room_id == Room.id)
+        .join(User, Tenant.user_id == User.id)
+        .where(Invoice.period_month == month)
+        .where(Invoice.period_year == year)
+    )
+    if building: query = query.where(Room.building == building)
+    if doc_type: query = query.where(Invoice.document_type == doc_type)
+    query = query.order_by(Room.building, Room.floor, Room.unit_number)
+    results = session.exec(query).all()
+    if not results:
+        raise HTTPException(status_code=404, detail="Tidak ada data untuk dicetak")
+    return _get_bulk_invoice_pdf_response(results, month, year, doc_type)
+
+def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type: Optional[DocumentType]) -> Response:
+    merger = PdfWriter()
+    temp_files_to_merge = 0
+    months_id = {
+        1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
+        7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+    }
+
+    try:
+        for row in results:
+            inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = row
+            actual_doc_type = doc_type or inv_obj.document_type
+            context = {
+                "nama_penyewa": t_name, "nik": t_nik,
+                "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
+                "tanggal_surat": (getattr(inv_obj, f"{actual_doc_type.value}_date", None) or date.today()).strftime("%d-%m-%Y"),
+                "unit": r_num, "gedung": r_bu, "lantai": str(r_fl), "rusunawa": r_ru,
+                "total_tagihan": fmt_decimal(inv_obj.total_amount),
+                "denda": fmt_decimal(inv_obj.penalty_amount),
+                "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
+                "tahun_tagihan": str(inv_obj.period_year),
+                "total_bayar": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0))
+            }
+            file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
+            full_path = os.path.abspath(file_path)
+            if full_path.endswith(".pdf"):
+                merger.append(full_path)
+                temp_files_to_merge += 1
+        
+        if temp_files_to_merge == 0:
+             raise HTTPException(status_code=500, detail="Gagal men-generate PDF untuk digabungkan.")
+
+        output_filename = f"BULK_{doc_type.value if doc_type else 'INVOICES'}_{month}_{year}.pdf"
+        output_dir = os.path.join("uploads", "bulk")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, output_filename)
+        with open(output_path, "wb") as f:
+            merger.write(f)
+        
+        with open(output_path, "rb") as f:
+            pdf_content = f.read()
+        return Response(
+            content=pdf_content, media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'inline; filename="{output_filename}"',
+                "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store",
+            }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Gagal cetak massal: {str(e)}")
+    finally:
+        merger.close()
 
 def internal_mass_generate_invoices(
     session: Session,
@@ -326,6 +474,8 @@ def internal_mass_generate_invoices(
         "total_active": len(active_tenants),
         "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids) + (len(active_tenants) - count_generated - len(billed_tenant_ids))} tagihan sudah ada/di-skip."
     }
+
+
 
 @router.post("/mass-generate", status_code=201)
 def mass_generate_invoices(

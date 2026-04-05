@@ -105,4 +105,128 @@ api.interceptors.response.use(
   }
 );
 
+export const handleDownload = async (url: string, filename?: string, openInNewTab = false) => {
+  try {
+    const response = await api.get(url, { responseType: 'blob' });
+    
+    // Attempt to extract filename from response headers if not provided
+    let fileName = filename;
+    const contentDisposition = response.headers['content-disposition'];
+    if (!fileName && contentDisposition) {
+      const fileNameMatch = contentDisposition.match(/filename="?(.+)"?/);
+      if (fileNameMatch && fileNameMatch.length > 1) {
+        fileName = fileNameMatch[1];
+      }
+    }
+
+    const contentType = response.headers['content-type'] || 'application/pdf';
+    const blob = new Blob([response.data], { type: contentType });
+    const blobUrl = window.URL.createObjectURL(blob);
+    
+    if (openInNewTab) {
+      const newWindow = window.open(blobUrl, '_blank');
+      if (!newWindow) {
+        // If popup is blocked, fall back to download
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', fileName || 'document.pdf');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+    } else {
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', fileName || 'document.pdf');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      // Cleanup
+      setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+    }
+  } catch (error) {
+    console.error("Download failed:", error);
+    throw error;
+  }
+};
+
+
+/**
+ * Preview a PDF document in a new browser tab.
+ * 
+ * Uses authenticated axios instance (cookies + interceptors) to fetch the PDF
+ * as a Blob, then creates a local Object URL and opens it in a new tab.
+ * This approach:
+ * - Guarantees auth cookies are sent (via axios withCredentials)
+ * - Ensures Content-Type is application/pdf (validated)
+ * - Bypasses any proxy header-stripping issues
+ * - Falls back to download if popup is blocked
+ * 
+ * @param endpoint - API endpoint path (e.g., "/invoices/1/print?doc_type=skrd")
+ * @param fallbackFilename - Filename for download fallback (e.g., "skrd_1.pdf")
+ */
+/**
+ * Membuka pratinjau PDF di tab baru menggunakan sistem One-time Token (OTT).
+ * Keuntungan: Browser menggunakan native PDF viewer, lebih ringan (no blob memory), 
+ * dan bypass semua masalah proxy MIME-type.
+ * 
+ * @param endpoint - Endpoint asli (misal: /invoices/751/print?doc_type=skrd)
+ */
+export const previewPdf = async (endpoint: string): Promise<void> => {
+  // 1. Buka tab kosong SINKRON segera — krusial agar tidak diblokir browser popup blocker
+  const newWindow = typeof window !== "undefined" ? window.open('', '_blank') : null;
+  
+  if (newWindow) {
+    newWindow.document.write(`
+      <html>
+        <head><title>Memuat Dokumen...</title></head>
+        <body style="font-family:sans-serif; display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; background:#f4f4f5; color:#71717a; margin:0;">
+          <div style="width:30px; height:30px; border:3px solid #e4e4e7; border-top-color:#0f172a; border-radius:50%; animation:spin 1s linear infinite;"></div>
+          <p style="margin-top:16px; font-size:14px; font-weight:500;">Menyiapkan pratinjau dokumen...</p>
+          <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+        </body>
+      </html>
+    `);
+  }
+
+  try {
+    // 2. Tentukan endpoint token berbasis endpoint aslinya
+    // Single: /invoices/123/print -> /invoices/123/token
+    // Bulk:   /invoices/print-bulk -> /invoices/bulk-token
+    // map backend route to token route - safe regex mapping
+    const tokenEndpoint = endpoint.includes('/print-bulk')
+      ? endpoint.replace(/\/print-bulk(\?|$)/, '/bulk-token$1')
+      : endpoint.replace(/\/print(\?|$)/, '/token$1');
+
+    // 3. Ambil token pratinjau (60 detik expired, sekali pakai)
+    // Endpoint ini memerlukan cookie admin
+    const response = await api.get(tokenEndpoint);
+    const { token } = response.data;
+
+    // 4. Arahkan tab baru ke URL pratinjau publik backend
+    const previewUrl = `/api/invoices/preview/${token}`;
+    
+    if (newWindow) {
+      newWindow.location.href = previewUrl;
+    } else {
+      // Fallback jika tab gagal dibuka di baris pertama
+      window.open(previewUrl, '_blank');
+    }
+
+  } catch (error: any) {
+    if (newWindow) newWindow.close();
+    
+    let message = 'Gagal memproses pratinjau dokumen.';
+    if (error.response?.data?.detail) {
+      message = error.response.data.detail;
+    } else if (error.message) {
+      message = error.message;
+    }
+    
+    throw new Error(message);
+  }
+};
+
+
 export default api;
