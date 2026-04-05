@@ -132,6 +132,7 @@ async def process_tenant_import(file_content: bytes, session: Session) -> Dict[s
                     "contract_end": tgl_selesai,
                     "motor_count": motor_count,
                     "nama": nama,
+                    "nik": nik,
                     "index": index
                 })
 
@@ -164,6 +165,7 @@ async def process_tenant_import(file_content: bytes, session: Session) -> Dict[s
                 contract_start=t_data["contract_start"],
                 contract_end=t_data["contract_end"],
                 motor_count=t_data["motor_count"],
+                nik=t_data["nik"],
                 is_active=True
             )
             tenant_objects.append(tenant)

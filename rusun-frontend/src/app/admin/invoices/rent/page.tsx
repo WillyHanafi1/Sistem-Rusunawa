@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import api from "@/lib/api";
-import { Loader2, Filter, ChevronLeft, ChevronRight, AlertCircle, Sparkles, FileText, TrendingUp, AlertTriangle, DollarSign, Layers, X, CheckCircle2, ArrowRight, Calendar, Hash } from "lucide-react";
+import api, { handleDownload, previewPdf } from "@/lib/api";
+import { Loader2, Filter, ChevronLeft, ChevronRight, AlertCircle, Sparkles, FileText, TrendingUp, AlertTriangle, DollarSign, Layers, X, CheckCircle2, ArrowRight, Calendar, Hash, Printer } from "lucide-react";
 import {
   createColumnHelper,
   flexRender,
@@ -292,6 +292,17 @@ export default function RentInvoicesPage() {
             fetchInvoicesForYear(filterYear);
         } catch (err: any) {
             alert(err.response?.data?.detail || "Gagal mengeksekusi tindakan massal");
+        } finally {
+            setIsMassActionLoading(false);
+        }
+    };
+
+    const handleMassPrint = async () => {
+        setIsMassActionLoading(true);
+        try {
+            await previewPdf(`/invoices/print-bulk?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
+        } catch (err: any) {
+            alert(err.message || "Gagal membuka dokumen massal. Silakan coba lagi.");
         } finally {
             setIsMassActionLoading(false);
         }
@@ -804,36 +815,36 @@ export default function RentInvoicesPage() {
                     <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Memuat Basis Data...</p>
                 </div>
             ) : (
-                <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-none rounded-[2rem] overflow-hidden transition-colors duration-300">
-                    <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-white/10">
-                        <table className="w-full border-collapse text-[11px]">
-                            <thead className="bg-slate-50/80 dark:bg-white/5 sticky top-0 z-20 backdrop-blur-md border-b border-slate-200 dark:border-white/10">
+                <div className="bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm dark:shadow-none rounded-2xl overflow-hidden transition-colors duration-300">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
                                 {table.getHeaderGroups().map(headerGroup => (
-                                    <tr key={headerGroup.id}>
-                                        {headerGroup.headers.map(header => {
-                                            const tight = ['building', 'floor', 'unit_number', 'status', 'tunggakan'].includes(header.id);
-                                            return (
-                                                <th 
-                                                    key={header.id} 
-                                                    className={`py-1.5 font-bold tracking-tight border-x border-slate-100/50 dark:border-white/5 first:border-l-0 last:border-r-0 ${tight ? 'px-0 text-center w-[50px]' : 'px-4 text-left'}`}
-                                                >
-                                                    {!header.isPlaceholder && flexRender(header.column.columnDef.header, header.getContext())}
-                                                </th>
-                                            );
-                                        })}
+                                    <tr key={headerGroup.id} className="border-b border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/80 whitespace-nowrap text-xs">
+                                {headerGroup.headers.map(header => {
+                                    const tight = ['building', 'floor', 'unit_number', 'status', 'tunggakan'].includes(header.id);
+                                    return (
+                                        <th 
+                                            key={header.id} 
+                                            className={`text-left py-3 font-bold tracking-wide align-bottom border-r border-slate-200 dark:border-white/8 last:border-r-0 ${tight ? 'px-1 w-16 text-center' : 'px-4'}`}
+                                        >
+                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                        </th>
+                                    );
+                                })}
                                     </tr>
                                 ))}
                             </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                            <tbody>
                                 {table.getRowModel().rows.map(row => (
-                                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                    <tr
+                                        key={row.id}
+                                        className="border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                                    >
                                         {row.getVisibleCells().map(cell => {
                                             const tight = ['building', 'floor', 'unit_number', 'status', 'tunggakan'].includes(cell.column.id);
                                             return (
-                                                <td 
-                                                    key={cell.id} 
-                                                    className={`py-0.5 align-middle border-x border-slate-100/50 dark:border-white/5 first:border-l-0 last:border-r-0 ${tight ? 'px-0 text-center w-[50px]' : 'px-4 text-left'}`}
-                                                >
+                                                <td key={cell.id} className={`py-1 align-middle border-r border-slate-100 dark:border-white/5 last:border-r-0 ${tight ? 'px-1' : 'px-4'}`}>
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </td>
                                             );
@@ -843,10 +854,7 @@ export default function RentInvoicesPage() {
                             </tbody>
                         </table>
                         {filteredRooms.length === 0 && (
-                            <div className="text-center py-20 bg-slate-50/50 dark:bg-transparent">
-                                <AlertCircle className="w-10 h-10 text-slate-300 mx-auto mb-4" />
-                                <p className="text-slate-500 dark:text-slate-400 font-bold uppercase tracking-[0.2em] text-[10px]">Data Tidak Terdeteksi</p>
-                            </div>
+                            <p className="text-center text-slate-500 dark:text-slate-400 py-12">Tidak ada data yang cocok.</p>
                         )}
                     </div>
                 </div>
@@ -1048,6 +1056,14 @@ export default function RentInvoicesPage() {
                                             >
                                                 {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                                                 Eksekusi Generate
+                                            </button>
+                                            <button
+                                                onClick={handleMassPrint}
+                                                disabled={isMassActionLoading}
+                                                className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all flex items-center gap-2"
+                                            >
+                                                {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+                                                Cetak Masal
                                             </button>
                                         </>
                                     )}

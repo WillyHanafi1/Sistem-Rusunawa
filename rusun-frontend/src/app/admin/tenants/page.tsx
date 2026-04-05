@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import api from "@/lib/api";
+import api, { handleDownload } from "@/lib/api";
 import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle } from "lucide-react";
 import { format, addMonths } from "date-fns";
 import {
@@ -202,14 +202,13 @@ export default function ContractRoomPage() {
         }
     };
 
-    const handleDownloadContract = (notes: string | undefined) => {
+    const handleDownloadContract = async (notes: string | undefined) => {
         if (!notes) return;
         const contractMatch = notes.match(/Kontrak path: (.*)/);
         const contractPath = contractMatch ? contractMatch[1] : null;
         if (contractPath) {
             const safePath = contractPath.replace(/\\/g, '/');
-            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${safePath}`;
-            window.open(url, '_blank');
+            await handleDownload(`/api/${safePath}`, undefined, true);
         } else {
             alert("File kontrak tidak ditemukan.");
         }

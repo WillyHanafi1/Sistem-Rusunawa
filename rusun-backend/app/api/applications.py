@@ -391,6 +391,7 @@ def submit_interview(
             new_tenant = Tenant(
                 user_id=user_id,
                 room_id=room.id,
+                nik=application.nik,
                 is_active=True,
                 contract_start=decision.contract_start,
                 contract_end=decision.contract_end,

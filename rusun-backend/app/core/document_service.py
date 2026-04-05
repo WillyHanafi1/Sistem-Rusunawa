@@ -79,18 +79,58 @@ class DocumentService:
                 doc.render(context)
                 doc.save(docx_path)
                 
-                # 2. Convert to PDF if possible
+                # 2. Convert to PDF
+                pdf_path = docx_path.replace(".docx", ".pdf")
+                
+                # Method A: Try docx2pdf (Requires MS Word on Windows)
+                conv_success = False
                 if HAS_PDF_CONVERTER:
                     try:
-                        # docx2pdf convert(input, output)
-                        pdf_path = docx_path.replace(".docx", ".pdf")
+                        import pythoncom
+                        pythoncom.CoInitialize()
                         convert(docx_path, pdf_path)
-                        # Store PDF path if successful
-                        generated_docs[doc_type] = pdf_path.replace("\\", "/") # Normalize for web access
+                        if os.path.exists(pdf_path):
+                            generated_docs[doc_type] = pdf_path.replace("\\", "/")
+                            conv_success = True
                     except Exception as e:
-                        print(f"Error converting {doc_type} to PDF: {e}")
-                        generated_docs[doc_type] = docx_path.replace("\\", "/")
-                else:
+                        print(f"docx2pdf failed for {doc_type}: {e}")
+                    finally:
+                        try:
+                            pythoncom.CoUninitialize()
+                        except:
+                            pass
+
+                # Method B: Try LibreOffice (soffice) if Method A failed
+                if not conv_success:
+                    try:
+                        import subprocess
+                        soffice_cmd = "soffice" 
+                        if os.name == 'nt': # Windows
+                            potential_paths = [
+                                r"C:\Program Files\LibreOffice\program\soffice.exe",
+                                r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
+                            ]
+                            for p in potential_paths:
+                                if os.path.exists(p):
+                                    soffice_cmd = p
+                                    break
+                        
+                        subprocess.run([
+                            soffice_cmd,
+                            '--headless',
+                            '--convert-to', 'pdf',
+                            '--outdir', output_dir,
+                            docx_path
+                        ], check=True, capture_output=True)
+                        
+                        if os.path.exists(pdf_path):
+                            generated_docs[doc_type] = pdf_path.replace("\\", "/")
+                            conv_success = True
+                    except Exception as e:
+                        print(f"LibreOffice failed for {doc_type}: {e}")
+
+                # Fallback to docx if both failed
+                if not conv_success:
                     generated_docs[doc_type] = docx_path.replace("\\", "/")
             except Exception as e:
                 print(f"Error generating {doc_type}: {e}")
@@ -144,17 +184,56 @@ class DocumentService:
             doc.render(context)
             doc.save(docx_path)
             
-            # 2. Convert to PDF if possible
+            # 2. Convert to PDF
+            pdf_path = docx_path.replace(".docx", ".pdf")
+            
+            # Method A: Try docx2pdf (Requires MS Word on Windows)
             if HAS_PDF_CONVERTER:
                 try:
-                    pdf_path = docx_path.replace(".docx", ".pdf")
+                    import pythoncom
+                    pythoncom.CoInitialize()
                     convert(docx_path, pdf_path)
-                    return pdf_path.replace("\\", "/") # Web-accessible path
+                    if os.path.exists(pdf_path):
+                        return pdf_path.replace("\\", "/")
                 except Exception as e:
-                    print(f"Error converting to PDF: {e}")
-                    return docx_path.replace("\\", "/")
-            else:
-                return docx_path.replace("\\", "/")
+                    print(f"docx2pdf failed: {e}")
+                finally:
+                    try:
+                        pythoncom.CoUninitialize()
+                    except:
+                        pass
+
+            # Method B: Try LibreOffice (soffice) - The server-side standard
+            try:
+                import subprocess
+                # For Windows, soffice might be in Program Files
+                # For Linux, it's usually just 'soffice'
+                soffice_cmd = "soffice" 
+                if os.name == 'nt': # Windows
+                    potential_paths = [
+                        r"C:\Program Files\LibreOffice\program\soffice.exe",
+                        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
+                    ]
+                    for p in potential_paths:
+                        if os.path.exists(p):
+                            soffice_cmd = p
+                            break
+                
+                subprocess.run([
+                    soffice_cmd,
+                    '--headless',
+                    '--convert-to', 'pdf',
+                    '--outdir', output_dir,
+                    docx_path
+                ], check=True, capture_output=True)
+                
+                if os.path.exists(pdf_path):
+                    return pdf_path.replace("\\", "/")
+            except Exception as e:
+                print(f"LibreOffice conversion failed: {e}")
+
+            # If both failed, return the docx (invoices.py will handle the error)
+            return docx_path.replace("\\", "/")
 
         except Exception as e:
             print(f"Error generating {doc_type}: {e}")

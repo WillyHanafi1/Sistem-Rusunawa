@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import api from "@/lib/api";
+import api, { handleDownload } from "@/lib/api";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
@@ -215,10 +215,9 @@ export default function ApplicationsPage() {
         }
     };
 
-    const handleDownloadFile = (filePath: string) => {
+    const handleDownloadFile = async (filePath: string) => {
         const safePath = filePath.replace(/\\/g, '/');
-        const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${safePath}`;
-        window.open(url, '_blank');
+        await handleDownload(`/api/${safePath}`, undefined, true);
     }
 
     const handleVerifyAll = async (appId: number) => {
