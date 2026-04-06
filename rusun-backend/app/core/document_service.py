@@ -32,11 +32,19 @@ class DocumentService:
         os.makedirs(output_dir, exist_ok=True)
 
         templates_mapping = {
-            "pengajuan": "template_pengajuan.docx",
             "ba_wawancara": "template_ba_wawancara.docx",
             "sip": "template_sip.docx",
-            "kontrak": "template_kontrak.docx"
+            "kontrak": "template_kontrak.docx",
+            "surat_jalan": "template_surat_jalan.docx",
+            "checkout": "template_ba_checkout.docx"
         }
+
+        # Determine pengajuan template based on occupation
+        occupation = data.get("pekerjaan", "").lower()
+        if "wiraswasta" in occupation:
+            templates_mapping["pengajuan"] = "template_pengajuan_wiraswasta.docx"
+        else:
+            templates_mapping["pengajuan"] = "template_pengajuan_karyawan.docx"
 
         # Prepare context (data padding etc)
         context = {

@@ -59,7 +59,7 @@ export default function LandingPage() {
       typeInfo: "Unit Type 21",
       twinblok: "4 Twinblok",
       totalUnit: "192 Total Unit",
-      image: "https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=800&q=80",
+      image: "/images/buildings/cigugur.jpg",
       mapUrl: "/cigugur-tengah"
     },
     {
@@ -68,7 +68,7 @@ export default function LandingPage() {
       typeInfo: "Unit Type 24 dan Type 27",
       twinblok: "4 Twinblok",
       totalUnit: "371 Total Unit",
-      image: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=800&q=80",
+      image: "/images/buildings/cibeureum.jpg",
       mapUrl: "/cibeureum"
     },
     {
@@ -77,7 +77,7 @@ export default function LandingPage() {
       typeInfo: "Unit Type 24",
       twinblok: "3 Twinblok",
       totalUnit: "297 Unit",
-      image: "https://images.unsplash.com/photo-1464938050520-ef2270bb8ce8?w=800&q=80",
+      image: "/images/buildings/leuwigajah.jpg",
       mapUrl: "/leuwigajah"
     },
   ];
@@ -108,7 +108,7 @@ export default function LandingPage() {
         <motion.div style={{ y, opacity }} className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-gradient-to-b from-slate-950/40 via-slate-950/80 to-slate-950 z-10" />
           <img
-            src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2070"
+            src="/images/landing/hero-home.jpg"
             alt="Background Rusunawa"
             className="w-full h-full object-cover object-center opacity-40"
           />
@@ -240,10 +240,10 @@ export default function LandingPage() {
                 <div className="relative w-48 h-48 md:w-56 md:h-56 mb-8 rounded-full p-2 border-2 border-slate-200 dark:border-white/10 group-hover:border-blue-500/50 transition-colors duration-500">
                   <div className="absolute inset-0 bg-blue-600 rounded-full blur-2xl opacity-0 group-hover:opacity-10 transition-opacity" />
                   <div className="relative w-full h-full rounded-full overflow-hidden shadow-2xl bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-900">
-                    <Image 
-                      src={topLeader.image_url || "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80"} 
-                      alt={topLeader.name} 
-                      fill 
+                    <Image
+                      src={topLeader.image_url || "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80"}
+                      alt={topLeader.name}
+                      fill
                       sizes="(max-width: 768px) 192px, 224px"
                       className="object-cover transition-transform duration-700 group-hover:scale-110"
                     />
@@ -252,7 +252,7 @@ export default function LandingPage() {
                 <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-1 tracking-tight">{topLeader.name}</h3>
                 <p className="text-slate-600 dark:text-slate-400 font-bold text-sm leading-relaxed">{topLeader.role}</p>
                 <p className="text-slate-400 dark:text-slate-500 text-xs font-mono mb-4">{topLeader.nip}</p>
-                
+
                 {/* Socials */}
                 <div className="flex gap-4 mb-4">
                   {['twitter', 'facebook', 'instagram'].map((platform) => {
@@ -288,10 +288,10 @@ export default function LandingPage() {
               >
                 <div className="relative w-44 h-44 md:w-52 md:h-52 mb-8 rounded-full p-2 border-2 border-slate-200 dark:border-white/10 group-hover:border-blue-500/50 transition-colors duration-500">
                   <div className="relative w-full h-full rounded-full overflow-hidden shadow-2xl bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-900">
-                    <Image 
-                      src={leader.image_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80"} 
-                      alt={leader.name} 
-                      fill 
+                    <Image
+                      src={leader.image_url || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80"}
+                      alt={leader.name}
+                      fill
                       sizes="(max-width: 768px) 176px, 208px"
                       className="object-cover transition-transform duration-700 group-hover:scale-110"
                     />
@@ -300,7 +300,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-black text-slate-900 dark:text-white mb-1 tracking-tight">{leader.name}</h3>
                 <p className="text-slate-600 dark:text-slate-400 font-bold text-sm leading-relaxed px-4">{leader.role}</p>
                 <p className="text-slate-400 dark:text-slate-500 text-xs font-mono mb-4">{leader.nip}</p>
-                
+
                 {/* Socials */}
                 <div className="flex gap-4">
                   {['twitter', 'facebook', 'instagram'].map((platform) => {
