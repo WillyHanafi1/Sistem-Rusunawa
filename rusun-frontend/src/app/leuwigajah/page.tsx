@@ -84,7 +84,7 @@ export default function LeuwigajahPage() {
             className="w-full h-full object-cover object-center"
           />
         </motion.div>
-        <div className="relative z-10 max-w-4xl mx-auto">
+        <div className="relative z-10 max-w-4xl mx-auto text-center">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
