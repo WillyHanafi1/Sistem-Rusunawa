@@ -37,6 +37,63 @@ def fmt_decimal(val: Decimal):
     if val is None: return "0"
     return f"{val:,.0f}".replace(",", ".")
 
+def get_room_code(room: Room) -> str:
+    """
+    Generates an 8-digit code: [Rusun][Gedung][Lantai][Unit]
+    - Rusun: 01=Cigugur, 02=Cibeureum, 03=Leuwigajah
+    - Gedung: A=01, B=02, ...
+    - Lantai: 01, 02, ...
+    - Unit: 01, 02, ...
+    """
+    site_codes = {"Cigugur Tengah": "01", "Cibeureum": "02", "Leuwigajah": "03"}
+    site_key = room.rusunawa.value if hasattr(room.rusunawa, 'value') else str(room.rusunawa)
+    rusun_code = site_codes.get(site_key, "00")
+    
+    # Building: A=01, B=02, etc. (Handle case-insensitive)
+    b_char = room.building.upper()
+    if ord('A') <= ord(b_char) <= ord('Z'):
+        gedung_code = f"{ord(b_char) - ord('A') + 1:02d}"
+    else:
+        gedung_code = "00"
+        
+    lantai_code = f"{room.floor:02d}"
+    unit_code = f"{room.unit_number:02d}"
+    
+    return f"{rusun_code}{gedung_code}{lantai_code}{unit_code}"
+
+def terbilang(n):
+    """Helper to convert number to Indonesian words."""
+    def penyebut(nilai):
+        nilai = abs(int(nilai))
+        huruf = ["", "satu", "dua", "tiga", "empat", "lima", "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas"]
+        temp = ""
+        if nilai < 12:
+            temp = " " + huruf[nilai]
+        elif nilai < 20:
+            temp = penyebut(nilai - 10) + " belas"
+        elif nilai < 100:
+            temp = penyebut(nilai // 10) + " puluh" + penyebut(nilai % 10)
+        elif nilai < 200:
+            temp = " seratus" + penyebut(nilai - 100)
+        elif nilai < 1000:
+            temp = penyebut(nilai // 100) + " ratus" + penyebut(nilai % 100)
+        elif nilai < 2000:
+            temp = " seribu" + penyebut(nilai - 1000)
+        elif nilai < 1000000:
+            temp = penyebut(nilai // 1000) + " ribu" + penyebut(nilai % 1000)
+        elif nilai < 1000000000:
+            temp = penyebut(nilai // 1000000) + " juta" + penyebut(nilai % 1000000)
+        elif nilai < 1000000000000:
+            temp = penyebut(nilai // 1000000000) + " milyar" + penyebut(nilai % 1000000000)
+        elif nilai < 1000000000000000:
+            temp = penyebut(nilai // 1000000000000) + " trilyun" + penyebut(nilai % 1000000000000)
+        return temp
+
+    if n == 0:
+        return "Nol"
+    hasil = penyebut(n).strip()
+    return (hasil[0].upper() + hasil[1:] + " Rupiah").replace("  ", " ")
+
 
 @router.get("", response_model=List[InvoiceReadWithRoom])
 def list_invoices(
@@ -232,17 +289,56 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, doc_type: Optional[Doc
         7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
     }
 
+    # Pembuatan ID Penghuni (8 digit kode kamar)
+    room_obj = session.get(Room, inv_obj.tenant.room_id) if hasattr(inv_obj, 'tenant') and inv_obj.tenant else None
+    if not room_obj:
+        # Fallback query if relationship is not loaded
+        room_obj = session.exec(select(Room).join(Tenant, Tenant.room_id == Room.id).where(Tenant.id == inv_obj.tenant_id)).first()
+    
+    id_penghuni_code = get_room_code(room_obj) if room_obj else t_nik
+
     context = {
+        # Identitas Dasar
         "nama_penyewa": t_name,
+        "nama": t_name,
         "nik": t_nik,
+        "id_penghuni": id_penghuni_code,
+        "id_kamar": id_penghuni_code,
+        
+        # Lokasi & Unit
+        "unit": r_num,
+        "room_number": r_num,
+        "gedung": r_bu,
+        "building": r_bu,
+        "lantai": str(r_fl),
+        "floor": str(r_fl),
+        "rusunawa": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
+        "location_name": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
+        
+        # Data Surat
         "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
-        "tanggal_surat": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d-%m-%Y"),
-        "unit": r_num, "gedung": r_bu, "lantai": str(r_fl), "rusunawa": r_ru,
-        "total_tagihan": fmt_decimal(inv_obj.total_amount),
-        "denda": fmt_decimal(inv_obj.penalty_amount),
+        "invoice_number": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
+        "tanggal_surat": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+        
+        # Periode
         "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
+        "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
         "tahun_tagihan": str(inv_obj.period_year),
-        "total_bayar": fmt_decimal(inv_obj.total_amount + inv_obj.penalty_amount)
+        "year": str(inv_obj.period_year),
+        
+        # Rincian Biaya
+        "sewa_price": fmt_decimal(inv_obj.base_rent),
+        "parking_price": fmt_decimal(inv_obj.parking_charge),
+        "water_price": fmt_decimal(inv_obj.water_charge),
+        "electricity_price": fmt_decimal(inv_obj.electricity_charge),
+        "other_price": fmt_decimal(inv_obj.other_charge),
+        "additional_price": fmt_decimal(inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.parking_charge + inv_obj.other_charge),
+        "penalty_price": fmt_decimal(inv_obj.penalty_amount or 0),
+        "total_tagihan": fmt_decimal(inv_obj.total_amount),
+        "denda": fmt_decimal(inv_obj.penalty_amount or 0),
+        "total_bayar": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
+        "total_price": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
+        "total_price_words": f"#{terbilang(int(inv_obj.total_amount + (inv_obj.penalty_amount or 0)))}#"
     }
 
     try:
@@ -300,16 +396,59 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
         for row in results:
             inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = row
             actual_doc_type = doc_type or inv_obj.document_type
+            
+            # Reconstruct room object for code generation
+            class TempRoom: pass
+            tr = TempRoom()
+            tr.rusunawa = r_ru
+            tr.building = r_bu
+            tr.floor = r_fl
+            tr.unit_number = r_un
+            
+            id_penghuni_code = get_room_code(tr) # type: ignore
+
             context = {
-                "nama_penyewa": t_name, "nik": t_nik,
+                # Identitas Dasar
+                "nama_penyewa": t_name,
+                "nama": t_name,
+                "nik": t_nik,
+                "id_penghuni": id_penghuni_code,
+                "id_kamar": id_penghuni_code,
+
+                # Lokasi & Unit
+                "unit": r_num,
+                "room_number": r_num,
+                "gedung": r_bu,
+                "building": r_bu,
+                "lantai": str(r_fl),
+                "floor": str(r_fl),
+                "rusunawa": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
+                "location_name": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
+
+                # Data Surat
                 "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
-                "tanggal_surat": (getattr(inv_obj, f"{actual_doc_type.value}_date", None) or date.today()).strftime("%d-%m-%Y"),
-                "unit": r_num, "gedung": r_bu, "lantai": str(r_fl), "rusunawa": r_ru,
-                "total_tagihan": fmt_decimal(inv_obj.total_amount),
-                "denda": fmt_decimal(inv_obj.penalty_amount),
+                "invoice_number": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
+                "tanggal_surat": (getattr(inv_obj, f"{actual_doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+
+                # Periode
                 "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
+                "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
                 "tahun_tagihan": str(inv_obj.period_year),
-                "total_bayar": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0))
+                "year": str(inv_obj.period_year),
+
+                # Rincian Biaya
+                "sewa_price": fmt_decimal(inv_obj.base_rent),
+                "parking_price": fmt_decimal(inv_obj.parking_charge),
+                "water_price": fmt_decimal(inv_obj.water_charge),
+                "electricity_price": fmt_decimal(inv_obj.electricity_charge),
+                "other_price": fmt_decimal(inv_obj.other_charge),
+                "additional_price": fmt_decimal(inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.parking_charge + inv_obj.other_charge),
+                "penalty_price": fmt_decimal(inv_obj.penalty_amount or 0),
+                "total_tagihan": fmt_decimal(inv_obj.total_amount),
+                "denda": fmt_decimal(inv_obj.penalty_amount or 0),
+                "total_bayar": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
+                "total_price": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
+                "total_price_words": f"#{terbilang(int(inv_obj.total_amount + (inv_obj.penalty_amount or 0)))}#"
             }
             file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
             full_path = os.path.abspath(file_path)
