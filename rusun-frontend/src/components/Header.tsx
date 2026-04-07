@@ -12,6 +12,12 @@ const locations = [
   { name: "Rusunawa Leuwigajah", href: "/leuwigajah" },
 ];
 
+/**
+ * FEATURE_FLAGS
+ * Set to true to show the 'Pengurus' (Staff) section and links.
+ */
+const SHOW_PENGURUS = false;
+
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [lokasiOpen, setLokasiOpen] = useState(false);
@@ -116,13 +122,15 @@ export function Header() {
             </AnimatePresence>
           </div>
 
-          <Link
-            href={getNavLink("#pengurus")}
-            className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
-              }`}
-          >
-            Pengurus
-          </Link>
+          {SHOW_PENGURUS && (
+            <Link
+              href={getNavLink("#pengurus")}
+              className={`text-sm font-medium transition-colors ${scrolled ? "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-white" : "text-white/80 hover:text-white"
+                }`}
+            >
+              Pengurus
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-4">
