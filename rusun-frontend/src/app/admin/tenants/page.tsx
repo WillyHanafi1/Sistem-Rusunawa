@@ -5,10 +5,10 @@ import api, { handleDownload } from "@/lib/api";
 import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle } from "lucide-react";
 import { format, addMonths } from "date-fns";
 import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
+    createColumnHelper,
+    flexRender,
+    getCoreRowModel,
+    useReactTable,
 } from '@tanstack/react-table';
 import InvoiceMonthDrawer, { InvoiceDetail } from "@/components/InvoiceMonthDrawer";
 import TenantImportModal from "@/components/TenantImportModal";
@@ -641,17 +641,17 @@ export default function ContractRoomPage() {
                             <thead>
                                 {table.getHeaderGroups().map(headerGroup => (
                                     <tr key={headerGroup.id} className="border-b border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/80 whitespace-nowrap text-xs">
-                                {headerGroup.headers.map(header => {
-                                    const tight = ['building', 'floor', 'unit_number', 'status', 'actions'].includes(header.id);
-                                    return (
-                                        <th 
-                                            key={header.id} 
-                                            className={`text-left py-3 font-bold tracking-wide align-bottom border-r border-slate-200 dark:border-white/8 last:border-r-0 ${tight ? 'px-1 w-16 text-center' : 'px-4'}`}
-                                        >
-                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                        </th>
-                                    );
-                                })}
+                                        {headerGroup.headers.map(header => {
+                                            const tight = ['building', 'floor', 'unit_number', 'status', 'actions'].includes(header.id);
+                                            return (
+                                                <th
+                                                    key={header.id}
+                                                    className={`text-left py-3 font-bold tracking-wide align-bottom border-r border-slate-200 dark:border-white/8 last:border-r-0 ${tight ? 'px-1 w-16 text-center' : 'px-4'}`}
+                                                >
+                                                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                 ))}
                             </thead>

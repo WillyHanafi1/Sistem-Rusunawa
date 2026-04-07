@@ -102,21 +102,21 @@ export default function LeuwigajahPage() {
           </motion.div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-2xl text-blue-600 dark:text-blue-400"><Building2 className="w-6 h-6" /></div>
-              <div className="text-center"><p className="text-sm text-slate-500 mb-1">Jumlah Gedung</p><p className="font-bold text-slate-900 dark:text-white">3 Twinblok</p></div>
+            <div className="bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 flex flex-col items-center gap-3 shadow-xl hover:bg-slate-900/60 transition-all group">
+              <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-400 group-hover:scale-110 transition-transform"><Building2 className="w-6 h-6" /></div>
+              <div className="text-center"><p className="text-sm text-slate-400 mb-1">Jumlah Gedung</p><p className="font-bold text-white">3 Twinblok</p></div>
             </div>
-            <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-2xl text-blue-600 dark:text-blue-400"><Layers className="w-6 h-6" /></div>
-              <div className="text-center"><p className="text-sm text-slate-500 mb-1">Tipe Hunian</p><p className="font-bold text-slate-900 dark:text-white">Unit Type 24</p></div>
+            <div className="bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 flex flex-col items-center gap-3 shadow-xl hover:bg-slate-900/60 transition-all group">
+              <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-400 group-hover:scale-110 transition-transform"><Layers className="w-6 h-6" /></div>
+              <div className="text-center"><p className="text-sm text-slate-400 mb-1">Tipe Hunian</p><p className="font-bold text-white">Unit Type 24</p></div>
             </div>
-            <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-2xl text-blue-600 dark:text-blue-400"><Users className="w-6 h-6" /></div>
-              <div className="text-center"><p className="text-sm text-slate-500 mb-1">Kapasitas</p><p className="font-bold text-slate-900 dark:text-white">297 Total Unit</p></div>
+            <div className="bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 flex flex-col items-center gap-3 shadow-xl hover:bg-slate-900/60 transition-all group">
+              <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-400 group-hover:scale-110 transition-transform"><Users className="w-6 h-6" /></div>
+              <div className="text-center"><p className="text-sm text-slate-400 mb-1">Kapasitas</p><p className="font-bold text-white">297 Total Unit</p></div>
             </div>
-            <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-slate-200 dark:border-white/10 flex flex-col items-center gap-3 shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-2xl text-blue-600 dark:text-blue-400"><MapPin className="w-6 h-6" /></div>
-              <div className="text-center"><p className="text-sm text-slate-500 mb-1">Lokasi</p><p className="font-bold text-slate-900 dark:text-white">Utara Leuwigajah</p></div>
+            <div className="bg-slate-900/40 backdrop-blur-md p-6 rounded-3xl border border-white/10 flex flex-col items-center gap-3 shadow-xl hover:bg-slate-900/60 transition-all group">
+              <div className="p-3 bg-blue-500/20 rounded-2xl text-blue-400 group-hover:scale-110 transition-transform"><MapPin className="w-6 h-6" /></div>
+              <div className="text-center"><p className="text-sm text-slate-400 mb-1">Lokasi</p><p className="font-bold text-white">Utara Leuwigajah</p></div>
             </div>
           </div>
         </div>
