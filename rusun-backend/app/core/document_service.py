@@ -64,9 +64,14 @@ class DocumentService:
             if kepala:
                 context["nama_kepala_uptd"] = kepala.name
                 context["nip_kepala_uptd"] = kepala.nip
+                context["manager_name"] = kepala.name
+                context["manager_nip"] = kepala.nip
+                context["manager_role"] = kepala.role
             if bendahara:
                 context["nama_bendahara"] = bendahara.name
                 context["nip_bendahara"] = bendahara.nip
+                context["bendahara_name"] = bendahara.name
+                context["bendahara_nip"] = bendahara.nip
 
         generated_docs = {}
 
@@ -178,9 +183,17 @@ class DocumentService:
                     if kepala:
                         context["nama_kepala_uptd"] = kepala.name
                         context["nip_kepala_uptd"] = kepala.nip
+                        context["manager_name"] = kepala.name
+                        context["manager_nip"] = kepala.nip
+                        context["manager_role"] = kepala.role
                     if bendahara:
                         context["nama_bendahara"] = bendahara.name
                         context["nip_bendahara"] = bendahara.nip
+                        context["bendahara_name"] = bendahara.name
+                        context["bendahara_nip"] = bendahara.nip
+                        # Default bank account info based on template example if not provided
+                        if "bank_account_info" not in context:
+                            context["bank_account_info"] = f"0083 0732 92001 / {bendahara.name}"
 
             # Add general context
             context.update({
