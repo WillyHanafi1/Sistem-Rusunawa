@@ -5,6 +5,7 @@ class StaffBase(SQLModel):
     name: str
     role: str
     nip: Optional[str] = None
+    pangkat: Optional[str] = Field(default=None, description="Pangkat/Golongan pejabat")
     tier: int = Field(default=3, description="1: Top Leader, 2: Sub Leader, 3: Operational Staff")
     image_url: Optional[str] = None
     socials: Optional[Dict[str, str]] = Field(default=None, sa_column=Column(JSON))
@@ -32,6 +33,7 @@ class StaffUpdate(SQLModel):
     name: Optional[str] = None
     role: Optional[str] = None
     nip: Optional[str] = None
+    pangkat: Optional[str] = None
     tier: Optional[int] = None
     image_url: Optional[str] = None
     socials: Optional[Dict[str, str]] = None

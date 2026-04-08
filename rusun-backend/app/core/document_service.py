@@ -63,15 +63,21 @@ class DocumentService:
             
             if kepala:
                 context["nama_kepala_uptd"] = kepala.name
+                context["nama_pejabat"] = kepala.name # Alias
                 context["nip_kepala_uptd"] = kepala.nip
+                context["nip_pejabat"] = kepala.nip # Alias
+                context["pangkat_kepala_uptd"] = kepala.pangkat
+                context["pangkat_pejabat"] = kepala.pangkat # Alias
                 context["manager_name"] = kepala.name
                 context["manager_nip"] = kepala.nip
                 context["manager_role"] = kepala.role
+                context["manager_pangkat"] = kepala.pangkat
             if bendahara:
                 context["nama_bendahara"] = bendahara.name
                 context["nip_bendahara"] = bendahara.nip
                 context["bendahara_name"] = bendahara.name
                 context["bendahara_nip"] = bendahara.nip
+                context["bendahara_pangkat"] = bendahara.pangkat
 
         generated_docs = {}
 
@@ -182,7 +188,11 @@ class DocumentService:
                     bendahara = next((s for s in management_staff if "bendahara" in s.role.lower()), None)
                     if kepala:
                         context["nama_kepala_uptd"] = kepala.name
+                        context["nama_pejabat"] = kepala.name # Alias
                         context["nip_kepala_uptd"] = kepala.nip
+                        context["nip_pejabat"] = kepala.nip # Alias
+                        context["pangkat_kepala_uptd"] = kepala.pangkat
+                        context["pangkat_pejabat"] = kepala.pangkat # Alias for SKRD
                         context["manager_name"] = kepala.name
                         context["manager_nip"] = kepala.nip
                         context["manager_role"] = kepala.role
@@ -191,6 +201,7 @@ class DocumentService:
                         context["nip_bendahara"] = bendahara.nip
                         context["bendahara_name"] = bendahara.name
                         context["bendahara_nip"] = bendahara.nip
+                        context["bendahara_pangkat"] = bendahara.pangkat
                         # Default bank account info based on template example if not provided
                         if "bank_account_info" not in context:
                             context["bank_account_info"] = f"0083 0732 92001 / {bendahara.name}"

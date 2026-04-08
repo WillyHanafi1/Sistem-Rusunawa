@@ -8,7 +8,7 @@ from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
 from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
 from app.models.tenant import Tenant
-from app.models.room import Room
+from app.models.room import Room, ROMAN
 from app.models.user import User, UserRole
 from app.core.config import settings
 from app.core.document_service import DocumentService
@@ -230,7 +230,7 @@ def preview_by_token(token: str, session: Session = Depends(get_session)):
         result = session.exec(query).first()
         if not result:
             raise HTTPException(status_code=404, detail="Invoice not found")
-        return _get_single_invoice_pdf(result, invoice_id, doc_type)
+        return _get_single_invoice_pdf(result, invoice_id, session, doc_type)
         
     elif token_data["type"] == "bulk":
         p = token_data["params"]
@@ -258,7 +258,7 @@ def print_invoice(
     result = session.exec(query).first()
     if not result:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return _get_single_invoice_pdf(result, invoice_id, doc_type)
+    return _get_single_invoice_pdf(result, invoice_id, session, doc_type)
 
 @router.get("/{invoice_id}/token")
 def get_print_token(
@@ -278,7 +278,7 @@ def get_print_token(
 
 
 # Helpers
-def _get_single_invoice_pdf(result: Any, invoice_id: int, doc_type: Optional[DocumentType] = None) -> Response:
+def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_type: Optional[DocumentType] = None) -> Response:
     inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = result
     
     if not doc_type:
@@ -304,6 +304,7 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, doc_type: Optional[Doc
         "nik": t_nik,
         "id_penghuni": id_penghuni_code,
         "id_kamar": id_penghuni_code,
+        "alamat_hunian": f"{r_bu} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
         
         # Lokasi & Unit
         "unit": r_num,
@@ -312,8 +313,10 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, doc_type: Optional[Doc
         "building": r_bu,
         "lantai": str(r_fl),
         "floor": str(r_fl),
-        "rusunawa": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
-        "location_name": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
+        "floor_roman": ROMAN.get(r_fl, str(r_fl)),
+        "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+        "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+        "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
         
         # Data Surat
         "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
@@ -414,6 +417,7 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "nik": t_nik,
                 "id_penghuni": id_penghuni_code,
                 "id_kamar": id_penghuni_code,
+                "alamat_hunian": f"{r_bu} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
 
                 # Lokasi & Unit
                 "unit": r_num,
@@ -422,8 +426,10 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "building": r_bu,
                 "lantai": str(r_fl),
                 "floor": str(r_fl),
-                "rusunawa": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
-                "location_name": r_ru.value if hasattr(r_ru, 'value') else str(r_ru),
+                "floor_roman": ROMAN.get(r_fl, str(r_fl)),
+                "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+                "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+                "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
 
                 # Data Surat
                 "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",

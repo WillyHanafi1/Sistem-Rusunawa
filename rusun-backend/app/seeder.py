@@ -257,6 +257,7 @@ def seed_staff(session: Session):
             name="KOKO, S.E., M.M.",
             role="Kepala UPTD Rusunawa Kota Cimahi",
             nip="19810323 200801 1 004",
+            pangkat="Pembina",
             tier=1,
             image_url="https://images.unsplash.com/photo-1560250097-0b93528c311a?w=800&q=80",
             socials={}
@@ -266,6 +267,7 @@ def seed_staff(session: Session):
             name="ANNISA SUNDANI",
             role="Bendahara",
             nip="19860102 201001 2 001",
+            pangkat="Penata",
             tier=2,
             image_url="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=800&q=80",
             socials={}
@@ -274,6 +276,7 @@ def seed_staff(session: Session):
             name="KADARISMAN DIPUTRA, S.P.",
             role="Kasubag Tata Usaha",
             nip="19840919 201001 1 006",
+            pangkat="Penata",
             tier=2,
             image_url="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=800&q=80",
             socials={}
@@ -282,6 +285,7 @@ def seed_staff(session: Session):
             name="ASEP SURYANA MASDUKI",
             role="Koordinator Lapangan",
             nip="19820410 200901 1 005",
+            pangkat="Penata",
             tier=2,
             image_url="https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=800&q=80",
             socials={}
