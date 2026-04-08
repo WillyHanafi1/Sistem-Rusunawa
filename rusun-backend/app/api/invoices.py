@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 from typing import List, Optional, Dict, Any
@@ -24,6 +24,10 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 # In-memory storage for preview tokens (One-time use)
 # Storage format: {token: {"type": "single|bulk", "data": {...}, "expires_at": datetime}}
 _preview_tokens: Dict[str, Any] = {}
+
+# In-memory storage for async bulk print jobs
+# Format: {job_id: {"status": "processing"|"completed"|"failed", "total": int, "processed": int, "file_path": str, "error": str}}
+_bulk_print_jobs: Dict[str, Any] = {}
 
 def _cleanup_expired_tokens():
     """Removes expired tokens from the in-memory dictionary."""
@@ -296,6 +300,16 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         room_obj = session.exec(select(Room).join(Tenant, Tenant.room_id == Room.id).where(Tenant.id == inv_obj.tenant_id)).first()
     
     id_penghuni_code = get_room_code(room_obj) if room_obj else t_nik
+    
+    display_penalty = inv_obj.penalty_amount or Decimal(0)
+    display_total = inv_obj.total_amount or Decimal(0)
+    
+    # Dynamic calculation for preview/non-persisted penalty
+    if doc_type in (DocumentType.strd, DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3):
+        if display_penalty == Decimal(0):
+            display_penalty = (inv_obj.base_rent + inv_obj.parking_charge) * Decimal(str(settings.PENALTY_RATE))
+            display_penalty = display_penalty.quantize(Decimal("0.01"))
+            display_total = inv_obj.base_rent + inv_obj.parking_charge + inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.other_charge + display_penalty
 
     context = {
         # Identitas Dasar
@@ -322,6 +336,7 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
         "invoice_number": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
         "tanggal_surat": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+        "tanggal_ttd": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
         
         # Periode
         "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
@@ -336,12 +351,12 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         "electricity_price": fmt_decimal(inv_obj.electricity_charge),
         "other_price": fmt_decimal(inv_obj.other_charge),
         "additional_price": fmt_decimal(inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.parking_charge + inv_obj.other_charge),
-        "penalty_price": fmt_decimal(inv_obj.penalty_amount or 0),
-        "total_tagihan": fmt_decimal(inv_obj.total_amount),
-        "denda": fmt_decimal(inv_obj.penalty_amount or 0),
-        "total_bayar": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
-        "total_price": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
-        "total_price_words": f"#{terbilang(int(inv_obj.total_amount + (inv_obj.penalty_amount or 0)))}#"
+        "penalty_price": fmt_decimal(display_penalty),
+        "total_tagihan": fmt_decimal(display_total),
+        "denda": fmt_decimal(display_penalty),
+        "total_bayar": fmt_decimal(display_total),
+        "total_price": fmt_decimal(display_total),
+        "total_price_words": f"#{terbilang(int(display_total))}#"
     }
 
     try:
@@ -410,6 +425,16 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
             
             id_penghuni_code = get_room_code(tr) # type: ignore
 
+            display_penalty = inv_obj.penalty_amount or Decimal(0)
+            display_total = inv_obj.total_amount or Decimal(0)
+            
+            # Jika user meminta preview STRD/Teguran tapi di DB denda belum diupdate (masih 0)
+            if actual_doc_type in (DocumentType.strd, DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3):
+                if display_penalty == Decimal(0):
+                    display_penalty = (inv_obj.base_rent + inv_obj.parking_charge) * Decimal(str(settings.PENALTY_RATE))
+                    display_penalty = display_penalty.quantize(Decimal("0.01"))
+                    display_total = inv_obj.base_rent + inv_obj.parking_charge + inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.other_charge + display_penalty
+
             context = {
                 # Identitas Dasar
                 "nama_penyewa": t_name,
@@ -449,12 +474,12 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "electricity_price": fmt_decimal(inv_obj.electricity_charge),
                 "other_price": fmt_decimal(inv_obj.other_charge),
                 "additional_price": fmt_decimal(inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.parking_charge + inv_obj.other_charge),
-                "penalty_price": fmt_decimal(inv_obj.penalty_amount or 0),
-                "total_tagihan": fmt_decimal(inv_obj.total_amount),
-                "denda": fmt_decimal(inv_obj.penalty_amount or 0),
-                "total_bayar": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
-                "total_price": fmt_decimal(inv_obj.total_amount + (inv_obj.penalty_amount or 0)),
-                "total_price_words": f"#{terbilang(int(inv_obj.total_amount + (inv_obj.penalty_amount or 0)))}#"
+                "penalty_price": fmt_decimal(display_penalty),
+                "total_tagihan": fmt_decimal(display_total),
+                "denda": fmt_decimal(display_penalty),
+                "total_bayar": fmt_decimal(display_total),
+                "total_price": fmt_decimal(display_total),
+                "total_price_words": f"#{terbilang(int(display_total))}#"
             }
             file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
             full_path = os.path.abspath(file_path)
@@ -490,11 +515,194 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
     finally:
         merger.close()
 
+def _process_bulk_pdf_background(
+    job_id: str, month: int, year: int, doc_type: Optional[DocumentType], building: Optional[str]
+):
+    """Background worker that builds the bulk PDF without blocking the HTTP request."""
+    from app.core.db import engine
+    
+    with Session(engine) as session:
+        query = (
+            select(
+                Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+                User.name.label("tenant_name"), Tenant.nik,
+            )
+            .join(Tenant, Invoice.tenant_id == Tenant.id)
+            .join(Room, Tenant.room_id == Room.id)
+            .join(User, Tenant.user_id == User.id)
+            .where(Invoice.period_month == month)
+            .where(Invoice.period_year == year)
+        )
+        if building: query = query.where(Room.building == building)
+        if doc_type: query = query.where(Invoice.document_type == doc_type)
+        query = query.order_by(Room.building, Room.floor, Room.unit_number)
+        results = session.exec(query).all()
+        
+        if not results:
+            _bulk_print_jobs[job_id]["status"] = "failed"
+            _bulk_print_jobs[job_id]["error"] = "Tidak ada data untuk dicetak"
+            return
+            
+        _bulk_print_jobs[job_id]["total"] = len(results)
+    
+        merger = PdfWriter()
+        temp_files_to_merge = 0
+        months_id = {
+            1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
+            7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
+        }
+
+        try:
+            for i, row in enumerate(results):
+                # Update progress
+                _bulk_print_jobs[job_id]["processed"] = i
+                
+                inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = row
+                actual_doc_type = doc_type or inv_obj.document_type
+                
+                class TempRoom: pass
+                tr = TempRoom()
+                tr.rusunawa = r_ru
+                tr.building = r_bu
+                tr.floor = r_fl
+                tr.unit_number = r_un
+                
+                id_penghuni_code = get_room_code(tr) # type: ignore
+
+                display_penalty = inv_obj.penalty_amount or Decimal(0)
+                display_total = inv_obj.total_amount or Decimal(0)
+                
+                # Jika user meminta preview STRD/Teguran tapi di DB denda belum diupdate (masih 0)
+                if actual_doc_type in (DocumentType.strd, DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3):
+                    if display_penalty == Decimal(0):
+                        display_penalty = (inv_obj.base_rent + inv_obj.parking_charge) * Decimal(str(settings.PENALTY_RATE))
+                        display_penalty = display_penalty.quantize(Decimal("0.01"))
+                        display_total = inv_obj.base_rent + inv_obj.parking_charge + inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.other_charge + display_penalty
+
+                context = {
+                    "nama_penyewa": t_name,
+                    "nama": t_name,
+                    "nik": t_nik,
+                    "id_penghuni": id_penghuni_code,
+                    "id_kamar": id_penghuni_code,
+                    "alamat_hunian": f"{r_bu} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
+                    "unit": r_num,
+                    "room_number": r_num,
+                    "gedung": r_bu,
+                    "building": r_bu,
+                    "lantai": str(r_fl),
+                    "floor": str(r_fl),
+                    "floor_roman": ROMAN.get(r_fl, str(r_fl)),
+                    "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+                    "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+                    "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
+                    "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
+                    "invoice_number": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
+                    "tanggal_surat": (getattr(inv_obj, f"{actual_doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+                    "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
+                    "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
+                    "tahun_tagihan": str(inv_obj.period_year),
+                    "year": str(inv_obj.period_year),
+                    "sewa_price": fmt_decimal(inv_obj.base_rent),
+                    "parking_price": fmt_decimal(inv_obj.parking_charge),
+                    "water_price": fmt_decimal(inv_obj.water_charge),
+                    "electricity_price": fmt_decimal(inv_obj.electricity_charge),
+                    "other_price": fmt_decimal(inv_obj.other_charge),
+                    "additional_price": fmt_decimal(inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.parking_charge + inv_obj.other_charge),
+                    "penalty_price": fmt_decimal(display_penalty),
+                    "total_tagihan": fmt_decimal(display_total),
+                    "denda": fmt_decimal(display_penalty),
+                    "total_bayar": fmt_decimal(display_total),
+                    "total_price": fmt_decimal(display_total),
+                    "total_price_words": f"#{terbilang(int(display_total))}#"
+                }
+                file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
+                full_path = os.path.abspath(file_path)
+                if full_path.endswith(".pdf"):
+                    merger.append(full_path)
+                    temp_files_to_merge += 1
+            
+            if temp_files_to_merge == 0:
+                 _bulk_print_jobs[job_id]["status"] = "failed"
+                 _bulk_print_jobs[job_id]["error"] = "Gagal men-generate PDF untuk digabungkan."
+                 return
+
+            output_filename = f"BULK_{doc_type.value if doc_type else 'INVOICES'}_{month}_{year}_{job_id[:6]}.pdf"
+            output_dir = os.path.join("uploads", "bulk")
+            os.makedirs(output_dir, exist_ok=True)
+            output_path = os.path.join(output_dir, output_filename)
+            
+            with open(output_path, "wb") as f:
+                merger.write(f)
+                
+            _bulk_print_jobs[job_id]["status"] = "completed"
+            _bulk_print_jobs[job_id]["processed"] = temp_files_to_merge
+            _bulk_print_jobs[job_id]["file_path"] = output_path
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            _bulk_print_jobs[job_id]["status"] = "failed"
+            _bulk_print_jobs[job_id]["error"] = str(e)
+        finally:
+            merger.close()
+
+@router.get("/print-bulk/async")
+def start_bulk_print_async(
+    background_tasks: BackgroundTasks,
+    month: int,
+    year: int,
+    doc_type: Optional[DocumentType] = None,
+    building: Optional[str] = None,
+    current_user: User = Depends(require_admin),
+):
+    """Mulai task cetak massal secara asynchronous dan kembalikan job_id."""
+    job_id = secrets.token_hex(16)
+    _bulk_print_jobs[job_id] = {
+        "status": "processing",
+        "total": 0,
+        "processed": 0,
+        "file_path": None,
+        "error": None
+    }
+    background_tasks.add_task(_process_bulk_pdf_background, job_id, month, year, doc_type, building)
+    return {"job_id": job_id, "message": "Proses cetak massal dimulai di background"}
+
+@router.get("/print-bulk/status/{job_id}")
+def check_bulk_print_status(job_id: str):
+    """Cek progress task cetak massal."""
+    job = _bulk_print_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job ID tidak ditemukan")
+    return job
+
+@router.get("/print-bulk/download/{job_id}")
+def download_bulk_print_result(job_id: str):
+    """Download hasil cetak massal yang sudah completed."""
+    job = _bulk_print_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job ID tidak ditemukan")
+    if job["status"] != "completed" or not job["file_path"]:
+        raise HTTPException(status_code=400, detail="Job belum selesai atau gagal")
+        
+    full_path = os.path.abspath(job["file_path"])
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="File hasil cetak tidak ditemukan")
+        
+    filename = os.path.basename(full_path)
+    return FileResponse(
+        path=full_path, 
+        filename=filename, 
+        media_type="application/pdf",
+        content_disposition_type="attachment"
+    )
+
 def internal_mass_generate_invoices(
     session: Session,
     period_month: int,
     period_year: int,
     due_date: date,
+    sign_date: Optional[date] = None,
     other_charge: Decimal = Decimal("0"),
     start_skrd_no: Optional[int] = None,
     notes: str = "Otomatisasi bulanan",
@@ -588,6 +796,9 @@ def internal_mass_generate_invoices(
         # 4b. Tentukan jenis dokumen: Selalu SKRD saat pembuatan awal (sesuai request user)
         doc_type = DocumentType.skrd
 
+        # Tanggal surat SKRD: dari user input, fallback ke due_date
+        effective_skrd_date = sign_date or due_date
+
         inv = Invoice(
             tenant_id=tenant.id,
             period_month=period_month,
@@ -603,7 +814,7 @@ def internal_mass_generate_invoices(
             status=InvoiceStatus.unpaid,
             document_type=doc_type,
             skrd_number=skrd_number,
-            skrd_date=due_date, # Default tanggal SKRD sama dengan batas bayar
+            skrd_date=effective_skrd_date,
         )
         new_invoices.append(inv)
 
@@ -635,6 +846,7 @@ def mass_generate_invoices(
             period_month=mass_in.period_month,
             period_year=mass_in.period_year,
             due_date=mass_in.due_date,
+            sign_date=mass_in.sign_date,
             other_charge=Decimal(str(mass_in.other_charge or 0)),
             start_skrd_no=mass_in.start_skrd_no,
             notes=mass_in.notes or "Generate Massal"

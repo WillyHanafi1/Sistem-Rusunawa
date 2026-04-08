@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import api, { handleDownload, previewPdf } from "@/lib/api";
-import { Loader2, Filter, ChevronLeft, ChevronRight, AlertCircle, Sparkles, FileText, TrendingUp, AlertTriangle, DollarSign, Layers, X, CheckCircle2, ArrowRight, Calendar, Hash, Printer } from "lucide-react";
+import { Loader2, Filter, ChevronLeft, ChevronRight, AlertCircle, Sparkles, FileText, TrendingUp, AlertTriangle, DollarSign, Layers, X, CheckCircle2, ArrowRight, Calendar, Hash, Printer, ShieldCheck, Ban } from "lucide-react";
 import {
-  createColumnHelper,
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
+    createColumnHelper,
+    flexRender,
+    getCoreRowModel,
+    useReactTable,
 } from '@tanstack/react-table';
 import InvoiceMonthDrawer, { InvoiceDetail } from "@/components/InvoiceMonthDrawer";
 
@@ -145,15 +145,28 @@ export default function RentInvoicesPage() {
     // Mass Action Panel State
     const [massActionPanelOpen, setMassActionPanelOpen] = useState(false);
     const [massActionTarget, setMassActionTarget] = useState<string>("skrd");
-    const [massActionPreview, setMassActionPreview] = useState<{count: number, message: string} | null>(null);
+    const [massActionPreview, setMassActionPreview] = useState<{ count: number, message: string } | null>(null);
     const [isMassActionLoading, setIsMassActionLoading] = useState(false);
     const [massActionDone, setMassActionDone] = useState(false);
     const [massActionStartNo, setMassActionStartNo] = useState<number | undefined>(undefined);
+    const [massActionSignDate, setMassActionSignDate] = useState<string>(new Date().toISOString().split("T")[0]); // YYYY-MM-DD
     // SKRD-specific inputs
     const [massActionMonth, setMassActionMonth] = useState(new Date().getMonth() + 1);
     const [massActionYear, setMassActionYear] = useState(new Date().getFullYear());
     const [skrdDueDay, setSkrdDueDay] = useState(20);
     const [skrdStartNo, setSkrdStartNo] = useState<number | undefined>(undefined);
+    // Prerequisite checking
+    const [prerequisiteData, setPrerequisiteData] = useState<{
+        counts: Record<string, number>;
+        unpaid_counts: Record<string, number>;
+        prerequisites: Record<string, boolean>;
+        total_invoices: number;
+    } | null>(null);
+    const [isLoadingPrereqs, setIsLoadingPrereqs] = useState(false);
+
+    // Mass Print Job State
+    const [printJobId, setPrintJobId] = useState<string | null>(null);
+    const [printJobData, setPrintJobData] = useState<{ status: string, processed: number, total: number, error?: string } | null>(null);
 
     // Filters & Search State
     const [filterSearch, setFilterSearch] = useState("");
@@ -190,7 +203,7 @@ export default function RentInvoicesPage() {
         try {
             const res = await api.get(`/invoices?year=${year}&limit=9999`);
             const invoices: InvoiceDetail[] = res.data;
-            
+
             // Build Map<tenant_id, Map<month, Invoice>>
             const map = new Map<number, Map<number, InvoiceDetail>>();
             for (const inv of invoices) {
@@ -236,7 +249,46 @@ export default function RentInvoicesPage() {
         setMassActionTarget("skrd");
         setMassActionPreview(null);
         setMassActionDone(false);
+        setMassActionSignDate(new Date().toISOString().split("T")[0]);
+        setPrerequisiteData(null);
     };
+
+    // Fetch prerequisite data when period changes
+    const fetchPrerequisites = useCallback(async () => {
+        setIsLoadingPrereqs(true);
+        try {
+            const res = await api.get(`/tasks/check-prerequisites?period_month=${massActionMonth}&period_year=${massActionYear}`);
+            setPrerequisiteData(res.data);
+        } catch (err) {
+            console.error("Failed to fetch prerequisites:", err);
+        } finally {
+            setIsLoadingPrereqs(false);
+        }
+    }, [massActionMonth, massActionYear]);
+
+    useEffect(() => {
+        if (massActionPanelOpen) {
+            fetchPrerequisites();
+        }
+    }, [massActionPanelOpen, fetchPrerequisites]);
+
+    // --- Polling for Mass Print Job ---
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (printJobId && printJobData?.status !== "completed" && printJobData?.status !== "failed") {
+            interval = setInterval(async () => {
+                try {
+                    const res = await api.get(`/invoices/print-bulk/status/${printJobId}`);
+                    setPrintJobData(res.data);
+                } catch (err) {
+                    console.error("Job status check failed", err);
+                }
+            }, 2000);
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [printJobId, printJobData?.status]);
 
     const triggerMassPreview = useCallback(async () => {
         setIsMassActionLoading(true);
@@ -245,14 +297,13 @@ export default function RentInvoicesPage() {
         try {
             if (massActionTarget === "skrd") {
                 setMassActionPreview({
-                    count: -1, 
+                    count: -1,
                     message: `Akan men-generate SKRD untuk seluruh penghuni aktif pada periode ${MONTHS_SHORT[massActionMonth - 1]} ${massActionYear}. Penghuni yang sudah memiliki tagihan di bulan ini akan di-skip otomatis.`
                 });
             } else {
                 const res = await api.post("/tasks/mass-escalate", {
                     target_doc_type: massActionTarget,
                     dry_run: true,
-                    start_no: massActionStartNo,
                     period_month: massActionMonth,
                     period_year: massActionYear
                 });
@@ -263,9 +314,26 @@ export default function RentInvoicesPage() {
         } finally {
             setIsMassActionLoading(false);
         }
-    }, [massActionTarget, massActionMonth, massActionYear, massActionStartNo]);
+    }, [massActionTarget, massActionMonth, massActionYear]);
 
     const confirmMassAction = async () => {
+        // Validasi field wajib sebelum eksekusi
+        if (massActionTarget !== "skrd") {
+            if (!massActionStartNo) {
+                alert("Nomor urut awal wajib diisi.");
+                return;
+            }
+            if (!massActionSignDate) {
+                alert("Tanggal surat wajib diisi.");
+                return;
+            }
+        } else {
+            if (!massActionSignDate) {
+                alert("Tanggal surat wajib diisi.");
+                return;
+            }
+        }
+
         setIsMassActionLoading(true);
         try {
             if (massActionTarget === "skrd") {
@@ -274,6 +342,7 @@ export default function RentInvoicesPage() {
                     period_month: massActionMonth,
                     period_year: massActionYear,
                     due_date: dueDate,
+                    sign_date: massActionSignDate || null,
                     start_skrd_no: skrdStartNo || null,
                     notes: `Generate Massal Manual — ${MONTHS_SHORT[massActionMonth - 1]} ${massActionYear}`
                 });
@@ -284,12 +353,14 @@ export default function RentInvoicesPage() {
                     dry_run: false,
                     start_no: massActionStartNo,
                     period_month: massActionMonth,
-                    period_year: massActionYear
+                    period_year: massActionYear,
+                    sign_date: massActionSignDate || null
                 });
                 setMassActionPreview({ count: res.data.processed, message: res.data.message });
             }
             setMassActionDone(true);
             fetchInvoicesForYear(filterYear);
+            fetchPrerequisites(); // Refresh prerequisite data after action
         } catch (err: any) {
             alert(err.response?.data?.detail || "Gagal mengeksekusi tindakan massal");
         } finally {
@@ -297,14 +368,28 @@ export default function RentInvoicesPage() {
         }
     };
 
-    const handleMassPrint = async () => {
+    const handleMassPrintAsync = async () => {
+        setPrintJobId(null);
+        setPrintJobData(null);
         setIsMassActionLoading(true);
         try {
-            await previewPdf(`/invoices/print-bulk?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
+            const res = await api.get(`/invoices/print-bulk/async?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
+            setPrintJobId(res.data.job_id);
+            setPrintJobData({ status: "processing", processed: 0, total: 100 }); // Optimistic start
         } catch (err: any) {
-            alert(err.message || "Gagal membuka dokumen massal. Silakan coba lagi.");
+            alert(err.response?.data?.detail || err.message || "Gagal memulai tugas cetak massal.");
         } finally {
             setIsMassActionLoading(false);
+        }
+    };
+
+    const handleDownloadMassPrint = async () => {
+        if (!printJobId) return;
+        try {
+            const downloadUrl = `/api/invoices/print-bulk/download/${printJobId}`;
+            window.open(downloadUrl, '_blank');
+        } catch (err: any) {
+            alert(err.message || "Gagal membuka dokumen massal.");
         }
     };
 
@@ -349,7 +434,7 @@ export default function RentInvoicesPage() {
     const filteredRooms = useMemo(() => {
         let result = [...rooms];
         if (filterStatus) result = result.filter(r => r.status === filterStatus);
-        
+
         // Billing-specific filter
         if (filterBilling === "ada_tunggakan") {
             result = result.filter(r => {
@@ -493,11 +578,10 @@ export default function RentInvoicesPage() {
                     const isExpired = r.contract_end ? new Date() > new Date(r.contract_end) : false;
                     return (
                         <div className="flex items-center gap-2">
-                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold uppercase shrink-0 transition-colors ${
-                                isExpired 
-                                    ? "bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30" 
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold uppercase shrink-0 transition-colors ${isExpired
+                                    ? "bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30"
                                     : "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
-                            }`}>
+                                }`}>
                                 {val.charAt(0)}
                             </div>
                             <span className={`font-bold text-sm whitespace-nowrap ${isExpired ? "text-rose-600 dark:text-rose-400" : "text-slate-900 dark:text-slate-100"}`}>
@@ -588,7 +672,7 @@ export default function RentInvoicesPage() {
                         </div>
                     );
                 }
-                
+
                 const tid = Number(r.tenant_id);
                 const tenantInvoices = invoiceMap.get(tid) ?? new Map<number, InvoiceDetail>();
                 const contractStartDate = r.contract_start ? new Date(r.contract_start) : null;
@@ -723,7 +807,7 @@ export default function RentInvoicesPage() {
                     </div>
                     <p className="text-slate-400 dark:text-slate-500 font-medium text-sm mt-1.5">Kelola tagihan sewa, cetak SKRD/STRD, dan teguran penagihan — klik kotak bulan untuk detail.</p>
                 </div>
-                <button 
+                <button
                     onClick={openMassPanel}
                     className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 px-5 py-3 rounded-2xl shadow-xl transition-all hover:-translate-y-1 active:translate-y-0"
                 >
@@ -821,17 +905,17 @@ export default function RentInvoicesPage() {
                             <thead>
                                 {table.getHeaderGroups().map(headerGroup => (
                                     <tr key={headerGroup.id} className="border-b border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 bg-slate-50/80 dark:bg-slate-800/80 whitespace-nowrap text-xs">
-                                {headerGroup.headers.map(header => {
-                                    const tight = ['building', 'floor', 'unit_number', 'status', 'tunggakan'].includes(header.id);
-                                    return (
-                                        <th 
-                                            key={header.id} 
-                                            className={`text-left py-3 font-bold tracking-wide align-bottom border-r border-slate-200 dark:border-white/8 last:border-r-0 ${tight ? 'px-1 w-16 text-center' : 'px-4'}`}
-                                        >
-                                            {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                                        </th>
-                                    );
-                                })}
+                                        {headerGroup.headers.map(header => {
+                                            const tight = ['building', 'floor', 'unit_number', 'status', 'tunggakan'].includes(header.id);
+                                            return (
+                                                <th
+                                                    key={header.id}
+                                                    className={`text-left py-3 font-bold tracking-wide align-bottom border-r border-slate-200 dark:border-white/8 last:border-r-0 ${tight ? 'px-1 w-16 text-center' : 'px-4'}`}
+                                                >
+                                                    {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
                                 ))}
                             </thead>
@@ -898,22 +982,55 @@ export default function RentInvoicesPage() {
                         {/* LEFT: Menu Sidebar */}
                         <div className="w-64 shrink-0 bg-slate-50 dark:bg-slate-900/60 border-r border-slate-200 dark:border-white/10 p-4 flex flex-col gap-2 overflow-y-auto">
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 px-2">Pilih Tipe Dokumen</p>
-                            {MASS_ACTION_TYPES.map(t => (
-                                <button
-                                    key={t.key}
-                                    onClick={() => { setMassActionTarget(t.key); setMassActionPreview(null); setMassActionDone(false); }}
-                                    className={`w-full text-left px-4 py-3 rounded-xl flex flex-col gap-0.5 transition-all border ${
-                                        massActionTarget === t.key 
-                                            ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-300 dark:border-blue-500/30 shadow-lg shadow-blue-500/10' 
-                                            : 'bg-white dark:bg-slate-800 border-transparent hover:border-slate-300 dark:hover:border-white/10 hover:shadow-md'
-                                    }`}
-                                >
-                                    <span className={`font-bold text-sm ${
-                                        massActionTarget === t.key ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'
-                                    }`}>{t.label}</span>
-                                    <span className="text-[10px] text-slate-500">{t.desc}</span>
-                                </button>
-                            ))}
+                            {MASS_ACTION_TYPES.map(t => {
+                                const isActive = massActionTarget === t.key;
+                                const prereqOk = prerequisiteData?.prerequisites?.[t.key] ?? true;
+                                const totalCount = prerequisiteData?.counts?.[t.key] ?? 0;
+                                const unpaidCount = prerequisiteData?.unpaid_counts?.[t.key] ?? 0;
+
+                                // Determine source count for escalation targets
+                                const sourceMap: Record<string, string> = { strd: "skrd", teguran1: "strd", teguran2: "teguran1", teguran3: "teguran2" };
+                                const sourceKey = sourceMap[t.key];
+                                const sourceUnpaid = sourceKey ? (prerequisiteData?.unpaid_counts?.[sourceKey] ?? 0) : 0;
+
+                                return (
+                                    <button
+                                        key={t.key}
+                                        onClick={() => { setMassActionTarget(t.key); setMassActionPreview(null); setMassActionDone(false); }}
+                                        disabled={!prereqOk}
+                                        className={`w-full text-left px-4 py-3 rounded-xl flex flex-col gap-0.5 transition-all border ${!prereqOk
+                                                ? 'bg-slate-50 dark:bg-slate-800/30 border-transparent opacity-50 cursor-not-allowed'
+                                                : isActive
+                                                    ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-300 dark:border-blue-500/30 shadow-lg shadow-blue-500/10'
+                                                    : 'bg-white dark:bg-slate-800 border-transparent hover:border-slate-300 dark:hover:border-white/10 hover:shadow-md'
+                                            }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={`font-bold text-sm ${!prereqOk ? 'text-slate-400 dark:text-slate-600' :
+                                                    isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-700 dark:text-slate-300'
+                                                }`}>{t.label}</span>
+                                            {prerequisiteData && (
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${totalCount > 0
+                                                        ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400'
+                                                        : 'bg-slate-100 dark:bg-slate-700 text-slate-400'
+                                                    }`}>{totalCount}</span>
+                                            )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-500">{t.desc}</span>
+                                        {/* Prerequisite info for escalation types */}
+                                        {sourceKey && prerequisiteData && (
+                                            <div className={`text-[10px] mt-1 flex items-center gap-1 ${prereqOk ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'
+                                                }`}>
+                                                {prereqOk ? <ShieldCheck className="w-3 h-3" /> : <Ban className="w-3 h-3" />}
+                                                {prereqOk
+                                                    ? `${sourceUnpaid} ${sourceKey.toUpperCase()} siap eskalasi`
+                                                    : `Belum ada ${sourceKey.toUpperCase()}`
+                                                }
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
                         </div>
 
                         {/* RIGHT: Content Area */}
@@ -929,7 +1046,7 @@ export default function RentInvoicesPage() {
                                         <div>
                                             <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Pilih Bulan</label>
                                             <select value={massActionMonth} onChange={e => setMassActionMonth(Number(e.target.value))} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
-                                                {MONTHS_SHORT.map((m, i) => <option key={i} value={i+1}>{m}</option>)}
+                                                {MONTHS_SHORT.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
                                             </select>
                                         </div>
                                         <div>
@@ -957,6 +1074,11 @@ export default function RentInvoicesPage() {
                                                     <input type="number" value={skrdStartNo || ''} onChange={e => setSkrdStartNo(e.target.value ? Number(e.target.value) : undefined)} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="Misal: 2363" />
                                                     <p className="text-[10px] text-slate-400 mt-1">Nomor awal urut surat SKRD. Kosongkan jika tanpa penomoran.</p>
                                                 </div>
+                                                <div className="col-span-2">
+                                                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Tanggal Surat / TTD</label>
+                                                    <input type="date" value={massActionSignDate} onChange={e => setMassActionSignDate(e.target.value)} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" />
+                                                    <p className="text-[10px] text-slate-400 mt-1">Tanggal yang tertera di bagian tanda tangan dokumen. Jika dikosongkan, menggunakan tanggal sesuai batas bayar.</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -965,45 +1087,59 @@ export default function RentInvoicesPage() {
                                 {/* ====== Escalation Forms (STRD, Teguran 1, 2, 3) ====== */}
                                 {["strd", "teguran1", "teguran2", "teguran3"].includes(massActionTarget) && (
                                     <div className="space-y-5">
-                                        <div className={`p-4 border rounded-2xl text-sm ${
-                                            massActionTarget === "strd" ? "bg-amber-50 dark:bg-amber-500/5 border-amber-100 dark:border-amber-500/20 text-amber-800 dark:text-amber-300" :
-                                            massActionTarget === "teguran1" ? "bg-orange-50 dark:bg-orange-500/5 border-orange-100 dark:border-orange-500/20 text-orange-800 dark:text-orange-300" :
-                                            massActionTarget === "teguran2" ? "bg-rose-50 dark:bg-rose-500/5 border-rose-100 dark:border-rose-500/20 text-rose-800 dark:text-rose-400" :
-                                            "bg-red-50 dark:bg-red-500/5 border-red-100 dark:border-red-500/20 text-red-800 dark:text-red-300"
-                                        }`}>
-                                            <strong>Kriteria Otomatis:</strong> Sistem akan mencari tagihan {
-                                                massActionTarget === "strd" ? "SKRD" :
-                                                massActionTarget === "teguran1" ? "STRD" :
-                                                massActionTarget === "teguran2" ? "Teguran 1" : "Teguran 2"
-                                            } yang memenuhi syarat untuk di-eskalasi menjadi {getMassActionLabel(massActionTarget)}.
+                                        <div className={`p-4 border rounded-2xl text-sm ${massActionTarget === "strd" ? "bg-amber-50 dark:bg-amber-500/5 border-amber-100 dark:border-amber-500/20 text-amber-800 dark:text-amber-300" :
+                                                massActionTarget === "teguran1" ? "bg-orange-50 dark:bg-orange-500/5 border-orange-100 dark:border-orange-500/20 text-orange-800 dark:text-orange-300" :
+                                                    massActionTarget === "teguran2" ? "bg-rose-50 dark:bg-rose-500/5 border-rose-100 dark:border-rose-500/20 text-rose-800 dark:text-rose-400" :
+                                                        "bg-red-50 dark:bg-red-500/5 border-red-100 dark:border-red-500/20 text-red-800 dark:text-red-300"
+                                            }`}>
+                                            {(() => {
+                                                const sourceMap: Record<string, string> = { strd: "SKRD", teguran1: "STRD", teguran2: "Teguran 1", teguran3: "Teguran 2" };
+                                                const sourceKey: Record<string, string> = { strd: "skrd", teguran1: "strd", teguran2: "teguran1", teguran3: "teguran2" };
+                                                const src = sourceMap[massActionTarget] || "";
+                                                const count = prerequisiteData?.unpaid_counts?.[sourceKey[massActionTarget]] ?? 0;
+                                                return (
+                                                    <>
+                                                        <strong>Prasyarat Terpenuhi:</strong> Ditemukan <strong>{count}</strong> tagihan {src} yang belum lunas pada periode {MONTHS_SHORT[massActionMonth - 1]} {massActionYear}. Seluruhnya akan di-eskalasi menjadi {getMassActionLabel(massActionTarget)}.
+                                                    </>
+                                                );
+                                            })()}
                                         </div>
 
                                         <div className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/5 space-y-4">
                                             <div>
                                                 <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Nomor Urut Awal {getMassActionLabel(massActionTarget)}</label>
-                                                <input 
-                                                    type="number" 
-                                                    value={massActionStartNo || ''} 
-                                                    onChange={e => setMassActionStartNo(e.target.value ? Number(e.target.value) : undefined)} 
-                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" 
-                                                    placeholder="Misal: 1001" 
+                                                <input
+                                                    type="number"
+                                                    value={massActionStartNo || ''}
+                                                    onChange={e => setMassActionStartNo(e.target.value ? Number(e.target.value) : undefined)}
+                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                    placeholder="Misal: 1001"
                                                 />
                                                 <p className="text-[10px] text-slate-400 mt-1">Sistem akan men-generate nomor dokumen secara urut mulai dari angka ini.</p>
                                             </div>
-                                            
+
+                                            <div>
+                                                <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Tanggal Surat / TTD</label>
+                                                <input
+                                                    type="date"
+                                                    value={massActionSignDate}
+                                                    onChange={e => setMassActionSignDate(e.target.value)}
+                                                    className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                                                />
+                                                <p className="text-[10px] text-slate-400 mt-1">Tanggal yang tertera di bagian tanda tangan dokumen. Jika kosong, menggunakan tanggal hari ini.</p>
+                                            </div>
+
                                             <div className="pt-2">
                                                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Proses yang akan dilakukan:</p>
                                                 <ul className="space-y-1.5 text-sm text-slate-600 dark:text-slate-400">
-                                                    <li className="flex items-start gap-2"><ArrowRight className={`w-4 h-4 shrink-0 mt-0.5 ${
-                                                        massActionTarget === "strd" ? "text-amber-500" :
-                                                        massActionTarget === "teguran1" ? "text-orange-500" :
-                                                        massActionTarget === "teguran2" ? "text-rose-500" : "text-red-500"
-                                                    }`} /> Update status dokumen menjadi {getMassActionLabel(massActionTarget)}</li>
-                                                    <li className="flex items-start gap-2"><ArrowRight className={`w-4 h-4 shrink-0 mt-0.5 ${
-                                                        massActionTarget === "strd" ? "text-amber-500" :
-                                                        massActionTarget === "teguran1" ? "text-orange-500" :
-                                                        massActionTarget === "teguran2" ? "text-rose-500" : "text-red-500"
-                                                    }`} /> Generate nomor surat otomatis</li>
+                                                    <li className="flex items-start gap-2"><ArrowRight className={`w-4 h-4 shrink-0 mt-0.5 ${massActionTarget === "strd" ? "text-amber-500" :
+                                                            massActionTarget === "teguran1" ? "text-orange-500" :
+                                                                massActionTarget === "teguran2" ? "text-rose-500" : "text-red-500"
+                                                        }`} /> Update status dokumen menjadi {getMassActionLabel(massActionTarget)}</li>
+                                                    <li className="flex items-start gap-2"><ArrowRight className={`w-4 h-4 shrink-0 mt-0.5 ${massActionTarget === "strd" ? "text-amber-500" :
+                                                            massActionTarget === "teguran1" ? "text-orange-500" :
+                                                                massActionTarget === "teguran2" ? "text-rose-500" : "text-red-500"
+                                                        }`} /> Generate nomor surat otomatis</li>
                                                     {massActionTarget === "strd" && (
                                                         <li className="flex items-start gap-2"><ArrowRight className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" /> Hitung denda keterlambatan 2%</li>
                                                     )}
@@ -1011,15 +1147,14 @@ export default function RentInvoicesPage() {
                                             </div>
                                         </div>
                                     </div>
-                                 )}
+                                )}
 
                                 {/* ====== Preview Result ====== */}
                                 {massActionPreview && (
-                                    <div className={`mt-6 p-5 rounded-2xl border ${
-                                        massActionDone 
-                                            ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20' 
+                                    <div className={`mt-6 p-5 rounded-2xl border ${massActionDone
+                                            ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20'
                                             : 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20'
-                                    }`}>
+                                        }`}>
                                         <div className="flex items-center gap-3 mb-2">
                                             {massActionDone ? (
                                                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
@@ -1037,9 +1172,47 @@ export default function RentInvoicesPage() {
                                     </div>
                                 )}
 
+                                {/* ====== Print Job Progress ====== */}
+                                {printJobData && (
+                                    <div className="mt-6 p-5 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-white/10">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                                                {printJobData.status === "processing" ? <Loader2 className="w-4 h-4 animate-spin text-blue-500" /> :
+                                                    printJobData.status === "completed" ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> :
+                                                        <AlertTriangle className="w-4 h-4 text-red-500" />}
+                                                {printJobData.status === "processing" ? "Sedang Memproses Dokumen..." :
+                                                    printJobData.status === "completed" ? "Selesai Memproses Dokumen" :
+                                                        "Gagal Memproses Dokumen"}
+                                            </span>
+                                            <span className="text-sm font-semibold text-slate-500">{printJobData.processed} / {printJobData.total}</span>
+                                        </div>
+
+                                        {/* Progress Bar */}
+                                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mb-4 overflow-hidden">
+                                            <div
+                                                className={`h-2.5 rounded-full transition-all duration-500 ${printJobData.status === 'failed' ? 'bg-red-500' : 'bg-blue-600'}`}
+                                                style={{ width: `${Math.max(5, (printJobData.processed / (printJobData.total || 1)) * 100)}%` }}
+                                            ></div>
+                                        </div>
+
+                                        {printJobData.error && (
+                                            <p className="text-sm text-red-500 font-medium mb-3">{printJobData.error}</p>
+                                        )}
+
+                                        {printJobData.status === "completed" && (
+                                            <button
+                                                onClick={handleDownloadMassPrint}
+                                                className="w-full px-4 py-3 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 transition-all active:scale-95 flex justify-center items-center gap-2"
+                                            >
+                                                <Printer className="w-4 h-4" /> Unduh Dokumen PDF
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* ====== Action Buttons ====== */}
                                 <div className="flex items-center gap-3 mt-8 pt-6 border-t border-slate-200 dark:border-white/10">
-                                    {!massActionDone && (
+                                    {!massActionDone && !printJobData && (
                                         <>
                                             <button
                                                 onClick={triggerMassPreview}
@@ -1058,7 +1231,7 @@ export default function RentInvoicesPage() {
                                                 Eksekusi Generate
                                             </button>
                                             <button
-                                                onClick={handleMassPrint}
+                                                onClick={handleMassPrintAsync}
                                                 disabled={isMassActionLoading}
                                                 className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-all flex items-center gap-2"
                                             >

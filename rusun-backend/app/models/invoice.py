@@ -77,6 +77,7 @@ class InvoiceMassGenerate(SQLModel):
     period_year: int
     other_charge: Decimal = Decimal("0")
     due_date: date
+    sign_date: Optional[date] = Field(default=None, description="Tanggal surat / tanda tangan (default: sama dengan due_date)")
     start_skrd_no: Optional[int] = Field(default=None, description="Nomor urut SKRD awal (misal: 2363)")
     notes: Optional[str] = None
 
