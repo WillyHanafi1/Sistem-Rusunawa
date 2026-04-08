@@ -82,6 +82,17 @@ class InvoiceMassGenerate(SQLModel):
     notes: Optional[str] = None
 
 
+class InvoiceTeguranMassGenerate(SQLModel):
+    doc_type: DocumentType  # teguran1, teguran2, or teguran3
+    period_month: int
+    period_year: int
+    sign_date: date
+    deadline_date: date
+    start_no: int
+    building: Optional[str] = None
+    notes: Optional[str] = None
+
+
 from pydantic import model_validator
 
 class InvoiceRead(InvoiceBase):

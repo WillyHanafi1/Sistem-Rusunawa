@@ -6,9 +6,9 @@ from decimal import Decimal
 import math
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
-from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
+from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceTeguranMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
 from app.models.tenant import Tenant
-from app.models.room import Room, ROMAN
+from app.models.room import Room, ROMAN, ROMAN_TO_INT
 from app.models.user import User, UserRole
 from app.core.config import settings
 from app.core.document_service import DocumentService
@@ -855,6 +855,122 @@ def mass_generate_invoices(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan internal: {str(e)}")
+
+
+def internal_mass_generate_teguran(
+    session: Session,
+    doc_type: DocumentType,
+    period_month: int,
+    period_year: int,
+    sign_date: date,
+    deadline_date: date,
+    start_no: int,
+    building: Optional[str] = None,
+    notes: Optional[str] = None
+) -> Dict[str, Any]:
+    """Mengubah tagihan belum lunas menjadi status Teguran (T1/T2/T3) secara massal."""
+    # 1. Mapping tipe dokumen ke kode singkatan (T1, T2, T3)
+    type_map = {
+        DocumentType.teguran1: "T1",
+        DocumentType.teguran2: "T2",
+        DocumentType.teguran3: "T3"
+    }
+    short_type = type_map.get(doc_type)
+    if not short_type:
+        raise ValueError("doc_type harus teguran1, teguran2, atau teguran3")
+
+    # 2. Ambil invoice + data kamar sekaligus (Eager Loading)
+    query = select(Invoice, Room).join(Tenant, Invoice.tenant_id == Tenant.id).join(Room, Tenant.room_id == Room.id).where(
+        Invoice.period_month == period_month,
+        Invoice.period_year == period_year,
+        Invoice.status.in_([InvoiceStatus.unpaid, InvoiceStatus.overdue])
+    )
+    
+    # Filter gedung jika ada
+    if building:
+        query = query.where(Room.building == building)
+
+    results = session.exec(query).all()
+    
+    if not results:
+        return {"success": True, "updated": 0, "message": "Tidak ada tagihan menunggak yang ditemukan untuk periode ini."}
+
+    # 3. Proses update
+    count_updated = 0
+    current_seq = start_no
+    
+    site_codes = {"Cigugur Tengah": "01", "Cibeureum": "02", "Leuwigajah": "03"}
+    
+    # Map Romawi lengkap untuk bulan (I - XII)
+    MONTH_ROMAN = {
+        1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 
+        7: "VII", 8: "VIII", 9: "IX", 10: "X", 11: "XI", 12: "XII"
+    }
+    month_roman = MONTH_ROMAN.get(sign_date.month, "I")
+    year_str = str(sign_date.year)
+
+    for inv, room in results:
+        site_key = room.rusunawa.value if hasattr(room.rusunawa, 'value') else str(room.rusunawa)
+        rusun_code = site_codes.get(site_key, "00")
+        
+        # Format nomor: 974/TX/SITE.SEQ/UPTD.RSN/ROMAN/YEAR
+        doc_no = f"974/{short_type}/{rusun_code}.{current_seq}/UPTD.RSN/{month_roman}/{year_str}"
+        
+        # Update field sesuai tipe teguran
+        if doc_type == DocumentType.teguran1:
+            inv.teguran1_number = doc_no
+            inv.teguran1_date = sign_date
+        elif doc_type == DocumentType.teguran2:
+            inv.teguran2_number = doc_no
+            inv.teguran2_date = sign_date
+        elif doc_type == DocumentType.teguran3:
+            inv.teguran3_number = doc_no
+            inv.teguran3_date = sign_date
+            
+        inv.document_type = doc_type
+        inv.due_date = deadline_date # Update tenggat bayar di surat teguran
+        if notes:
+            inv.notes = notes
+
+        # Pastikan denda terhitung
+        _recalculate_penalty(inv, session)
+        
+        session.add(inv)
+        count_updated += 1
+        current_seq += 1
+
+    session.commit()
+    
+    return {
+        "success": True,
+        "updated": count_updated,
+        "message": f"Berhasil memproses {count_updated} surat {doc_type}."
+    }
+
+
+@router.post("/mass-generate-teguran", status_code=201)
+def mass_generate_teguran_endpoint(
+    req: InvoiceTeguranMassGenerate,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+) -> Dict[str, Any]:
+    """Trigger manual untuk generate Surat Teguran 1, 2, atau 3 secara massal."""
+    try:
+        return internal_mass_generate_teguran(
+            session=session,
+            doc_type=req.doc_type,
+            period_month=req.period_month,
+            period_year=req.period_year,
+            sign_date=req.sign_date,
+            deadline_date=req.deadline_date,
+            start_no=req.start_no,
+            building=req.building,
+            notes=req.notes
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Gagal generate teguran massal: {str(e)}")
 
 @router.get("/{invoice_id}", response_model=InvoiceRead)
 def get_invoice(
