@@ -16,9 +16,56 @@ from sqlmodel import Session, select
 from app.core.db import engine, create_db_and_tables
 from app.models.user import User, UserRole
 from app.models.room import Room, RusunawaSite, RoomStatus, make_room_number
+from app.models.staff import Staff
+from app.models.tenant import Tenant
 from app.core.security import hash_password
+import pandas as pd
+import re
+import os
+from datetime import datetime
 
 ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
+
+# Translation map for Indonesian months to English
+ID_MONTHS = {
+    'Januari': 'January', 'Februari': 'February', 'Maret': 'March',
+    'April': 'April', 'Mei': 'May', 'Juni': 'June',
+    'Juli': 'July', 'Agustus': 'August', 'September': 'September',
+    'Oktober': 'October', 'November': 'November', 'Desember': 'December',
+    'Jan': 'Jan', 'Feb': 'Feb', 'Mar': 'Mar', 'Apr': 'Apr',
+    'Mei': 'May', 'Jun': 'Jun', 'Jul': 'Jul', 'Agu': 'Aug',
+    'Sep': 'Sep', 'Okt': 'Oct', 'Nov': 'Nov', 'Des': 'Dec',
+    'jan': 'Jan', 'feb': 'Feb', 'mar': 'Mar', 'apr': 'Apr',
+    'mei': 'May', 'jun': 'Jun', 'jul': 'Jul', 'agu': 'Aug',
+    'sep': 'Sep', 'okt': 'Oct', 'nov': 'Nov', 'des': 'Dec'
+}
+
+def clean_date_str(val):
+    if pd.isna(val) or str(val).strip() in ["", "-", "0"]:
+        return None
+    
+    s = str(val).strip()
+    s = s.rstrip('.')
+    
+    # Handle formats like "Januari 2018"
+    if re.match(r'^[a-zA-Z]+\s+\d{4}$', s):
+        # Add a default day
+        s = f"01 {s}"
+
+    # Replace Indonesian month names with English
+    for id_m, en_m in ID_MONTHS.items():
+        if id_m in s:
+            s = s.replace(id_m, en_m)
+            break
+            
+    try:
+        # Try parsing various formats
+        parsed = pd.to_datetime(s, dayfirst=True, errors='coerce')
+        if pd.isna(parsed):
+            return None
+        return parsed.date()
+    except:
+        return None
 
 # ─── Harga sewa per (rusunawa, gedung, lantai) ─────────────────────────────
 # Format: (rusunawa_site, gedung, lantai) -> harga
@@ -228,7 +275,7 @@ def seed_admin(session: Session):
 def seed_rooms(session: Session):
     existing_count = len(session.exec(select(Room)).all())
     if existing_count > 0:
-        print(f"ℹ️  Data kamar sudah ada ({existing_count} kamar). Seed dilewati.")
+        print(f"[INFO] Data kamar sudah ada ({existing_count} kamar). Seed dilewati.")
         return
 
     rooms = generate_rooms()
@@ -301,6 +348,101 @@ def seed_staff(session: Session):
     print(f"[OK] Berhasil seeding {len(staff_data)} data pengurus/staff.")
 
 
+def seed_tenants(session: Session):
+    """Seed tenants from CSV file in app/seeds/data/."""
+    csv_path = "seeds/data/cibeureum_tenants.csv"
+    if not os.path.exists(csv_path):
+        # Check relative to app directory if needed, but usually run from backend root
+        alt_path = "app/" + csv_path
+        if os.path.exists(alt_path):
+            csv_path = alt_path
+        else:
+            print(f"[INFO] Data tenants ({csv_path}) tidak ditemukan. Seeding tenants dilewati.")
+            return
+
+    print(f"[START] Memproses data tenants dari {csv_path}...")
+    try:
+        raw_df = pd.read_csv(csv_path, sep=';', skiprows=2, header=None)
+    except Exception as e:
+        print(f"[ERROR] Gagal membaca CSV tenants: {e}")
+        return
+
+    count = 0
+    for index, row in raw_df.iterrows():
+        if pd.isna(row[2]) or str(row[2]).strip() == "":
+            continue # Skip empty rows
+            
+        name = str(row[2]).strip()
+        id_penghuni = str(row[3]).strip().replace("'", "")
+        
+        # Data Cleaning
+        def to_clean_str(val):
+            if pd.isna(val): return ""
+            s = str(val).strip()
+            if s.endswith('.0'): return s[:-2]
+            return s
+
+        building = to_clean_str(row[4])
+        floor_roman = to_clean_str(row[5])
+        unit = to_clean_str(row[6])
+        tgl_str = str(row[7])
+        
+        contract_start = clean_date_str(tgl_str)
+        if not contract_start:
+            contract_start = datetime(2024, 1, 1).date()
+        
+        contract_end = contract_start.replace(year=contract_start.year + 2)
+        
+        # Find Room
+        room_number = f"Cibeureum - {building} {floor_roman} {unit}"
+        room = session.exec(select(Room).where(Room.room_number == room_number)).first()
+        
+        if not room:
+            # print(f"   [!] Kamar {room_number} tidak ditemukan. Dilewati.")
+            continue
+            
+        # Create/Update User
+        email = f"{id_penghuni}@rusunawa.com"
+        user = session.exec(select(User).where(User.email == email)).first()
+        if not user:
+            user = User(
+                email=email,
+                name=name,
+                role=UserRole.penghuni,
+                password_hash=hash_password("password123"),
+                is_active=True
+            )
+            session.add(user)
+            session.flush()
+        else:
+            user.name = name
+            session.add(user)
+        
+        # Create/Update Tenant
+        tenant = session.exec(select(Tenant).where(Tenant.user_id == user.id)).first()
+        if not tenant:
+            tenant = Tenant(
+                user_id=user.id,
+                room_id=room.id,
+                contract_start=contract_start,
+                contract_end=contract_end,
+                nik=id_penghuni.ljust(16, '0')[:16],
+                is_active=True
+            )
+        else:
+            tenant.room_id = room.id
+            tenant.contract_start = contract_start
+            tenant.contract_end = contract_end
+        
+        session.add(tenant)
+        room.status = RoomStatus.isi
+        session.add(room)
+        count += 1
+
+    session.commit()
+    print(f"[OK] Berhasil seeding {count} data tenants Cibeureum.")
+
+
 def seed():
     create_db_and_tables()
     with Session(engine) as session:
@@ -308,7 +450,7 @@ def seed():
         seed_admin(session)
         seed_rooms(session)
         seed_staff(session)
-        # seed_tenants(session) 
+        seed_tenants(session) 
         print("[SUCCESS] Seeding database selesai!")
 
 
