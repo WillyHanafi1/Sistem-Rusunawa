@@ -13,7 +13,7 @@ class TenantBase(SQLModel):
     notes: Optional[str] = None
     is_active: bool = True
     renewal_count: int = Field(default=0)
-    nik: str = Field(max_length=16, min_length=16, index=True)
+    nik: str = Field(max_length=16, min_length=1, index=True)
 
     # Profile / Bio Data
     place_of_birth: Optional[str] = None
@@ -55,7 +55,7 @@ class TenantUpdate(SQLModel):
     is_active: Optional[bool] = None
     ktp_doc_path: Optional[str] = None
     kk_doc_path: Optional[str] = None
-    nik: Optional[str] = Field(default=None, max_length=16, min_length=16)
+    nik: Optional[str] = Field(default=None, max_length=16, min_length=1)
     
     # Bio Updates
     place_of_birth: Optional[str] = None

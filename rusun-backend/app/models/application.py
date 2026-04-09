@@ -12,7 +12,7 @@ class ApplicationStatus(str, Enum):
     contract_created = "contract_created"
 
 class ApplicationBase(SQLModel):
-    nik: str = Field(index=True, max_length=16, min_length=16)
+    nik: str = Field(index=True, max_length=16, min_length=1)
     full_name: str
     phone_number: str
     email: str
@@ -76,7 +76,7 @@ class ApplicationRead(ApplicationBase):
     id: int
 
 class ApplicationUpdate(SQLModel):
-    nik: Optional[str] = Field(default=None, max_length=16, min_length=16)
+    nik: Optional[str] = Field(default=None, max_length=16, min_length=1)
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None

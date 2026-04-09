@@ -87,7 +87,7 @@ class InvoiceTeguranMassGenerate(SQLModel):
     period_month: int
     period_year: int
     sign_date: date
-    deadline_date: date
+    deadline_date: Optional[date] = None
     start_no: int
     building: Optional[str] = None
     notes: Optional[str] = None

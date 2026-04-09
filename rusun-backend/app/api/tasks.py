@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
+from sqlalchemy import case
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, List, Optional
 from decimal import Decimal
@@ -12,7 +13,7 @@ from app.models.user import User
 from app.core.config import settings
 from app.api.invoices import internal_mass_generate_invoices
 from app.models.sequence import SystemSequence
-from app.models.room import Room
+from app.models.room import Room, RusunawaSite
 from app.models.tenant import Tenant
 
 class MassEscalateRequest(BaseModel):
@@ -65,7 +66,25 @@ def handle_overdue_processing(
     today_day = now.day
     
     # 1. Ambil semua invoice yang belum lunas
-    statement = select(Invoice).where(Invoice.status == InvoiceStatus.unpaid)
+    statement = (
+        select(Invoice)
+        .join(Tenant, Invoice.tenant_id == Tenant.id)
+        .join(Room, Tenant.room_id == Room.id)
+        .where(Invoice.status == InvoiceStatus.unpaid)
+        .order_by(
+            case(
+                {
+                    RusunawaSite.cigugur_tengah: 1,
+                    RusunawaSite.cibeureum: 2,
+                    RusunawaSite.leuwigajah: 3
+                },
+                value=Room.rusunawa
+            ),
+            Room.building,
+            Room.floor,
+            Room.unit_number
+        )
+    )
     unpaid_invoices = session.exec(statement).all()
     
     processed_count = 0
@@ -118,20 +137,23 @@ def handle_overdue_processing(
                 
                 if inv.document_type == DocumentType.strd:
                     inv.document_type = DocumentType.teguran1
-                    inv.teguran1_number = format_teguran_number(code, "T1", next_seq, now.month, now.year)
+                    inv.teguran1_number = format_document_number(code, "T1", next_seq, now.month, now.year)
                     inv.teguran1_date = now.date()
+                    inv.due_date = now.date() + timedelta(days=7)
                     inv.document_status_updated_at = now
                     changed = True
                 elif inv.document_type == DocumentType.teguran1:
                     inv.document_type = DocumentType.teguran2
-                    inv.teguran2_number = format_teguran_number(code, "T2", next_seq, now.month, now.year)
+                    inv.teguran2_number = format_document_number(code, "T2", next_seq, now.month, now.year)
                     inv.teguran2_date = now.date()
+                    inv.due_date = now.date() + timedelta(days=7)
                     inv.document_status_updated_at = now
                     changed = True
                 elif inv.document_type == DocumentType.teguran2:
                     inv.document_type = DocumentType.teguran3
-                    inv.teguran3_number = format_teguran_number(code, "T3", next_seq, now.month, now.year)
+                    inv.teguran3_number = format_document_number(code, "T3", next_seq, now.month, now.year)
                     inv.teguran3_date = now.date()
+                    inv.due_date = now.date() + timedelta(days=7)
                     inv.document_status_updated_at = now
                     changed = True
         
@@ -249,11 +271,26 @@ def mass_escalate_documents(
     # Cari semua invoice unpaid dengan document_type = source, di periode yang ditentukan
     statement = (
         select(Invoice)
+        .join(Tenant, Invoice.tenant_id == Tenant.id)
+        .join(Room, Tenant.room_id == Room.id)
         .where(
             Invoice.status == InvoiceStatus.unpaid,
             Invoice.document_type == source_doc,
             Invoice.period_month == payload.period_month,
             Invoice.period_year == payload.period_year,
+        )
+        .order_by(
+            case(
+                {
+                    RusunawaSite.cigugur_tengah: 1,
+                    RusunawaSite.cibeureum: 2,
+                    RusunawaSite.leuwigajah: 3
+                },
+                value=Room.rusunawa
+            ),
+            Room.building,
+            Room.floor,
+            Room.unit_number
         )
     )
     eligible_invoices = session.exec(statement).all()
@@ -315,23 +352,27 @@ def mass_escalate_documents(
                 inv.electricity_charge + inv.other_charge + inv.penalty_amount
             )
             inv.document_type = DocumentType.strd
-            inv.strd_number = format_document_number(code, "STRD", current_seq, now.month, now.year)
+            inv.strd_number = format_document_number(code, "STRD", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.strd_date = effective_sign_date
+            inv.due_date = effective_sign_date + timedelta(days=7)
 
         elif target == DocumentType.teguran1:
             inv.document_type = DocumentType.teguran1
-            inv.teguran1_number = format_document_number(code, "T1", current_seq, now.month, now.year)
+            inv.teguran1_number = format_document_number(code, "T1", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.teguran1_date = effective_sign_date
+            inv.due_date = effective_sign_date + timedelta(days=7)
                 
         elif target == DocumentType.teguran2:
             inv.document_type = DocumentType.teguran2
-            inv.teguran2_number = format_document_number(code, "T2", current_seq, now.month, now.year)
+            inv.teguran2_number = format_document_number(code, "T2", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.teguran2_date = effective_sign_date
+            inv.due_date = effective_sign_date + timedelta(days=7)
                 
         elif target == DocumentType.teguran3:
             inv.document_type = DocumentType.teguran3
-            inv.teguran3_number = format_document_number(code, "T3", current_seq, now.month, now.year)
+            inv.teguran3_number = format_document_number(code, "T3", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.teguran3_date = effective_sign_date
+            inv.due_date = effective_sign_date + timedelta(days=7)
                 
         inv.document_status_updated_at = now
         session.add(inv)

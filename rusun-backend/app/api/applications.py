@@ -80,7 +80,7 @@ async def create_application(
         )
 
     # Security: Validate NIK (Must be 16 digits)
-    if not re.match(r"^\d{16}$", nik):
+    if not re.match(r"^\d{10,16}$", nik):
         raise HTTPException(status_code=400, detail="NIK tidak valid. Harus 16 digit angka.")
 
     # Helper to save files (Sanitized)

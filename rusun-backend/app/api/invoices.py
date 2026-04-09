@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
+from sqlalchemy import case
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 import math
@@ -318,7 +319,7 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         "nik": t_nik,
         "id_penghuni": id_penghuni_code,
         "id_kamar": id_penghuni_code,
-        "alamat_hunian": f"{r_bu} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
+        "alamat_hunian": f"{r_bu.split(' - ')[-1]} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
         
         # Lokasi & Unit
         "unit": r_num,
@@ -443,7 +444,7 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "nik": t_nik,
                 "id_penghuni": id_penghuni_code,
                 "id_kamar": id_penghuni_code,
-                "alamat_hunian": f"{r_bu} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
+                "alamat_hunian": f"{r_bu.split(' - ')[-1]} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
 
                 # Lokasi & Unit
                 "unit": r_num,
@@ -587,7 +588,7 @@ def _process_bulk_pdf_background(
                     "nik": t_nik,
                     "id_penghuni": id_penghuni_code,
                     "id_kamar": id_penghuni_code,
-                    "alamat_hunian": f"{r_bu} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
+                    "alamat_hunian": f"{r_bu.split(' - ')[-1]} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
                     "unit": r_num,
                     "room_number": r_num,
                     "gedung": r_bu,
@@ -716,7 +717,19 @@ def internal_mass_generate_invoices(
         select(Tenant)
         .join(Room, Tenant.room_id == Room.id)
         .where(Tenant.is_active == True)
-        .order_by(Room.rusunawa, Room.building, Room.floor, Room.unit_number)
+        .order_by(
+            case(
+                {
+                    RusunawaSite.cigugur_tengah: 1,
+                    RusunawaSite.cibeureum: 2,
+                    RusunawaSite.leuwigajah: 3
+                },
+                value=Room.rusunawa
+            ),
+            Room.building,
+            Room.floor,
+            Room.unit_number
+        )
     )
     active_tenants = session.exec(query).all()
     print(f"[Mass Generate] Period: {period_month}/{period_year}, Found {len(active_tenants)} active tenants.")
@@ -865,7 +878,7 @@ def internal_mass_generate_teguran(
     period_month: int,
     period_year: int,
     sign_date: date,
-    deadline_date: date,
+    deadline_date: Optional[date],  # Now ignored/computed internally
     start_no: int,
     building: Optional[str] = None,
     notes: Optional[str] = None
@@ -886,6 +899,18 @@ def internal_mass_generate_teguran(
         Invoice.period_month == period_month,
         Invoice.period_year == period_year,
         Invoice.status.in_([InvoiceStatus.unpaid, InvoiceStatus.overdue])
+    ).order_by(
+        case(
+            {
+                RusunawaSite.cigugur_tengah: 1,
+                RusunawaSite.cibeureum: 2,
+                RusunawaSite.leuwigajah: 3
+            },
+            value=Room.rusunawa
+        ),
+        Room.building,
+        Room.floor,
+        Room.unit_number
     )
     
     # Filter gedung jika ada
@@ -900,6 +925,9 @@ def internal_mass_generate_teguran(
     # 3. Proses update
     count_updated = 0
     current_seq = start_no
+    
+    # Otomatisasi tenggat: 7 hari setelah tanggal tanda tangan
+    effective_deadline = sign_date + timedelta(days=7)
     
     site_codes = {"Cigugur Tengah": "01", "Cibeureum": "02", "Leuwigajah": "03"}
     
@@ -930,7 +958,7 @@ def internal_mass_generate_teguran(
             inv.teguran3_date = sign_date
             
         inv.document_type = doc_type
-        inv.due_date = deadline_date # Update tenggat bayar di surat teguran
+        inv.due_date = effective_deadline # Update tenggat bayar di surat teguran
         if notes:
             inv.notes = notes
 
