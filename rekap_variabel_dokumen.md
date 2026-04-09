@@ -45,6 +45,7 @@ Variabel untuk administrasi surat-menyurat.
 | `{{ tanggal_surat }}` | `Invoice` | Tanggal tanda tangan (Bhs Indo) | 27 Januari 2026 |
 | `{{ tanggal_ttd }}` | `Invoice` | Alias untuk `tanggal_surat` | 27 Januari 2026 |
 | `{{ tanggal_cetak }}` | System Time | Tanggal download dokumen | 08-04-2026 |
+| `{{ tenggat_bayar }}` | `Invoice.due_date` | Batas akhir pembayaran (Teguran) | 03 Februari 2026 |
 | `{{ tahun }}` | System Time | Tahun saat ini | 2026 |
 
 ---
@@ -73,7 +74,9 @@ Seluruh variabel biaya diformat dengan tanda titik sebagai pemisah ribuan (Forma
 | `{{ other_price }}` | `Invoice.other_charge` | Biaya lain-lain | 0 |
 | `{{ additional_price }}` | `Sum(Charges)` | Total biaya non-sewa | 365.500 |
 | `{{ penalty_price }}` | `Invoice.penalty_amount` | Denda 2% | 9.600 |
+| `{{ denda }}` | `Invoice.penalty_amount` | Alias untuk `penalty_price` | 9.600 |
 | `{{ total_tagihan }}` | `Invoice.total_amount` | Total Tagihan Netto | 825.100 |
+| `{{ total_bayar }}` | `Invoice.total_amount` | Alias untuk `total_tagihan` | 825.100 |
 | `{{ total_price_words }}` | `terbilang()` | Ejaan Total Terbilang | #Delapan Ratus...# |
 
 ---

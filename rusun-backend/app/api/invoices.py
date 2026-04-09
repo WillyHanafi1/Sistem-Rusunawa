@@ -343,6 +343,7 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
         "tahun_tagihan": str(inv_obj.period_year),
         "year": str(inv_obj.period_year),
+        "tenggat_bayar": (inv_obj.due_date or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
         
         # Rincian Biaya
         "sewa_price": fmt_decimal(inv_obj.base_rent),
@@ -466,6 +467,7 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
                 "tahun_tagihan": str(inv_obj.period_year),
                 "year": str(inv_obj.period_year),
+                "tenggat_bayar": (inv_obj.due_date or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
 
                 # Rincian Biaya
                 "sewa_price": fmt_decimal(inv_obj.base_rent),
