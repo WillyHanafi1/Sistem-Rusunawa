@@ -329,8 +329,8 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         "lantai": str(r_fl),
         "floor": str(r_fl),
         "floor_roman": ROMAN.get(r_fl, str(r_fl)),
-        "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
-        "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+        "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
+        "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
         "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
         
         # Data Surat
@@ -454,8 +454,8 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "lantai": str(r_fl),
                 "floor": str(r_fl),
                 "floor_roman": ROMAN.get(r_fl, str(r_fl)),
-                "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
-                "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+                "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
+                "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
                 "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
 
                 # Data Surat
@@ -596,8 +596,8 @@ def _process_bulk_pdf_background(
                     "lantai": str(r_fl),
                     "floor": str(r_fl),
                     "floor_roman": ROMAN.get(r_fl, str(r_fl)),
-                    "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
-                    "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)).upper(),
+                    "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
+                    "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
                     "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
                     "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
                     "invoice_number": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
