@@ -141,6 +141,38 @@ def update_tenant(
     for key, value in update_data.items():
         setattr(tenant, key, value)
 
+    # Cascade motor_count change to unpaid/overdue invoices
+    if "motor_count" in update_data:
+        from app.models.invoice import Invoice, InvoiceStatus, MOTOR_RATE
+        from app.api.invoices import _recalculate_penalty
+        from decimal import Decimal
+        from datetime import date
+
+        today = date.today()
+        # Hanya ubah tagihan bulan ini dan bulan-bulan ke depan, masa lalu biarkan
+        unpaid_invoices = session.exec(
+            select(Invoice).where(
+                Invoice.tenant_id == tenant.id,
+                Invoice.status.in_([InvoiceStatus.unpaid, InvoiceStatus.overdue]),
+                (Invoice.period_year > today.year) | 
+                ((Invoice.period_year == today.year) & (Invoice.period_month >= today.month))
+            )
+        ).all()
+
+        for inv in unpaid_invoices:
+            inv.parking_charge = Decimal(str(tenant.motor_count)) * MOTOR_RATE
+            inv.total_amount = (
+                (inv.base_rent or Decimal("0")) +
+                (inv.water_charge or Decimal("0")) +
+                (inv.electricity_charge or Decimal("0")) +
+                inv.parking_charge +
+                (inv.other_charge or Decimal("0")) +
+                (inv.penalty_amount or Decimal("0"))
+            )
+            session.add(inv)
+            # Recalculate penalty proactively if overdue, so total stays correct
+            _recalculate_penalty(inv, session)
+
     # Jika is_active diubah menjadi False -> kamarnya kosong lagi
     if "is_active" in update_data and not update_data["is_active"]:
         room = session.get(Room, tenant.room_id)

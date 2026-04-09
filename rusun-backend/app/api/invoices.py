@@ -9,7 +9,7 @@ from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
 from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceTeguranMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
 from app.models.tenant import Tenant
-from app.models.room import Room, ROMAN, ROMAN_TO_INT
+from app.models.room import Room, ROMAN, ROMAN_TO_INT, RusunawaSite
 from app.models.user import User, UserRole
 from app.core.config import settings
 from app.core.document_service import DocumentService
@@ -283,7 +283,8 @@ def get_print_token(
 
 
 # Helpers
-def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_type: Optional[DocumentType] = None) -> Response:
+def _prepare_invoice_context(result: Any, session: Session, doc_type: Optional[DocumentType] = None) -> Dict[str, Any]:
+    """Helper to prepare the data dictionary (context) used by docxtpl."""
     inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = result
     
     if not doc_type:
@@ -297,7 +298,6 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
     # Pembuatan ID Penghuni (8 digit kode kamar)
     room_obj = session.get(Room, inv_obj.tenant.room_id) if hasattr(inv_obj, 'tenant') and inv_obj.tenant else None
     if not room_obj:
-        # Fallback query if relationship is not loaded
         room_obj = session.exec(select(Room).join(Tenant, Tenant.room_id == Room.id).where(Tenant.id == inv_obj.tenant_id)).first()
     
     id_penghuni_code = get_room_code(room_obj) if room_obj else t_nik
@@ -311,6 +311,10 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
             display_penalty = (inv_obj.base_rent + inv_obj.parking_charge) * Decimal(str(settings.PENALTY_RATE))
             display_penalty = display_penalty.quantize(Decimal("0.01"))
             display_total = inv_obj.base_rent + inv_obj.parking_charge + inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.other_charge + display_penalty
+
+    def fmt_date(d: Optional[date]):
+        if not d: d = date.today()
+        return d.strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember")
 
     context = {
         # Identitas Dasar
@@ -336,15 +340,15 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         # Data Surat
         "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
         "invoice_number": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
-        "tanggal_surat": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
-        "tanggal_ttd": (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+        "tanggal_surat": fmt_date(getattr(inv_obj, f"{doc_type.value}_date", None)),
+        "tanggal_ttd": fmt_date(getattr(inv_obj, f"{doc_type.value}_date", None)),
         
         # Periode
         "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
         "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
         "tahun_tagihan": str(inv_obj.period_year),
         "year": str(inv_obj.period_year),
-        "tenggat_bayar": (inv_obj.due_date or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+        "tenggat_bayar": fmt_date(inv_obj.due_date),
         
         # Rincian Biaya
         "sewa_price": fmt_decimal(inv_obj.base_rent),
@@ -360,6 +364,38 @@ def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_
         "total_price": fmt_decimal(display_total),
         "total_price_words": f"#{terbilang(int(display_total))}#"
     }
+    return context
+
+def pre_generate_invoices_task(invoice_ids: List[int]):
+    """Background task to pre-generate PDF documents for a list of invoices."""
+    from app.core.db import engine
+    with Session(engine) as session:
+        for inv_id in invoice_ids:
+            try:
+                statement = select(
+                    Invoice, Room.number, Room.rusunawa, Room.building, Room.floor, Room.unit_number, Tenant.name, Tenant.nik
+                ).join(Tenant, Invoice.tenant_id == Tenant.id).join(Room, Tenant.room_id == Room.id).where(Invoice.id == inv_id)
+                
+                result = session.exec(statement).first()
+                if not result: continue
+                
+                inv_obj = result[0]
+                doc_type = inv_obj.document_type
+                
+                context = _prepare_invoice_context(result, session, doc_type)
+                # Note: DocumentService uses a thread lock internally
+                DocumentService.generate_invoice_document(context, doc_type.value, inv_id)
+            except Exception as e:
+                print(f"[BG PDF] Error ID {inv_id}: {str(e)}")
+
+def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_type: Optional[DocumentType] = None) -> Response:
+    inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = result
+    
+    if not doc_type:
+        doc_type = inv_obj.document_type
+
+    context = _prepare_invoice_context(result, session, doc_type)
+
 
     try:
         file_path = DocumentService.generate_invoice_document(context, doc_type.value, invoice_id)
@@ -550,75 +586,16 @@ def _process_bulk_pdf_background(
     
         merger = PdfWriter()
         temp_files_to_merge = 0
-        months_id = {
-            1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
-            7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
-        }
-
         try:
             for i, row in enumerate(results):
                 # Update progress
                 _bulk_print_jobs[job_id]["processed"] = i
                 
-                inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = row
+                inv_obj = row[0] # The first item in the Tuple is the Invoice object
                 actual_doc_type = doc_type or inv_obj.document_type
                 
-                class TempRoom: pass
-                tr = TempRoom()
-                tr.rusunawa = r_ru
-                tr.building = r_bu
-                tr.floor = r_fl
-                tr.unit_number = r_un
-                
-                id_penghuni_code = get_room_code(tr) # type: ignore
+                context = _prepare_invoice_context(row, session, actual_doc_type)
 
-                display_penalty = inv_obj.penalty_amount or Decimal(0)
-                display_total = inv_obj.total_amount or Decimal(0)
-                
-                # Jika user meminta preview STRD/Teguran tapi di DB denda belum diupdate (masih 0)
-                if actual_doc_type in (DocumentType.strd, DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3):
-                    if display_penalty == Decimal(0):
-                        display_penalty = (inv_obj.base_rent + inv_obj.parking_charge) * Decimal(str(settings.PENALTY_RATE))
-                        display_penalty = display_penalty.quantize(Decimal("0.01"))
-                        display_total = inv_obj.base_rent + inv_obj.parking_charge + inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.other_charge + display_penalty
-
-                context = {
-                    "nama_penyewa": t_name,
-                    "nama": t_name,
-                    "nik": t_nik,
-                    "id_penghuni": id_penghuni_code,
-                    "id_kamar": id_penghuni_code,
-                    "alamat_hunian": f"{r_bu.split(' - ')[-1]} {ROMAN.get(r_fl, str(r_fl))} {r_un}",
-                    "unit": r_num,
-                    "room_number": r_num,
-                    "gedung": r_bu,
-                    "building": r_bu,
-                    "lantai": str(r_fl),
-                    "floor": str(r_fl),
-                    "floor_roman": ROMAN.get(r_fl, str(r_fl)),
-                    "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
-                    "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
-                    "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
-                    "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
-                    "invoice_number": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
-                    "tanggal_surat": (getattr(inv_obj, f"{actual_doc_type.value}_date", None) or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
-                    "bulan_tagihan": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
-                    "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
-                    "tahun_tagihan": str(inv_obj.period_year),
-                    "year": str(inv_obj.period_year),
-                    "sewa_price": fmt_decimal(inv_obj.base_rent),
-                    "parking_price": fmt_decimal(inv_obj.parking_charge),
-                    "water_price": fmt_decimal(inv_obj.water_charge),
-                    "electricity_price": fmt_decimal(inv_obj.electricity_charge),
-                    "other_price": fmt_decimal(inv_obj.other_charge),
-                    "additional_price": fmt_decimal(inv_obj.water_charge + inv_obj.electricity_charge + inv_obj.parking_charge + inv_obj.other_charge),
-                    "penalty_price": fmt_decimal(display_penalty),
-                    "total_tagihan": fmt_decimal(display_total),
-                    "denda": fmt_decimal(display_penalty),
-                    "total_bayar": fmt_decimal(display_total),
-                    "total_price": fmt_decimal(display_total),
-                    "total_price_words": f"#{terbilang(int(display_total))}#"
-                }
                 file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
                 full_path = os.path.abspath(file_path)
                 if full_path.endswith(".pdf"):
@@ -709,6 +686,7 @@ def internal_mass_generate_invoices(
     other_charge: Decimal = Decimal("0"),
     start_skrd_no: Optional[int] = None,
     notes: str = "Otomatisasi bulanan",
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """Logika inti pembuatan invoice massal."""
     # 1. Ambil semua penghuni aktif, urutkan agar penomoran rapi
@@ -831,32 +809,69 @@ def internal_mass_generate_invoices(
             skrd_number=skrd_number,
             skrd_date=effective_skrd_date,
         )
+        
+        # Attach preview data if it's a dry run
+        if dry_run:
+            from app.models.user import User
+            user = session.exec(select(User).where(User.id == tenant.user_id)).first()
+            tenant_name = user.name if user else "Unknown"
+            room_label = f"{room.building.split(' - ')[-1]} {ROMAN.get(room.floor, str(room.floor))} {room.unit_number}"
+            rusunawa_name = room.rusunawa.value if hasattr(room.rusunawa, 'value') else str(room.rusunawa)
+            
+            inv._preview = {
+                "tenant_name": tenant_name,
+                "room_label": room_label,
+                "rusunawa": rusunawa_name,
+                "base_rent": float(base_rent),
+                "parking_charge": float(parking_charge),
+                "penalty_amount": 0.0,
+                "total_amount": float(total)
+            }
+
         new_invoices.append(inv)
 
+    if dry_run:
+        return {
+            "success": True,
+            "generated": len(new_invoices),
+            "total_active": len(active_tenants),
+            "message": f"Ditemukan {len(new_invoices)} penghuni yang akan di-generate tagihan.",
+            "dry_run": True,
+            "preview_data": [i._preview for i in new_invoices]
+        }
+
     # 5. Bulk insert jika ada yang baru
+
     count_generated = len(new_invoices)
+    invoice_ids = []
     if count_generated > 0:
         session.add_all(new_invoices)
         session.commit()
+        # Refresh to get IDs
+        invoice_ids = [inv.id for inv in new_invoices]
 
     return {
         "success": True, 
         "generated": count_generated, 
+        "invoice_ids": invoice_ids,
         "total_active": len(active_tenants),
         "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids) + (len(active_tenants) - count_generated - len(billed_tenant_ids))} tagihan sudah ada/di-skip."
     }
 
 
 
+
 @router.post("/mass-generate", status_code=201)
 def mass_generate_invoices(
     mass_in: InvoiceMassGenerate,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     _: User = Depends(require_admin),
 ) -> Dict[str, Any]:
+
     """Generate tagihan bulanan untuk SEMUA penghuni aktif yang belum punya invoice di bulan/tahun tsb."""
     try:
-        return internal_mass_generate_invoices(
+        result = internal_mass_generate_invoices(
             session=session,
             period_month=mass_in.period_month,
             period_year=mass_in.period_year,
@@ -864,8 +879,16 @@ def mass_generate_invoices(
             sign_date=mass_in.sign_date,
             other_charge=Decimal(str(mass_in.other_charge or 0)),
             start_skrd_no=mass_in.start_skrd_no,
-            notes=mass_in.notes or "Generate Massal"
+            notes=mass_in.notes or "Generate Massal",
+            dry_run=mass_in.dry_run
         )
+        
+        # Trigger background PDF generation for new invoices
+        if result.get("invoice_ids"):
+            background_tasks.add_task(pre_generate_invoices_task, result["invoice_ids"])
+            
+        return result
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -970,23 +993,28 @@ def internal_mass_generate_teguran(
         current_seq += 1
 
     session.commit()
+    invoice_ids = [inv.id for inv, room in results]
     
     return {
         "success": True,
         "updated": count_updated,
+        "invoice_ids": invoice_ids,
         "message": f"Berhasil memproses {count_updated} surat {doc_type}."
     }
+
 
 
 @router.post("/mass-generate-teguran", status_code=201)
 def mass_generate_teguran_endpoint(
     req: InvoiceTeguranMassGenerate,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     _: User = Depends(require_admin),
 ) -> Dict[str, Any]:
+
     """Trigger manual untuk generate Surat Teguran 1, 2, atau 3 secara massal."""
     try:
-        return internal_mass_generate_teguran(
+        result = internal_mass_generate_teguran(
             session=session,
             doc_type=req.doc_type,
             period_month=req.period_month,
@@ -997,6 +1025,13 @@ def mass_generate_teguran_endpoint(
             building=req.building,
             notes=req.notes
         )
+        
+        # Trigger background PDF generation
+        if result.get("invoice_ids"):
+            background_tasks.add_task(pre_generate_invoices_task, result["invoice_ids"])
+            
+        return result
+
     except Exception as e:
         import traceback
         traceback.print_exc()

@@ -119,6 +119,7 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
 
     const cfg = STATUS_CONFIG[invoice.status];
     const isUnpaidOrOverdue = invoice.status === "unpaid" || invoice.status === "overdue";
+    const isWarningDoc = invoice.document_type && invoice.document_type !== "skrd";
 
     const baseRent = Number(invoice.base_rent || 0);
     const parkingCharge = Number(invoice.parking_charge || 0);
@@ -129,11 +130,13 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
     const baseTotal = baseRent + parkingCharge + waterCharge + electricityCharge + otherCharge;
     const dbPenalty = Number(invoice.penalty_amount || 0);
 
-    const daysOverdueFrontend = invoice.status === "overdue" && invoice.due_date
+    // Hitung denda secara live jika belum lunas & sudah lewat jatuh tempo
+    const daysOverdueFrontend = isUnpaidOrOverdue && invoice.due_date
         ? Math.max(0, Math.floor((Date.now() - new Date(invoice.due_date).getTime()) / (1000 * 60 * 60 * 24)))
         : 0;
 
-    const dynamicPenalty = invoice.status === "overdue" && daysOverdueFrontend > 0
+    // Tampilkan denda 2% jika lewat jatuh tempo SKRD (dinamis atau status DB)
+    const dynamicPenalty = (invoice.status === "overdue" || daysOverdueFrontend > 0) && isUnpaidOrOverdue
         ? baseTotal * 0.02
         : dbPenalty;
 

@@ -39,6 +39,7 @@ class RoomExtendedRead(RoomRead):
     tenant_name: Optional[str] = None
     contract_start: Optional[date] = None
     contract_end: Optional[date] = None
+    motor_count: int = 0
     parking_price: Decimal = Decimal("0")
     total_unpaid_bill: Decimal = Decimal("0")
     notes: Optional[str] = None
@@ -116,7 +117,8 @@ def get_extended_rooms(
             data["notes"] = tenant.notes
             data["renewal_count"] = tenant.renewal_count
             
-            # Parking: motor_count * 30,000
+            # Parking: motor_count
+            data["motor_count"] = tenant.motor_count
             data["parking_price"] = Decimal(str(tenant.motor_count * 30000))
             
             # Total Bills
@@ -125,6 +127,7 @@ def get_extended_rooms(
             data["tenant_name"] = None
             data["contract_start"] = None
             data["contract_end"] = None
+            data["motor_count"] = 0
             data["parking_price"] = Decimal("0")
             data["total_unpaid_bill"] = Decimal("0")
 

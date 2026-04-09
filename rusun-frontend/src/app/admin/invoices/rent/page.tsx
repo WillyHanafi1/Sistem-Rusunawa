@@ -28,6 +28,7 @@ interface Room {
     tenant_id?: number | null;
     notes?: string | null;
     renewal_count?: number;
+    motor_count?: number;
 }
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -71,7 +72,15 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
         if (invoice.status === "paid") {
             return "bg-emerald-100 dark:bg-emerald-500/20 border-emerald-400 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-500/20";
         }
-        if (invoice.status === "overdue") {
+
+        // Status "warning" (STRD atau Teguran) harus tetap merah/berkedip meski status technically "unpaid"
+        const isWarningDoc = invoice.document_type && invoice.document_type !== "skrd";
+        
+        // Cek denda/overdue secara live di frontend (untuk antisipasi status DB belum update)
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isActuallyOverdue = invoice.status === "unpaid" && invoice.due_date && String(invoice.due_date) < todayStr;
+
+        if (invoice.status === "overdue" || (invoice.status === "unpaid" && isWarningDoc) || isActuallyOverdue) {
             return "bg-red-100 dark:bg-red-500/20 border-red-500 dark:border-red-500/60 text-red-700 dark:text-red-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-red-500/20 animate-pulse";
         }
         if (invoice.status === "unpaid") {
@@ -146,6 +155,7 @@ export default function RentInvoicesPage() {
     const [massActionPanelOpen, setMassActionPanelOpen] = useState(false);
     const [massActionTarget, setMassActionTarget] = useState<string>("skrd");
     const [massActionPreview, setMassActionPreview] = useState<{ count: number, message: string } | null>(null);
+    const [massActionPreviewData, setMassActionPreviewData] = useState<any[] | null>(null);
     const [isMassActionLoading, setIsMassActionLoading] = useState(false);
     const [massActionDone, setMassActionDone] = useState(false);
     const [massActionStartNo, setMassActionStartNo] = useState<number | undefined>(undefined);
@@ -177,6 +187,25 @@ export default function RentInvoicesPage() {
     const [filterStatus, setFilterStatus] = useState("");
     const [filterBilling, setFilterBilling] = useState(""); // billing-specific filter
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+
+    // --- Grouped Preview Data ---
+    const groupedPreviewData: Record<string, any[]> = useMemo(() => {
+        if (!massActionPreviewData) return {};
+        const grouped: Record<string, any[]> = {};
+        for (const item of massActionPreviewData) {
+            const rusunName = item.rusun_name || "Tidak Diketahui";
+            if (!grouped[rusunName]) {
+                grouped[rusunName] = [];
+            }
+            grouped[rusunName].push(item);
+        }
+        return grouped;
+    }, [massActionPreviewData]);
+
+    const grandTotalPreview = useMemo(() => {
+        if (!massActionPreviewData) return 0;
+        return massActionPreviewData.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+    }, [massActionPreviewData]);
 
     // --- Fetch rooms ---
     const fetchRooms = async () => {
@@ -293,13 +322,22 @@ export default function RentInvoicesPage() {
     const triggerMassPreview = useCallback(async () => {
         setIsMassActionLoading(true);
         setMassActionPreview(null);
+        setMassActionPreviewData(null);
         setMassActionDone(false);
         try {
             if (massActionTarget === "skrd") {
-                setMassActionPreview({
-                    count: -1,
-                    message: `Akan men-generate SKRD untuk seluruh penghuni aktif pada periode ${MONTHS_SHORT[massActionMonth - 1]} ${massActionYear}. Penghuni yang sudah memiliki tagihan di bulan ini akan di-skip otomatis.`
+                const dueDate = `${massActionYear}-${String(massActionMonth).padStart(2, '0')}-${String(skrdDueDay).padStart(2, '0')}`;
+                const res = await api.post("/invoices/mass-generate", {
+                    period_month: massActionMonth,
+                    period_year: massActionYear,
+                    due_date: dueDate,
+                    sign_date: massActionSignDate || null,
+                    start_skrd_no: skrdStartNo || null,
+                    notes: `Generate Massal Manual — ${MONTHS_SHORT[massActionMonth - 1]} ${massActionYear}`,
+                    dry_run: true
                 });
+                setMassActionPreview({ count: res.data.generated, message: res.data.message });
+                setMassActionPreviewData(res.data.preview_data || null);
             } else {
                 const res = await api.post("/tasks/mass-escalate", {
                     target_doc_type: massActionTarget,
@@ -308,13 +346,14 @@ export default function RentInvoicesPage() {
                     period_year: massActionYear
                 });
                 setMassActionPreview({ count: res.data.processed, message: res.data.message });
+                setMassActionPreviewData(res.data.preview_data || null);
             }
         } catch (err: any) {
             alert(err.response?.data?.detail || "Gagal memproses pratinjau");
         } finally {
             setIsMassActionLoading(false);
         }
-    }, [massActionTarget, massActionMonth, massActionYear]);
+    }, [massActionTarget, massActionMonth, massActionYear, skrdDueDay, massActionSignDate, skrdStartNo]);
 
     const confirmMassAction = async () => {
         // Validasi field wajib sebelum eksekusi
@@ -621,6 +660,44 @@ export default function RentInvoicesPage() {
                     );
                 }
                 return <span className="text-slate-300 dark:text-slate-600 italic text-xs">Belum ada</span>;
+            }
+        }),
+
+        // --- MOTOR COLUMN ---
+        columnHelper.accessor('motor_count', {
+            header: () => (
+                <div className="flex flex-col gap-1 items-center w-full min-w-[50px]">
+                    <span className="text-slate-500 font-semibold leading-tight pt-2">Motor</span>
+                </div>
+            ),
+            cell: info => {
+                const r = info.row.original;
+                if (!r.tenant_id || r.status !== 'isi') {
+                    return <div className="text-center"><span className="text-slate-300 dark:text-slate-600 text-[10px]">—</span></div>;
+                }
+                
+                return (
+                    <div className="flex justify-center items-center h-full">
+                        <select
+                            value={info.getValue() || 0}
+                            onChange={async (e) => {
+                                const newCount = parseInt(e.target.value);
+                                try {
+                                    await api.patch(`/tenants/${r.tenant_id}`, { motor_count: newCount });
+                                    fetchRooms();
+                                    fetchInvoicesForYear(filterYear);
+                                } catch (err: any) {
+                                    alert(err.response?.data?.detail || "Gagal mengupdate jumlah motor");
+                                }
+                            }}
+                            className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 rounded px-1.5 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500 font-bold text-center text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-slate-100 transition-colors"
+                        >
+                            {[0, 1, 2, 3, 4].map(num => (
+                                <option key={num} value={num}>{num}</option>
+                            ))}
+                        </select>
+                    </div>
+                );
             }
         }),
 
@@ -1169,6 +1246,75 @@ export default function RentInvoicesPage() {
                                         {!massActionDone && massActionPreview.count === 0 && massActionTarget !== "skrd" && (
                                             <p className="text-xs text-slate-500 mt-2">Tidak ada tagihan yang memenuhi kriteria saat ini.</p>
                                         )}
+                                    </div>
+                                )}
+
+                                {/* ====== Preview Data Grid ====== */}
+                                {massActionPreviewData && massActionPreviewData.length > 0 && !massActionDone && (
+                                    <div className="mt-8 space-y-6">
+                                        <h4 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+                                            <Layers className="w-5 h-5 text-blue-500" /> Detail Rincian Tagihan
+                                        </h4>
+                                        {Object.entries(groupedPreviewData).map(([rusunName, items]) => {
+                                            const subTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                                            return (
+                                                <div key={rusunName} className="border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                                                    <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
+                                                        <h5 className="font-bold text-slate-800 dark:text-white">{rusunName}</h5>
+                                                        <span className="text-xs font-semibold px-2 py-1 bg-white dark:bg-slate-700/50 rounded-lg text-slate-500">{items.length} Tagihan</span>
+                                                    </div>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-left max-w-full">
+                                                            <thead className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/5">
+                                                                <tr>
+                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Nama & Hunian</th>
+                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Tagihan Sewa</th>
+                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Biaya Motor</th>
+                                                                    {massActionTarget !== "skrd" && <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Denda (2%)</th>}
+                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Total</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                                                {items.map(item => (
+                                                                    <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                                                        <td className="px-4 py-3">
+                                                                            <div className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{item.tenant_name}</div>
+                                                                            <div className="text-xs text-slate-500 mt-0.5">{item.room_name}</div>
+                                                                        </td>
+                                                                        <td className="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Rp {item.base_rent.toLocaleString('id-ID')}</td>
+                                                                        <td className="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Rp {item.parking.toLocaleString('id-ID')}</td>
+                                                                        {massActionTarget !== "skrd" && <td className="px-4 py-3 text-right text-sm text-red-500 dark:text-red-400 font-medium whitespace-nowrap">Rp {item.penalty.toLocaleString('id-ID')}</td>}
+                                                                        <td className="px-4 py-3 text-right text-sm text-slate-800 dark:text-slate-200 font-bold whitespace-nowrap border-l border-slate-100 dark:border-white/5">Rp {item.total.toLocaleString('id-ID')}</td>
+                                                                    </tr>
+                                                                ))}
+                                                            </tbody>
+                                                            <tfoot className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-white/10">
+                                                                <tr>
+                                                                    <td colSpan={massActionTarget !== "skrd" ? 4 : 3} className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Subtotal {rusunName}</td>
+                                                                    <td className="px-4 py-3 text-right text-base text-blue-600 dark:text-blue-400 font-black whitespace-nowrap border-l border-slate-200 dark:border-white/10">Rp {subTotal.toLocaleString('id-ID')}</td>
+                                                                </tr>
+                                                            </tfoot>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* Grand Total & Final Execute Button */}
+                                        <div className="bg-blue-600 dark:bg-blue-500 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-blue-100 mb-1 tracking-wider uppercase">Grand Total {getMassActionLabel(massActionTarget)} ({MONTHS_SHORT[massActionMonth - 1]} {massActionYear})</h4>
+                                                <p className="text-3xl font-black">Rp {grandTotalPreview.toLocaleString('id-ID')}</p>
+                                            </div>
+                                            <button
+                                                onClick={confirmMassAction}
+                                                disabled={isMassActionLoading}
+                                                className="bg-white disabled:bg-white/50 text-blue-600 disabled:text-blue-600/50 hover:bg-blue-50 px-6 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shrink-0"
+                                            >
+                                                {isMassActionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
+                                                Eksekusi Sekarang
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
 

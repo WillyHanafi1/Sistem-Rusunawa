@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+
 from sqlmodel import Session, select
 from sqlalchemy import case
 from datetime import datetime, date, timezone, timedelta
@@ -11,7 +12,8 @@ from app.core.security import require_admin
 from app.models.invoice import Invoice, InvoiceStatus, DocumentType
 from app.models.user import User
 from app.core.config import settings
-from app.api.invoices import internal_mass_generate_invoices
+from app.api.invoices import internal_mass_generate_invoices, pre_generate_invoices_task
+
 from app.models.sequence import SystemSequence
 from app.models.room import Room, RusunawaSite
 from app.models.tenant import Tenant
@@ -139,21 +141,18 @@ def handle_overdue_processing(
                     inv.document_type = DocumentType.teguran1
                     inv.teguran1_number = format_document_number(code, "T1", next_seq, now.month, now.year)
                     inv.teguran1_date = now.date()
-                    inv.due_date = now.date() + timedelta(days=7)
                     inv.document_status_updated_at = now
                     changed = True
                 elif inv.document_type == DocumentType.teguran1:
                     inv.document_type = DocumentType.teguran2
                     inv.teguran2_number = format_document_number(code, "T2", next_seq, now.month, now.year)
                     inv.teguran2_date = now.date()
-                    inv.due_date = now.date() + timedelta(days=7)
                     inv.document_status_updated_at = now
                     changed = True
                 elif inv.document_type == DocumentType.teguran2:
                     inv.document_type = DocumentType.teguran3
                     inv.teguran3_number = format_document_number(code, "T3", next_seq, now.month, now.year)
                     inv.teguran3_date = now.date()
-                    inv.due_date = now.date() + timedelta(days=7)
                     inv.document_status_updated_at = now
                     changed = True
         
@@ -239,9 +238,11 @@ def check_prerequisites(
 @router.post("/mass-escalate", status_code=200)
 def mass_escalate_documents(
     payload: MassEscalateRequest,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     _: User = Depends(require_admin),
 ) -> Dict[str, Any]:
+
     """
     Endpoint semi-manual untuk eskalasi dokumen penagihan secara massal.
     Admin menentukan kapan, nomor berapa, dan tanggal surat berapa.
@@ -301,6 +302,36 @@ def mass_escalate_documents(
         source_label = source_doc.value.upper()
         target_label = target.value.upper()
         
+        preview_data = []
+        for inv in eligible_invoices:
+            room_stmt = select(Room).join(Tenant, Tenant.room_id == Room.id).where(Tenant.id == inv.tenant_id)
+            room = session.exec(room_stmt).first()
+            user_stmt = select(User).join(Tenant, Tenant.user_id == User.id).where(Tenant.id == inv.tenant_id)
+            user = session.exec(user_stmt).first()
+            
+            tenant_name = user.name if user else "Unknown"
+            room_label = f"{room.building.split(' - ')[-1]} {app.models.room.ROMAN.get(room.floor, str(room.floor))} {room.unit_number}" if room else "Unknown"
+            rusunawa_name = room.rusunawa.value if room and hasattr(room.rusunawa, 'value') else str(room.rusunawa) if room else "Unknown"
+            
+            # calculate expected penalty
+            base_t = inv.base_rent + inv.parking_charge + inv.water_charge + inv.electricity_charge + inv.other_charge
+            expected_penalty = inv.penalty_amount or Decimal(0)
+            if target == DocumentType.strd and expected_penalty == Decimal(0):
+                penalty_calc = (inv.base_rent + inv.parking_charge) * Decimal(str(settings.PENALTY_RATE))
+                expected_penalty = penalty_calc.quantize(Decimal("0.01"))
+            
+            total_after = base_t + expected_penalty
+            
+            preview_data.append({
+                "tenant_name": tenant_name,
+                "room_label": room_label,
+                "rusunawa": rusunawa_name,
+                "base_rent": float(inv.base_rent),
+                "parking_charge": float(inv.parking_charge),
+                "penalty_amount": float(expected_penalty),
+                "total_amount": float(total_after)
+            })
+
         if total_eligible == 0:
             msg = f"Tidak ditemukan tagihan {source_label} yang belum lunas pada periode {payload.period_month}/{payload.period_year}. Pastikan {source_label} sudah di-generate terlebih dahulu."
         else:
@@ -310,7 +341,8 @@ def mass_escalate_documents(
             "success": True,
             "processed": total_eligible,
             "message": msg,
-            "dry_run": True
+            "dry_run": True,
+            "preview_data": preview_data
         }
     
     # Validasi: nomor urut wajib untuk eksekusi
@@ -354,25 +386,21 @@ def mass_escalate_documents(
             inv.document_type = DocumentType.strd
             inv.strd_number = format_document_number(code, "STRD", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.strd_date = effective_sign_date
-            inv.due_date = effective_sign_date + timedelta(days=7)
 
         elif target == DocumentType.teguran1:
             inv.document_type = DocumentType.teguran1
             inv.teguran1_number = format_document_number(code, "T1", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.teguran1_date = effective_sign_date
-            inv.due_date = effective_sign_date + timedelta(days=7)
                 
         elif target == DocumentType.teguran2:
             inv.document_type = DocumentType.teguran2
             inv.teguran2_number = format_document_number(code, "T2", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.teguran2_date = effective_sign_date
-            inv.due_date = effective_sign_date + timedelta(days=7)
                 
         elif target == DocumentType.teguran3:
             inv.document_type = DocumentType.teguran3
             inv.teguran3_number = format_document_number(code, "T3", current_seq, effective_sign_date.month, effective_sign_date.year)
             inv.teguran3_date = effective_sign_date
-            inv.due_date = effective_sign_date + timedelta(days=7)
                 
         inv.document_status_updated_at = now
         session.add(inv)
@@ -380,6 +408,10 @@ def mass_escalate_documents(
             
     if processed_count > 0:
         session.commit()
+        # Trigger background PDF generation
+        invoice_ids = [inv.id for inv in eligible_invoices]
+        background_tasks.add_task(pre_generate_invoices_task, invoice_ids)
+
         
     return {
         "success": True,

@@ -80,6 +80,7 @@ class InvoiceMassGenerate(SQLModel):
     sign_date: Optional[date] = Field(default=None, description="Tanggal surat / tanda tangan (default: sama dengan due_date)")
     start_skrd_no: Optional[int] = Field(default=None, description="Nomor urut SKRD awal (misal: 2363)")
     notes: Optional[str] = None
+    dry_run: bool = False
 
 
 class InvoiceTeguranMassGenerate(SQLModel):

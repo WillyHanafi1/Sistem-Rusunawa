@@ -5,6 +5,11 @@ import uuid
 from sqlmodel import Session, select
 from app.core.db import engine
 from app.models.staff import Staff
+import threading
+import time
+
+# Global lock to prevent concurrent MS Word COM calls which are not thread-safe on Windows
+PDF_CONVERSION_LOCK = threading.Lock()
 
 # Note: docx2pdf requirement depends on OS. 
 # On Windows, it uses Microsoft Word. On Linux, it often requires LibreOffice.
@@ -17,6 +22,73 @@ except ImportError:
 class DocumentService:
     TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
     OUTPUT_BASE_DIR = "uploads"
+
+    @classmethod
+    def _perform_pdf_conversion(cls, docx_path: str, pdf_path: str, output_dir: str) -> bool:
+        """
+        Internal helper with lock and retry logic for PDF conversion.
+        Ensures thread-safety for COM calls on Windows and provides a fallback.
+        """
+        success = False
+        max_retries = 3
+        
+        # Method A: Try docx2pdf (Requires MS Word on Windows)
+        if HAS_PDF_CONVERTER:
+            for attempt in range(max_retries):
+                # Locking ensures only one thread talks to MS Word COM at a time
+                with PDF_CONVERSION_LOCK:
+                    try:
+                        import pythoncom
+                        pythoncom.CoInitialize()
+                        try:
+                            # docx2pdf.convert will perform the conversion
+                            convert(docx_path, pdf_path)
+                            if os.path.exists(pdf_path):
+                                success = True
+                                break
+                        finally:
+                            pythoncom.CoUninitialize()
+                    except Exception as e:
+                        print(f"docx2pdf attempt {attempt+1} failed: {e}")
+                        # If Word application is busy or Quitting, a small wait can help
+                        if attempt < max_retries - 1:
+                            time.sleep(1.5) 
+            
+        if success:
+            return True
+
+        # Method B: Try LibreOffice (soffice) if Method A failed or was unavailable
+        try:
+            import subprocess
+            soffice_cmd = "soffice" 
+            if os.name == 'nt': # Windows
+                potential_paths = [
+                    r"C:\Program Files\LibreOffice\program\soffice.exe",
+                    r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+                    r"C:\Program Files\LibreOffice\program\soffice.com"
+                ]
+                for p in potential_paths:
+                    if os.path.exists(p):
+                        soffice_cmd = p
+                        break
+            
+            # Subprocess call to LibreOffice in headless mode
+            subprocess.run([
+                soffice_cmd,
+                '--headless',
+                '--convert-to', 'pdf',
+                '--outdir', output_dir,
+                docx_path
+            ], check=True, capture_output=True)
+            
+            if os.path.exists(pdf_path):
+                return True
+        except Exception as e:
+            # Don't throw here, just log so we can fallback to DOCX
+            if "soffice" not in str(e).lower():
+                 print(f"LibreOffice conversion error: {e}")
+        
+        return False
 
     @classmethod
     def generate_bundle(cls, data: dict, nik: str) -> dict:
@@ -85,8 +157,6 @@ class DocumentService:
             template_path = os.path.join(cls.TEMPLATES_DIR, template_name)
             
             if not os.path.exists(template_path):
-                # If template doesn't exist, skip or create a placeholder if needed
-                # For now, we assume templates are provided by the user.
                 continue
 
             docx_filename = f"{doc_type}_{nik}_{unique_id}.docx"
@@ -100,56 +170,12 @@ class DocumentService:
                 
                 # 2. Convert to PDF
                 pdf_path = docx_path.replace(".docx", ".pdf")
+                conv_success = cls._perform_pdf_conversion(docx_path, pdf_path, output_dir)
                 
-                # Method A: Try docx2pdf (Requires MS Word on Windows)
-                conv_success = False
-                if HAS_PDF_CONVERTER:
-                    try:
-                        import pythoncom
-                        pythoncom.CoInitialize()
-                        convert(docx_path, pdf_path)
-                        if os.path.exists(pdf_path):
-                            generated_docs[doc_type] = pdf_path.replace("\\", "/")
-                            conv_success = True
-                    except Exception as e:
-                        print(f"docx2pdf failed for {doc_type}: {e}")
-                    finally:
-                        try:
-                            pythoncom.CoUninitialize()
-                        except:
-                            pass
-
-                # Method B: Try LibreOffice (soffice) if Method A failed
-                if not conv_success:
-                    try:
-                        import subprocess
-                        soffice_cmd = "soffice" 
-                        if os.name == 'nt': # Windows
-                            potential_paths = [
-                                r"C:\Program Files\LibreOffice\program\soffice.exe",
-                                r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
-                            ]
-                            for p in potential_paths:
-                                if os.path.exists(p):
-                                    soffice_cmd = p
-                                    break
-                        
-                        subprocess.run([
-                            soffice_cmd,
-                            '--headless',
-                            '--convert-to', 'pdf',
-                            '--outdir', output_dir,
-                            docx_path
-                        ], check=True, capture_output=True)
-                        
-                        if os.path.exists(pdf_path):
-                            generated_docs[doc_type] = pdf_path.replace("\\", "/")
-                            conv_success = True
-                    except Exception as e:
-                        print(f"LibreOffice failed for {doc_type}: {e}")
-
-                # Fallback to docx if both failed
-                if not conv_success:
+                if conv_success:
+                    generated_docs[doc_type] = pdf_path.replace("\\", "/")
+                else:
+                    # Fallback to docx if both failed
                     generated_docs[doc_type] = docx_path.replace("\\", "/")
             except Exception as e:
                 print(f"Error generating {doc_type}: {e}")
@@ -218,53 +244,12 @@ class DocumentService:
             
             # 2. Convert to PDF
             pdf_path = docx_path.replace(".docx", ".pdf")
+            conv_success = cls._perform_pdf_conversion(docx_path, pdf_path, output_dir)
             
-            # Method A: Try docx2pdf (Requires MS Word on Windows)
-            if HAS_PDF_CONVERTER:
-                try:
-                    import pythoncom
-                    pythoncom.CoInitialize()
-                    convert(docx_path, pdf_path)
-                    if os.path.exists(pdf_path):
-                        return pdf_path.replace("\\", "/")
-                except Exception as e:
-                    print(f"docx2pdf failed: {e}")
-                finally:
-                    try:
-                        pythoncom.CoUninitialize()
-                    except:
-                        pass
+            if conv_success:
+                return pdf_path.replace("\\", "/")
 
-            # Method B: Try LibreOffice (soffice) - The server-side standard
-            try:
-                import subprocess
-                # For Windows, soffice might be in Program Files
-                # For Linux, it's usually just 'soffice'
-                soffice_cmd = "soffice" 
-                if os.name == 'nt': # Windows
-                    potential_paths = [
-                        r"C:\Program Files\LibreOffice\program\soffice.exe",
-                        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
-                    ]
-                    for p in potential_paths:
-                        if os.path.exists(p):
-                            soffice_cmd = p
-                            break
-                
-                subprocess.run([
-                    soffice_cmd,
-                    '--headless',
-                    '--convert-to', 'pdf',
-                    '--outdir', output_dir,
-                    docx_path
-                ], check=True, capture_output=True)
-                
-                if os.path.exists(pdf_path):
-                    return pdf_path.replace("\\", "/")
-            except Exception as e:
-                print(f"LibreOffice conversion failed: {e}")
-
-            # If both failed, return the docx (invoices.py will handle the error)
+            # If failed, return the docx (invoices.py will handle the error)
             return docx_path.replace("\\", "/")
 
         except Exception as e:
