@@ -15,7 +15,6 @@ venv/
 local_data/
 *.xlsx
 *.csv
-!rusun-backend/seeds/data/*.csv
 *.db
 *.sqlite3
 openapi.json
