@@ -55,11 +55,11 @@ async def import_tenants(
     session: Session = Depends(get_session),
     _: User = Depends(require_super_admin),
 ):
-    if not file.filename.endswith(('.xlsx', '.xls')):
-        raise HTTPException(status_code=400, detail="File harus berupa format Excel (.xlsx atau .xls)")
+    if not file.filename.endswith(('.xlsx', '.xls', '.csv')):
+        raise HTTPException(status_code=400, detail="File harus berupa format Excel (.xlsx, .xls) atau CSV (.csv)")
     
     content = await file.read()
-    result = await process_tenant_import(content, session)
+    result = await process_tenant_import(content, session, filename=file.filename)
     
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result)
