@@ -25,20 +25,61 @@ def parse_date_safe(val, default_date: date) -> date:
     except Exception:
         return default_date
 
-async def process_tenant_import(file_content: bytes, session: Session) -> Dict[str, Any]:
+async def process_tenant_import(file_content: bytes, session: Session, filename: str = None) -> Dict[str, Any]:
     """
     Process Excel file and import tenants.
     Expected columns: nama, nik, email, rusunawa, gedung, lantai, unit, tgl_mulai, tgl_selesai, jumlah_motor
     """
     try:
-        df = pd.read_excel(BytesIO(file_content))
+        if filename and filename.endswith('.csv'):
+            # Coba deteksi separator (koma vs titik koma)
+            # Default ke koma, tapi jika gagal coba sep=';'
+            try:
+                df = pd.read_csv(BytesIO(file_content))
+                # Jika cuma 1 kolom terdeteksi tapi harusnya banyak, mungkin sep salah
+                if len(df.columns) < 5:
+                    df = pd.read_csv(BytesIO(file_content), sep=';')
+            except:
+                df = pd.read_csv(BytesIO(file_content), sep=';')
+        else:
+            df = pd.read_excel(BytesIO(file_content))
     except Exception as e:
-        return {"success": False, "error": f"Gagal membaca file Excel: {str(e)}"}
+        return {"success": False, "error": f"Gagal membaca file: {str(e)}"}
 
-    required_cols = ["nama", "nik", "email", "rusunawa", "gedung", "lantai", "unit"]
+    required_cols = ["nama", "rusunawa", "gedung", "lantai", "unit"]
     for col in required_cols:
         if col not in df.columns:
             return {"success": False, "error": f"Kolom tidak ditemukan: {col}"}
+
+    import uuid
+    # Pastikan kolom ada meskipun Excel tidak menyediakannya
+    if 'email' not in df.columns:
+        df['email'] = ""
+    if 'nik' not in df.columns:
+        df['nik'] = ""
+
+    # Pre-processing: Auto generate NIK dan Email dummy jika kosong
+    for index, row in df.iterrows():
+        email_val = str(row.get('email', '')).strip()
+        nik_val = str(row.get('nik', '')).strip()
+        
+        if email_val in ("", "nan", "None", "-"):
+            ged = str(row.get('gedung', '')).strip()
+            lan = str(row.get('lantai', '')).strip()
+            unt = str(row.get('unit', '')).strip()
+            # Contoh: dummy_a_1_1_349122@rusunawa.com
+            uuid_email = str(uuid.uuid4().int)[:6]
+            new_email = f"dummy_{ged}_{lan}_{unt}_{uuid_email}@rusunawa.com".lower().replace(" ", "")
+            df.at[index, 'email'] = new_email
+            
+        if nik_val in ("", "nan", "None", "-"):
+            ged = str(row.get('gedung', '')).strip()
+            lan = str(row.get('lantai', '')).strip()
+            unt = str(row.get('unit', '')).strip()
+            # Format: 99 + Gedung + Lantai + Unit + Random UUID (Max 16 chars)
+            uuid_nik = str(uuid.uuid4().int)[:10]
+            new_nik = f"99{ged[:1].upper()}{lan[:1]}{unt.zfill(2)}{uuid_nik}"[:16]
+            df.at[index, 'nik'] = new_nik
 
     results = []
     success_count = 0
@@ -77,13 +118,32 @@ async def process_tenant_import(file_content: bytes, session: Session) -> Dict[s
         # 2. Validasi Memory (Tidak menyentuh DB di dalam loop)
         for index, row in df.iterrows():
             try:
-                nama = str(row['nama']).strip()
-                nik = str(row['nik']).strip()
-                email = str(row['email']).strip()
-                rusunawa = str(row['rusunawa']).strip()
-                gedung = str(row['gedung']).strip()
-                lantai = int(row['lantai'])
-                unit = int(row['unit'])
+                # Cek jika baris kosong (semua na)
+                if pd.isna(row.get('nama')) and pd.isna(row.get('lantai')):
+                    continue
+
+                nama = str(row.get('nama', '')).strip()
+                if not nama or nama == 'nan':
+                    continue
+
+                nik = str(row.get('nik', '-')).strip()
+                email = str(row.get('email', '-')).strip()
+                rusunawa = str(row.get('rusunawa', '')).strip()
+                gedung = str(row.get('gedung', '')).strip()
+
+                raw_lantai = row.get('lantai')
+                raw_unit = row.get('unit')
+
+                if pd.isna(raw_lantai) or pd.isna(raw_unit):
+                    logger.warning(f"Baris dilewati karena lantai/unit kosong: {row.to_dict()}")
+                    continue
+
+                try:
+                    lantai = int(float(raw_lantai))
+                    unit = int(float(raw_unit))
+                except (ValueError, TypeError):
+                    logger.warning(f"Baris dilewati karena format lantai/unit tidak valid: {row.to_dict()}")
+                    continue
                 
                 tgl_mulai = parse_date_safe(row.get('tgl_mulai'), datetime.now().date())
                 
@@ -96,7 +156,26 @@ async def process_tenant_import(file_content: bytes, session: Session) -> Dict[s
                     
                 tgl_selesai = parse_date_safe(row.get('tgl_selesai'), default_selesai)
                 
-                motor_count = int(row.get('jumlah_motor', 0))
+                # Logic baru: Handle jumlah_motor sebagai nominal (30000, 60000)
+                motor_val = row.get('jumlah_motor', 0)
+                if pd.isna(motor_val) or motor_val == '':
+                    motor_val = 0
+                elif isinstance(motor_val, str):
+                    # Bersihkan karakter non-digit (seperti titik atau koma)
+                    # Tapi biarkan jika isinya cuma "1", "2" dsb
+                    clean_val = "".join(filter(str.isdigit, motor_val))
+                    motor_val = int(clean_val) if clean_val else 0
+                
+                # Jika input berupa nominal (>= 30000), konversi ke jumlah unit motor
+                from app.models.invoice import MOTOR_RATE
+                rate = int(MOTOR_RATE) # 30000
+                if motor_val >= rate:
+                    motor_count = int(motor_val // rate)
+                else:
+                    motor_count = int(motor_val)
+
+                # Batasi maksimal 4 motor (sesuai constraint DB)
+                motor_count = min(max(motor_count, 0), 4)
 
                 room_number = make_room_number(rusunawa, gedung, lantai, unit)
                 room = room_dict.get(room_number)
