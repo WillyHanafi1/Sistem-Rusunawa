@@ -1,6 +1,7 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional, List
 from enum import Enum
+from sqlalchemy import Enum as sa_Enum
 from datetime import datetime, date
 from app.models.room import RusunawaSite
 
@@ -16,7 +17,9 @@ class ApplicationBase(SQLModel):
     full_name: str
     phone_number: str
     email: str
-    rusunawa_target: RusunawaSite
+    rusunawa_target: RusunawaSite = Field(
+        sa_type=sa_Enum(RusunawaSite, values_callable=lambda x: [e.value for e in x])
+    )
     family_members_count: int = Field(default=1, ge=1)
     status: ApplicationStatus = ApplicationStatus.pending
     ktp_file_path: Optional[str] = None
@@ -59,7 +62,9 @@ class ApplicationCreate(SQLModel):
     full_name: str
     phone_number: str
     email: str
-    rusunawa_target: RusunawaSite
+    rusunawa_target: RusunawaSite = Field(
+        sa_type=sa_Enum(RusunawaSite, values_callable=lambda x: [e.value for e in x])
+    )
     family_members_count: int = 1
     has_signed_statement: bool = False
     notes: Optional[str] = None
@@ -80,7 +85,10 @@ class ApplicationUpdate(SQLModel):
     full_name: Optional[str] = None
     phone_number: Optional[str] = None
     email: Optional[str] = None
-    rusunawa_target: Optional[RusunawaSite] = None
+    rusunawa_target: Optional[RusunawaSite] = Field(
+        default=None,
+        sa_type=sa_Enum(RusunawaSite, values_callable=lambda x: [e.value for e in x])
+    )
     family_members_count: Optional[int] = Field(default=None, ge=1)
     status: Optional[ApplicationStatus] = None
     notes: Optional[str] = None

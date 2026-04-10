@@ -188,12 +188,42 @@ export default function RentInvoicesPage() {
     const [filterBilling, setFilterBilling] = useState(""); // billing-specific filter
     const [filterYear, setFilterYear] = useState(new Date().getFullYear());
 
+    // --- Auto-update signature date based on target and period ---
+    useEffect(() => {
+        // Javascript Date takes month 0-indexed
+        const baseDate = new Date(massActionYear, massActionMonth - 1, 1);
+        
+        switch (massActionTarget) {
+            case "skrd":
+                baseDate.setDate(1);
+                break;
+            case "strd":
+                baseDate.setDate(20);
+                break;
+            case "teguran1":
+                baseDate.setDate(27);
+                break;
+            case "teguran2":
+                baseDate.setDate(27 + 7);
+                break;
+            case "teguran3":
+                baseDate.setDate(27 + 14);
+                break;
+        }
+
+        // Format manually to avoid timezone shift issues (e.g., getting previous day at 11PM UTC)
+        const y = baseDate.getFullYear();
+        const m = String(baseDate.getMonth() + 1).padStart(2, '0');
+        const d = String(baseDate.getDate()).padStart(2, '0');
+        setMassActionSignDate(`${y}-${m}-${d}`);
+    }, [massActionTarget, massActionMonth, massActionYear]);
+
     // --- Grouped Preview Data ---
     const groupedPreviewData: Record<string, any[]> = useMemo(() => {
         if (!massActionPreviewData) return {};
         const grouped: Record<string, any[]> = {};
         for (const item of massActionPreviewData) {
-            const rusunName = item.rusun_name || "Tidak Diketahui";
+            const rusunName = item.rusunawa || "Tidak Diketahui";
             if (!grouped[rusunName]) {
                 grouped[rusunName] = [];
             }
@@ -204,7 +234,7 @@ export default function RentInvoicesPage() {
 
     const grandTotalPreview = useMemo(() => {
         if (!massActionPreviewData) return 0;
-        return massActionPreviewData.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        return massActionPreviewData.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
     }, [massActionPreviewData]);
 
     // --- Fetch rooms ---
@@ -320,6 +350,11 @@ export default function RentInvoicesPage() {
     }, [printJobId, printJobData?.status]);
 
     const triggerMassPreview = useCallback(async () => {
+        if (massActionTarget === "skrd" && !skrdStartNo) {
+            alert("Nomor urut SKRD wajib diisi untuk melihat pratinjau.");
+            return;
+        }
+
         setIsMassActionLoading(true);
         setMassActionPreview(null);
         setMassActionPreviewData(null);
@@ -367,6 +402,10 @@ export default function RentInvoicesPage() {
                 return;
             }
         } else {
+            if (!skrdStartNo) {
+                alert("Nomor urut SKRD wajib diisi.");
+                return;
+            }
             if (!massActionSignDate) {
                 alert("Tanggal surat wajib diisi.");
                 return;
@@ -1147,9 +1186,9 @@ export default function RentInvoicesPage() {
                                                     <p className="text-[10px] text-slate-400 mt-1">Tanggal di bulan tersebut sebagai batas bayar</p>
                                                 </div>
                                                 <div>
-                                                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Nomor Urut SKRD (Opsional)</label>
+                                                    <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Hash className="w-3.5 h-3.5" /> Nomor Urut SKRD (Wajib)</label>
                                                     <input type="number" value={skrdStartNo || ''} onChange={e => setSkrdStartNo(e.target.value ? Number(e.target.value) : undefined)} className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-white/10 rounded-xl px-4 py-3 text-sm font-semibold focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none" placeholder="Misal: 2363" />
-                                                    <p className="text-[10px] text-slate-400 mt-1">Nomor awal urut surat SKRD. Kosongkan jika tanpa penomoran.</p>
+                                                    <p className="text-[10px] text-slate-400 mt-1">Nomor awal urut surat SKRD.</p>
                                                 </div>
                                                 <div className="col-span-2">
                                                     <label className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider mb-1.5 flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Tanggal Surat / TTD</label>
@@ -1249,14 +1288,16 @@ export default function RentInvoicesPage() {
                                     </div>
                                 )}
 
-                                {/* ====== Preview Data Grid ====== */}
-                                {massActionPreviewData && massActionPreviewData.length > 0 && !massActionDone && (
-                                    <div className="mt-8 space-y-6">
+                            </div> {/* CLOSE max-w-xl mx-auto */}
+                            
+                            {/* ====== Preview Data Grid (Full Width) ====== */}
+                            {massActionPreviewData && massActionPreviewData.length > 0 && !massActionDone && (
+                                <div className="mt-8 space-y-6 w-full max-w-full">
                                         <h4 className="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
                                             <Layers className="w-5 h-5 text-blue-500" /> Detail Rincian Tagihan
                                         </h4>
                                         {Object.entries(groupedPreviewData).map(([rusunName, items]) => {
-                                            const subTotal = items.reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+                                            const subTotal = items.reduce((sum, item) => sum + (Number(item.total_amount) || 0), 0);
                                             return (
                                                 <div key={rusunName} className="border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
                                                     <div className="bg-slate-50 dark:bg-slate-800/80 px-4 py-3 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
@@ -1267,31 +1308,63 @@ export default function RentInvoicesPage() {
                                                         <table className="w-full text-left max-w-full">
                                                             <thead className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-white/5">
                                                                 <tr>
-                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Nama & Hunian</th>
-                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Tagihan Sewa</th>
-                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Biaya Motor</th>
-                                                                    {massActionTarget !== "skrd" && <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Denda (2%)</th>}
-                                                                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Total</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Nama</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Rusunawa</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Gd</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Lt</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-center">Unit</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Tagihan Sewa</th>
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Biaya Motor</th>
+                                                                    {massActionTarget !== "skrd" && <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Denda (2%)</th>}
+                                                                    <th className="px-2 py-1.5 text-[13px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap text-right">Total</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-slate-100 dark:divide-white/5">
-                                                                {items.map(item => (
-                                                                    <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
-                                                                        <td className="px-4 py-3">
-                                                                            <div className="font-semibold text-sm text-slate-800 dark:text-slate-200 truncate">{item.tenant_name}</div>
-                                                                            <div className="text-xs text-slate-500 mt-0.5">{item.room_name}</div>
-                                                                        </td>
-                                                                        <td className="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Rp {item.base_rent.toLocaleString('id-ID')}</td>
-                                                                        <td className="px-4 py-3 text-right text-sm text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Rp {item.parking.toLocaleString('id-ID')}</td>
-                                                                        {massActionTarget !== "skrd" && <td className="px-4 py-3 text-right text-sm text-red-500 dark:text-red-400 font-medium whitespace-nowrap">Rp {item.penalty.toLocaleString('id-ID')}</td>}
-                                                                        <td className="px-4 py-3 text-right text-sm text-slate-800 dark:text-slate-200 font-bold whitespace-nowrap border-l border-slate-100 dark:border-white/5">Rp {item.total.toLocaleString('id-ID')}</td>
-                                                                    </tr>
-                                                                ))}
+                                                                {items.map((item, idx) => {
+                                                                    let rName = rusunName;
+                                                                    let rGd = '-';
+                                                                    let rLt = '-';
+                                                                    let rUnit = '-';
+
+                                                                    if (item.room_label?.includes('|')) {
+                                                                        const parts = item.room_label.split("|").map((p: string) => p.trim());
+                                                                        rName = parts[0] || rusunName;
+                                                                        rGd = parts[1] ? parts[1].replace('Gd ', '') : '-';
+                                                                        rLt = parts[2] ? parts[2].replace('Lt ', '') : '-';
+                                                                        rUnit = parts[3] ? parts[3].replace('#', '') : '-';
+                                                                    } else if (item.room_label) {
+                                                                        const parts = item.room_label.split(" ").map((p: string) => p.trim()).filter(Boolean);
+                                                                        if (parts.length >= 3) {
+                                                                            rUnit = parts.pop() || '-';
+                                                                            rLt = parts.pop() || '-';
+                                                                            rGd = parts.join(' ');
+                                                                        } else if (parts.length === 2) {
+                                                                            rLt = parts[0];
+                                                                            rUnit = parts[1];
+                                                                        } else {
+                                                                            rUnit = parts[0] || '-';
+                                                                        }
+                                                                    }
+
+                                                                    return (
+                                                                        <tr key={item.id || `preview-${item.tenant_id}-${idx}`} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
+                                                                            <td className="px-2 py-1 font-bold text-[15px] text-slate-800 dark:text-slate-200 leading-tight truncate max-w-[150px]">{item.tenant_name}</td>
+                                                                            <td className="px-2 py-1 text-center text-[14px] text-slate-600 dark:text-slate-400 whitespace-nowrap">{rName}</td>
+                                                                            <td className="px-2 py-1 text-center text-[14px] font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{rGd}</td>
+                                                                            <td className="px-2 py-1 text-center text-[14px] font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">{rLt}</td>
+                                                                            <td className="px-2 py-1 text-center text-[14px] font-bold text-slate-900 dark:text-white whitespace-nowrap">{rUnit}</td>
+                                                                            <td className="px-2 py-1 text-right text-[15px] text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Rp {(item.base_rent ?? 0).toLocaleString('id-ID')}</td>
+                                                                            <td className="px-2 py-1 text-right text-[15px] text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Rp {(item.parking_charge ?? 0).toLocaleString('id-ID')}</td>
+                                                                            {massActionTarget !== "skrd" && <td className="px-2 py-1 text-right text-[15px] text-red-500 dark:text-red-400 font-medium whitespace-nowrap">Rp {(item.penalty_amount ?? 0).toLocaleString('id-ID')}</td>}
+                                                                            <td className="px-2 py-1 text-right text-[15px] text-slate-800 dark:text-slate-200 font-bold whitespace-nowrap border-l border-slate-100 dark:border-white/5">Rp {(item.total_amount ?? 0).toLocaleString('id-ID')}</td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
                                                             </tbody>
                                                             <tfoot className="bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-white/10">
                                                                 <tr>
-                                                                    <td colSpan={massActionTarget !== "skrd" ? 4 : 3} className="px-4 py-3 text-right text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Subtotal {rusunName}</td>
-                                                                    <td className="px-4 py-3 text-right text-base text-blue-600 dark:text-blue-400 font-black whitespace-nowrap border-l border-slate-200 dark:border-white/10">Rp {subTotal.toLocaleString('id-ID')}</td>
+                                                                    <td colSpan={massActionTarget !== "skrd" ? 8 : 7} className="px-2 py-2 text-right text-[14px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest">Subtotal {rusunName}</td>
+                                                                    <td className="px-2 py-2 text-right text-lg text-blue-600 dark:text-blue-400 font-black whitespace-nowrap border-l border-slate-200 dark:border-white/10">Rp {(subTotal ?? 0).toLocaleString('id-ID')}</td>
                                                                 </tr>
                                                             </tfoot>
                                                         </table>
@@ -1301,10 +1374,10 @@ export default function RentInvoicesPage() {
                                         })}
 
                                         {/* Grand Total & Final Execute Button */}
-                                        <div className="bg-blue-600 dark:bg-blue-500 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div className="max-w-xl mx-auto mt-8 bg-blue-600 dark:bg-blue-500 rounded-2xl p-6 text-white shadow-lg shadow-blue-500/20 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
                                             <div>
                                                 <h4 className="text-sm font-semibold text-blue-100 mb-1 tracking-wider uppercase">Grand Total {getMassActionLabel(massActionTarget)} ({MONTHS_SHORT[massActionMonth - 1]} {massActionYear})</h4>
-                                                <p className="text-3xl font-black">Rp {grandTotalPreview.toLocaleString('id-ID')}</p>
+                                                <p className="text-3xl font-black">Rp {(grandTotalPreview ?? 0).toLocaleString('id-ID')}</p>
                                             </div>
                                             <button
                                                 onClick={confirmMassAction}
@@ -1319,6 +1392,7 @@ export default function RentInvoicesPage() {
                                 )}
 
                                 {/* ====== Print Job Progress ====== */}
+                                <div className="max-w-xl mx-auto">
                                 {printJobData && (
                                     <div className="mt-6 p-5 rounded-2xl border bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-white/10">
                                         <div className="flex items-center justify-between mb-2">

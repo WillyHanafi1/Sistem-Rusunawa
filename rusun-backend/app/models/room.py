@@ -1,5 +1,5 @@
-from sqlmodel import SQLModel, Field
-from sqlalchemy import UniqueConstraint
+from sqlmodel import SQLModel, Field, select
+from sqlalchemy import UniqueConstraint, Enum as sa_Enum
 from typing import Optional
 from enum import Enum
 from decimal import Decimal
@@ -22,7 +22,9 @@ class RoomStatus(str, Enum):
 
 
 class RoomBase(SQLModel):
-    rusunawa: RusunawaSite
+    rusunawa: RusunawaSite = Field(
+        sa_type=sa_Enum(RusunawaSite, values_callable=lambda x: [e.value for e in x])
+    )
     building: str = Field(index=True)       # A, B, C, D
     floor: int                               # 1, 2, 3, 4 (disimpan int, tampil romawi)
     unit_number: int                         # 1 s.d. 12
@@ -49,7 +51,9 @@ def make_room_number(rusunawa: str, building: str, floor: int, unit: int) -> str
 
 
 class RoomCreate(SQLModel):
-    rusunawa: RusunawaSite
+    rusunawa: RusunawaSite = Field(
+        sa_type=sa_Enum(RusunawaSite, values_callable=lambda x: [e.value for e in x])
+    )
     building: str
     floor: int
     unit_number: int
