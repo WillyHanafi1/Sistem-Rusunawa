@@ -737,17 +737,14 @@ def internal_mass_generate_invoices(
             print(f"  - Skipping Tenant ID {tenant.id}: Already billed for {period_month}/{period_year}")
             continue
             
-        # 3. Check Overlap Kontrak
-        _, last_day = calendar.monthrange(period_year, period_month)
+        # (Check Overlap Kontrak Dihapus karena tenant berstatus aktif pasti ditagih)
         start_of_period = date(period_year, period_month, 1)
-        end_of_period = date(period_year, period_month, last_day)
+        # _, last_day = calendar.monthrange(period_year, period_month)
+        # end_of_period = date(period_year, period_month, last_day)
         
-        # Jika kontrak mulai SETELAH periode ini berakhir -> SKIP
-        # Kita tidak melakukan skip jika contract_end < start_of_period karena admin ingin 
-        # tetap menagih penghuni yang masih aktif meskipun masa kontrak formalnya habis.
-        if tenant.contract_start > end_of_period:
-            print(f"  - Skipping Tenant ID {tenant.id}: Contract starts at {tenant.contract_start}, which is after period {period_month}/{period_year}")
-            continue
+        # if tenant.contract_start > end_of_period:
+        #     print(f"  - Skipping Tenant ID {tenant.id}: Contract starts at {tenant.contract_start}, which is after period {period_month}/{period_year}")
+        #     continue
 
         room = room_dict.get(tenant.room_id)
         if not room:
