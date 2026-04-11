@@ -7,6 +7,7 @@ from app.core.db import engine
 from app.models.staff import Staff
 import threading
 import time
+from app.core.utils import terbilang
 
 # Global lock to prevent concurrent MS Word COM calls which are not thread-safe on Windows
 PDF_CONVERSION_LOCK = threading.Lock()
@@ -91,6 +92,100 @@ class DocumentService:
         return False
 
     @classmethod
+    def get_date_context(cls, date_obj: datetime = None) -> dict:
+        """
+        Generates Indonesian date context for templates.
+        """
+        if not date_obj:
+            date_obj = datetime.now()
+            
+        months = [
+            "", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+            "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+        ]
+        days = {
+            "Monday": "Senin", "Tuesday": "Selasa", "Wednesday": "Rabu",
+            "Thursday": "Kamis", "Friday": "Jumat", "Saturday": "Sabtu", "Sunday": "Minggu"
+        }
+        
+        day_name = days.get(date_obj.strftime("%A"), "")
+        month_name = months[date_obj.month]
+        
+        return {
+            "tanggal_now_indo": f"{date_obj.day} {month_name} {date_obj.year}",
+            "tanggal_terbilang": terbilang(date_obj.day),
+            "hari_now": day_name,
+            "bulan_now_indo": month_name,
+            "tahun_now": date_obj.year,
+            "tahun_terbilang": terbilang(date_obj.year),
+            "tanggal_cetak": date_obj.strftime("%d-%m-%Y")
+        }
+
+    @classmethod
+    def get_management_context(cls, rusun_site: str = None) -> dict:
+        """
+        Fetches management staff for document context.
+        """
+        context = {}
+        with Session(engine) as session:
+            active_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
+            
+            # 1. Kepala UPTD
+            kepala = next((s for s in active_staff if "kepala" in s.role.lower()), None)
+            if kepala:
+                context.update({
+                    "nama_kepala_uptd": kepala.name,
+                    "nip_kepala_uptd": kepala.nip,
+                    "pangkat_kepala_uptd": kepala.pangkat,
+                    "nama_pejabat": kepala.name,
+                    "nip_pejabat": kepala.nip,
+                    "pangkat_pejabat": kepala.pangkat
+                })
+                
+            # 2. Kasubag TU
+            kasubag = next((s for s in active_staff if "kasubag" in s.role.lower()), None)
+            if kasubag:
+                context.update({
+                    "nama_kasubag_tu": kasubag.name,
+                    "nip_kasubag_tu": kasubag.nip,
+                    "pangkat_kasubag_tu": kasubag.pangkat
+                })
+                
+            # 3. Bendahara
+            bendahara = next((s for s in active_staff if "bendahara" in s.role.lower()), None)
+            if bendahara:
+                context.update({
+                    "nama_bendahara": bendahara.name,
+                    "nip_bendahara": bendahara.nip,
+                    "pangkat_bendahara": bendahara.pangkat,
+                    "bank_account_info": f"0083 0732 92001 / {bendahara.name}" # Fallback bank info
+                })
+
+            # 4. Koordinator (Filtered by site if possible, otherwise first one found)
+            koordinator = None
+            if rusun_site:
+                # Handle Enum if passed
+                site_name = rusun_site.value if hasattr(rusun_site, "value") else str(rusun_site)
+                site_lower = site_name.lower()
+                koordinator = next((s for s in active_staff if "koordinator" in s.role.lower() and site_lower in s.role.lower()), None)
+            
+            if not koordinator:
+                koordinator = next((s for s in active_staff if "koordinator" in s.role.lower()), None)
+                
+            if koordinator:
+                context.update({
+                    "nama_koordinator": koordinator.name,
+                    "nip_koordinator": koordinator.nip,
+                    "pangkat_koordinator": koordinator.pangkat,
+                    # Fallback spelling for legacy templates
+                    "nama_kordinator": koordinator.name,
+                    "nip_kordinator": koordinator.nip,
+                    "pangkat_kordinator": koordinator.pangkat
+                })
+                
+        return context
+
+    @classmethod
     def generate_bundle(cls, data: dict, nik: str) -> dict:
         """
         Generates 4 required documents for a tenant.
@@ -118,43 +213,12 @@ class DocumentService:
         else:
             templates_mapping["pengajuan"] = "template_pengajuan_karyawan.docx"
 
-        # Prepare context (data padding etc)
+        # Prepare context
         context = {
             **data,
-            "tanggal_cetak": datetime.now().strftime("%d-%m-%Y"),
-            "tahun": datetime.now().year
+            **cls.get_date_context(),
+            **cls.get_management_context(rusun_site=data.get("rusunawa"))
         }
-
-        # Inject Management Data (Kepala UPTD, Bendahara, etc)
-        with Session(engine) as session:
-            management_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
-            
-            # Find specific roles for document tags
-            kepala = next((s for s in management_staff if "kepala" in s.role.lower()), None)
-            bendahara = next((s for s in management_staff if "bendahara" in s.role.lower()), None)
-            kasubag = next((s for s in management_staff if "kasubag" in s.role.lower()), None)
-            
-            if kepala:
-                context["nama_kepala_uptd"] = kepala.name
-                context["nama_pejabat"] = kepala.name # Alias
-                context["nip_kepala_uptd"] = kepala.nip
-                context["nip_pejabat"] = kepala.nip # Alias
-                context["pangkat_kepala_uptd"] = kepala.pangkat
-                context["pangkat_pejabat"] = kepala.pangkat # Alias
-                context["manager_name"] = kepala.name
-                context["manager_nip"] = kepala.nip
-                context["manager_role"] = kepala.role
-                context["manager_pangkat"] = kepala.pangkat
-            if bendahara:
-                context["nama_bendahara"] = bendahara.name
-                context["nip_bendahara"] = bendahara.nip
-                context["bendahara_name"] = bendahara.name
-                context["bendahara_nip"] = bendahara.nip
-                context["bendahara_pangkat"] = bendahara.pangkat
-            if kasubag:
-                context["nama_kasubag_tu"] = kasubag.name
-                context["nip_kasubag_tu"] = kasubag.nip
-                context["pangkat_kasubag_tu"] = kasubag.pangkat
 
         generated_docs = {}
 
@@ -211,37 +275,9 @@ class DocumentService:
         
         # 1. Fill Template
         try:
-            # Inject management data if missing
-            if "nama_kepala_uptd" not in context:
-                with Session(engine) as session:
-                    management_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
-                    kepala = next((s for s in management_staff if "kepala" in s.role.lower()), None)
-                    bendahara = next((s for s in management_staff if "bendahara" in s.role.lower()), None)
-                    if kepala:
-                        context["nama_kepala_uptd"] = kepala.name
-                        context["nama_pejabat"] = kepala.name # Alias
-                        context["nip_kepala_uptd"] = kepala.nip
-                        context["nip_pejabat"] = kepala.nip # Alias
-                        context["pangkat_kepala_uptd"] = kepala.pangkat
-                        context["pangkat_pejabat"] = kepala.pangkat # Alias for SKRD
-                        context["manager_name"] = kepala.name
-                        context["manager_nip"] = kepala.nip
-                        context["manager_role"] = kepala.role
-                    if bendahara:
-                        context["nama_bendahara"] = bendahara.name
-                        context["nip_bendahara"] = bendahara.nip
-                        context["bendahara_name"] = bendahara.name
-                        context["bendahara_nip"] = bendahara.nip
-                        context["bendahara_pangkat"] = bendahara.pangkat
-                        # Default bank account info based on template example if not provided
-                        if "bank_account_info" not in context:
-                            context["bank_account_info"] = f"0083 0732 92001 / {bendahara.name}"
-
-            # Add general context
-            context.update({
-                "tanggal_cetak": datetime.now().strftime("%d-%m-%Y"),
-                "tahun": datetime.now().year
-            })
+            # Inject management and date context
+            context.update(cls.get_date_context())
+            context.update(cls.get_management_context(rusun_site=context.get("rusunawa")))
 
             doc = DocxTemplate(template_path)
             doc.render(context)

@@ -20,6 +20,7 @@ class DocumentType(str, Enum):
     teguran1 = "teguran1"
     teguran2 = "teguran2"
     teguran3 = "teguran3"
+    jaminan = "jaminan"
 
 
 class InvoiceBase(SQLModel):
@@ -47,6 +48,8 @@ class InvoiceBase(SQLModel):
     teguran2_date: Optional[date] = None
     teguran3_number: Optional[str] = None
     teguran3_date: Optional[date] = None
+    jaminan_number: Optional[str] = None
+    jaminan_date: Optional[date] = None
     notes: Optional[str] = None
 
 
@@ -131,6 +134,8 @@ class InvoiceUpdate(SQLModel):
     teguran2_date: Optional[date] = None
     teguran3_number: Optional[str] = None
     teguran3_date: Optional[date] = None
+    jaminan_number: Optional[str] = None
+    jaminan_date: Optional[date] = None
     penalty_amount: Optional[Decimal] = None
     total_amount: Optional[Decimal] = None
     notes: Optional[str] = None

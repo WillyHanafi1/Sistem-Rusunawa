@@ -5,9 +5,9 @@ import { logout, getUserName } from "@/lib/auth";
 import { useEffect, useState } from "react";
 import Cookies from "js-cookie";
 import { ThemeToggle } from "./ThemeToggle";
-import { 
-    Building2, Home, Users, FileText, LogOut, LayoutDashboard, MessageSquare, ClipboardList, 
-    ChevronDown, ChevronRight, Settings, BedDouble, UserCheck, History, AlertTriangle, FileWarning, Wallet
+import {
+    Building2, Home, Users, FileText, LogOut, LayoutDashboard, MessageSquare, ClipboardList,
+    ChevronDown, ChevronRight, Settings, BedDouble, UserCheck, History, AlertTriangle, FileWarning, Wallet, ShieldCheck
 } from "lucide-react";
 
 type NavItem = {
@@ -45,6 +45,7 @@ const navItems: NavItem[] = [
         icon: Wallet,
         children: [
             { href: "/admin/invoices/rent", label: "Tagihan", icon: FileText },
+            { href: "/admin/invoices/deposit", label: "Jaminan", icon: ShieldCheck },
         ]
     },
     {
@@ -55,9 +56,9 @@ const navItems: NavItem[] = [
             { href: "/admin/tickets/closed", label: "Riwayat Selesai", icon: History }
         ]
     },
-    { 
-        label: "Pengaturan", 
-        icon: Settings, 
+    {
+        label: "Pengaturan",
+        icon: Settings,
         children: [
             { href: "/admin/settings", label: "Utama", icon: Settings },
             { href: "/admin/settings/management", label: "Kepengurusan", icon: Users, role: "sadmin" },
@@ -69,7 +70,7 @@ export default function AdminSidebar() {
     const pathname = usePathname();
     const [name, setName] = useState<string>("Admin");
     const [mounted, setMounted] = useState(false);
-    
+
     // State to track which parent menu is expanded
     const [openMenu, setOpenMenu] = useState<string | null>(null);
 
@@ -79,7 +80,7 @@ export default function AdminSidebar() {
         const userName = getUserName();
         if (userName) setName(userName);
 
-        const currentParent = navItems.find(item => 
+        const currentParent = navItems.find(item =>
             item.children?.some(child => pathname === child.href || pathname.startsWith(child.href + "/"))
         );
         if (currentParent) {
@@ -113,7 +114,7 @@ export default function AdminSidebar() {
                 {navItems.filter(item => !item.role || item.role === userRole).map((item) => {
                     const hasChildren = !!item.children;
                     const isOpen = openMenu === item.label;
-                    
+
                     // For flat items (like Dashboard/Settings)
                     if (!hasChildren && item.href) {
                         const isActive = pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href));
@@ -134,18 +135,17 @@ export default function AdminSidebar() {
 
                     // For Accordion items
                     const isChildActive = item.children?.some(child => pathname === child.href || pathname.startsWith(child.href + "/"));
-                    
+
                     return (
                         <div key={item.label} className="flex flex-col">
                             <button
                                 onClick={() => handleMenuClick(item.label)}
-                                className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 w-full ${
-                                    isChildActive && !isOpen
-                                    ? "bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10"
-                                    : isOpen 
-                                        ? "text-blue-600 dark:text-blue-400"
-                                        : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
-                                }`}
+                                className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 w-full ${isChildActive && !isOpen
+                                        ? "bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10"
+                                        : isOpen
+                                            ? "text-blue-600 dark:text-blue-400"
+                                            : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                                    }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <item.icon className="w-4.5 h-4.5" />
@@ -155,7 +155,7 @@ export default function AdminSidebar() {
                                     <ChevronDown className="w-4 h-4 opacity-50" />
                                 </div>
                             </button>
-                            
+
                             {/* Children Smooth Collapse */}
                             <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0"}`}>
                                 <div className="overflow-hidden space-y-1">
@@ -165,11 +165,10 @@ export default function AdminSidebar() {
                                             <Link
                                                 key={child.href}
                                                 href={child.href}
-                                                className={`flex items-center gap-3 pl-11 pr-4 py-2.5 rounded-lg text-[13px] font-medium transition-all ${
-                                                    isNavActive
-                                                    ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 relative before:absolute before:left-4 before:w-1.5 before:h-1.5 before:bg-blue-500 before:rounded-full"
-                                                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-300"
-                                                }`}
+                                                className={`flex items-center gap-3 pl-11 pr-4 py-2.5 rounded-lg text-[13px] font-medium transition-all ${isNavActive
+                                                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 relative before:absolute before:left-4 before:w-1.5 before:h-1.5 before:bg-blue-500 before:rounded-full"
+                                                        : "text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-800 dark:hover:text-slate-300"
+                                                    }`}
                                             >
                                                 {child.label}
                                             </Link>

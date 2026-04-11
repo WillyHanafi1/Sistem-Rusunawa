@@ -7,6 +7,8 @@ from app.core.security import require_admin, get_current_user
 from app.models.application import Application, ApplicationCreate, ApplicationRead, ApplicationUpdate, ApplicationStatus
 from app.models.user import User, UserRole
 from app.models.tenant import Tenant
+from app.models.invoice import Invoice, InvoiceStatus, DocumentType, MOTOR_RATE
+from app.models.room import Room, RoomStatus
 from app.models.family_member import FamilyMember, FamilyMemberCreate
 from app.core.security import hash_password
 import os
@@ -16,8 +18,15 @@ from datetime import datetime
 import uuid
 import re
 import json
+
+# Setup logger
+logger = logging.getLogger(__name__)
+
 from app.core.utils import format_rupiah_terbilang, terbilang as terbilang_func
 from datetime import datetime, date
+
+# Segments mapping
+ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
 
 # Base direktori untuk menyimpan file upload
 UPLOAD_DIR = "uploads"
@@ -287,7 +296,7 @@ from app.models.room import Room, RoomStatus
 from app.core.document_service import DocumentService
 
 class InterviewDecision(BaseModel):
-    room_id: int
+    room_id: Optional[int] = None
     contract_start: Optional[date] = None # Default: today
     contract_end: Optional[date] = None   # Default: 24 months from start
     deposit_amount: Optional[float] = None # Default: 2x room price
@@ -328,13 +337,29 @@ def submit_interview(
     if not application:
         raise HTTPException(status_code=404, detail="Data pengajuan tidak ditemukan")
     
-    # Validasi Verifikasi Dokumen
+    # Jika ditolak, proses cepat & abaikan validasi kamar
+    if decision.status == ApplicationStatus.rejected:
+        application.status = ApplicationStatus.rejected
+        if decision.notes:
+            application.notes = decision.notes
+        session.add(application)
+        session.commit()
+        session.refresh(application)
+        return application
+
+    # Validasi Verifikasi Dokumen (Hanya untuk approval)
     if not application.is_documents_verified:
         raise HTTPException(
             status_code=400, 
             detail="Dokumen pendaftaran belum diverifikasi oleh Admin. Silakan verifikasi dokumen terlebih dahulu."
         )
     
+    if decision.room_id is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="Kamar harus dipilih untuk pengajuan yang akan disetujui."
+        )
+
     room = session.get(Room, decision.room_id)
     if not room or room.status != RoomStatus.kosong:
         raise HTTPException(status_code=400, detail="Kamar tidak ditemukan atau tidak kosong")
@@ -501,18 +526,13 @@ def submit_interview(
                 if not d: return "-"
                 return f"{d.day} {MONTHS[d.month-1]} {d.year}"
 
+            # Fallback context for pimpinan data if not in DB
+            context = {}
+
             doc_context = {
-                # Pihak Pertama (Management)
-                "nama_kepala_uptd": context.get("nama_kepala_uptd", "KOKO, S.E., M.M."),
-                "nip_kepala_uptd": context.get("nip_kepala_uptd", "19810323 200801 1 004"),
-                "pangkat_kepala_uptd": context.get("pangkat_kepala_uptd", "Pembina"),
-                "jabatan_kepala_uptd": "Kepala UPTD Rumah Susun Sederhana Sewa (RUSUNAWA) Dinas Perumahan Dan Kawasan Permukiman – Kota Cimahi.",
-                
+                # Pihak Pertama (Management) - Akan di-fetch otomatis oleh DocumentService dari DB Staff
                 # Kordinator (For BAST)
-                "nama_kordinator": context.get("nama_kordinator", "ASEP SURYANA MASDUKI"),
-                "nip_kordinator": context.get("nip_kordinator", "19820410 200901 1 005"),
-                "pangkat_kordinator": context.get("pangkat_kordinator", "Penata"),
-                "jabatan_kordinator": f"Kordinator Rusun {application.rusunawa_target}",
+                "jabatan_kordinator": f"Kordinator Rusun {application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
                 
                 # Pihak Kedua (Tenant)
                 "nama_penyewa": application.full_name,
@@ -528,13 +548,13 @@ def submit_interview(
                 "jumlah_keluarga_terbilang": f"{len(decision.family_members)} ({terbilang_func(len(decision.family_members))})" if decision.family_members else "0 (Nol)",
                 
                 # Lokasi & Dokumen
-                "rusunawa": application.rusunawa_target,
-                "nama_rusunawa": application.rusunawa_target,
+                "rusunawa": application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target,
+                "nama_rusunawa": application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target,
                 "nomor_kamar": room.room_number,
                 "lantai": room.floor,
                 "gedung": room.building,
                 "unit": room.unit_number,
-                "lokasi_lengkap": f"{room.building} {ROMAN.get(room.floor, room.floor)} {room.unit_number} Rusunawa {application.rusunawa_target}",
+                "lokasi_lengkap": f"{room.building} {ROMAN.get(room.floor, room.floor)} {room.unit_number} Rusunawa {application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
                 
                 "ps_number": decision.ps_number,
                 "sk_number": decision.sk_number,
@@ -593,7 +613,7 @@ def submit_interview(
                 "ps_nomor": decision.ps_number,
                 "sip_nomor": decision.sip_number,
                 "room_number": room.room_number,
-                "nama_rusunawa": f"{application.rusunawa_target}",
+                "nama_rusunawa": f"{application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
             }
             
             bundle = DocumentService.generate_bundle(doc_context, application.nik)
@@ -614,7 +634,85 @@ def submit_interview(
             # Tetap simpan ringkasan di notes untuk referensi legacy
             doc_links = "\n".join([f"{k.upper()}: {v}" for k, v in bundle.items()])
             new_tenant.notes = f"Dokumen Bundle:\n{doc_links}"
-            application.notes = f"INTERVIEW_SUCCESS|{doc_links}"
+            
+            # --- OTOMATISASI INVOICE (BEST PRACTICE) ---
+            # Cari kode site untuk penomoran
+            site_codes = {"Cigugur Tengah": "01", "Cibeureum": "02", "Leuwigajah": "03"}
+            rusun_name = application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target
+            code = site_codes.get(rusun_name, "00")
+            
+            # Import helper here to avoid circular or dependency issues if needed, 
+            # but we already imported Invoice above.
+            from app.api.tasks import get_next_sequence_value, format_document_number
+            
+            # Check if invoice for this period already exists for this tenant
+            existing_skrd = session.exec(
+                select(Invoice)
+                .where(Invoice.tenant_id == new_tenant.id)
+                .where(Invoice.document_type == DocumentType.skrd)
+                .where(Invoice.period_month == decision.contract_start.month)
+                .where(Invoice.period_year == decision.contract_start.year)
+            ).first()
+
+            if not existing_skrd:
+                # 1. Invoice Sewa (SKRD) - Bulan Pertama
+                next_skrd_seq = get_next_sequence_value(session, "skrd_seq", decision.contract_start.year)
+                skrd_no = format_document_number(code, "SKRD", next_skrd_seq, decision.contract_start.month, decision.contract_start.year)
+                
+                rent_invoice = Invoice(
+                    tenant_id=new_tenant.id,
+                    document_type=DocumentType.skrd,
+                    status=InvoiceStatus.unpaid,
+                    period_month=decision.contract_start.month,
+                    period_year=decision.contract_start.year,
+                    base_rent=room.price,
+                    water_charge=0,
+                    electricity_charge=0,
+                    parking_charge=0,
+                    other_charge=0,
+                    penalty_amount=0,
+                    total_amount=room.price,
+                    due_date=decision.contract_start,
+                    skrd_number=skrd_no,
+                    skrd_date=now.date(),
+                    notes=f"Tagihan Sewa Pertama - Bulan {decision.contract_start.month}/{decision.contract_start.year}"
+                )
+                session.add(rent_invoice)
+            else:
+                logger.info(f"SKRD already exists for tenant {new_tenant.id} period {decision.contract_start.month}/{decision.contract_start.year}")
+
+            # 2. Invoice Jaminan (JKRD) - 2x Sewa
+            existing_jkrd = session.exec(
+                select(Invoice)
+                .where(Invoice.tenant_id == new_tenant.id)
+                .where(Invoice.document_type == DocumentType.jaminan)
+            ).first()
+
+            if not existing_jkrd:
+                next_jkrd_seq = get_next_sequence_value(session, "jkrd_seq", now.year)
+                jkrd_no = format_document_number(code, "JKRD", next_jkrd_seq, now.month, now.year)
+                
+                deposit_invoice = Invoice(
+                    tenant_id=new_tenant.id,
+                    document_type=DocumentType.jaminan,
+                    status=InvoiceStatus.unpaid,
+                    period_month=decision.contract_start.month,
+                    period_year=decision.contract_start.year,
+                    base_rent=decision.deposit_amount,
+                    water_charge=0,
+                    electricity_charge=0,
+                    parking_charge=0,
+                    other_charge=0,
+                    penalty_amount=0,
+                    total_amount=decision.deposit_amount,
+                    due_date=now.date(),
+                    jaminan_number=jkrd_no,
+                    jaminan_date=now.date(),
+                    notes=f"Tagihan Uang Jaminan (Security Deposit)"
+                )
+                session.add(deposit_invoice)
+            
+            application.notes = f"INTERVIEW_SUCCESS|{doc_links}|INVOICES_CREATED"
 
         session.add(application)
         session.commit()

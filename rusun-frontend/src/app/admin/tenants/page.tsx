@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import api, { handleDownload } from "@/lib/api";
 import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle, Edit, FileText, ChevronDown } from "lucide-react";
 import { format, addMonths } from "date-fns";
@@ -72,29 +72,31 @@ interface MatrixCellProps {
     onClick: (inv: InvoiceDetail) => void;
 }
 
-function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled, onClick }: MatrixCellProps) {
-    const cellStyle = useMemo(() => {
-        if (disabled) {
-            return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-300 dark:text-slate-600 cursor-not-allowed";
-        }
-        if (!invoice) {
-            return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500 cursor-not-allowed";
-        }
-        if (invoice.status === "paid") {
-            return "bg-emerald-100 dark:bg-emerald-500/20 border-emerald-400 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-500/20";
-        }
-        if (invoice.status === "overdue") {
-            return "bg-red-100 dark:bg-red-500/20 border-red-500 dark:border-red-500/60 text-red-700 dark:text-red-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-red-500/20 animate-pulse";
-        }
-        if (invoice.status === "unpaid") {
-            return "bg-amber-100 dark:bg-amber-500/20 border-amber-400 dark:border-amber-500/50 text-amber-700 dark:text-amber-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-amber-500/20";
-        }
-        if (invoice.status === "cancelled") {
-            return "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 cursor-pointer";
-        }
-        return "";
-    }, [disabled, invoice]);
+function getStatusStyle(status: string | undefined, disabled: boolean) {
+    if (disabled) {
+        return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-300 dark:text-slate-600 cursor-not-allowed";
+    }
+    if (!status) {
+        return "bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700/60 text-slate-400 dark:text-slate-500 cursor-not-allowed";
+    }
+    if (status === "paid") {
+        return "bg-emerald-100 dark:bg-emerald-500/20 border-emerald-400 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-emerald-500/20";
+    }
+    if (status === "overdue") {
+        return "bg-red-100 dark:bg-red-500/20 border-red-500 dark:border-red-500/60 text-red-700 dark:text-red-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-red-500/20 animate-pulse";
+    }
+    if (status === "unpaid") {
+        return "bg-amber-100 dark:bg-amber-500/20 border-amber-400 dark:border-amber-500/50 text-amber-700 dark:text-amber-400 cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:shadow-amber-500/20";
+    }
+    if (status === "cancelled") {
+        return "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-400 cursor-pointer";
+    }
+    return "";
+}
 
+function MatrixCell({ month, year, invoice, disabled, onClick }: MatrixCellProps) {
+    const status = invoice?.status;
+    const cellStyle = getStatusStyle(status, disabled);
     const isClickable = !disabled && !!invoice;
 
     return (
@@ -108,6 +110,57 @@ function MatrixCell({ month, year, contractStart, contractEnd, invoice, disabled
         </button>
     );
 }
+
+// --- Helper Components for Table Optimization ---
+const TableSearchHeader = ({ 
+    label, 
+    placeholder, 
+    initialValue, 
+    onSearch,
+    icon: Icon 
+}: { 
+    label: string, 
+    placeholder: string, 
+    initialValue: string, 
+    onSearch: (val: string) => void,
+    icon?: any
+}) => {
+    const [localValue, setLocalValue] = useState(initialValue);
+    const [isFirstRender, setIsFirstRender] = useState(true);
+
+    useEffect(() => {
+        if (isFirstRender) {
+            setIsFirstRender(false);
+            return;
+        }
+        const timer = setTimeout(() => {
+            onSearch(localValue);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [localValue]);
+
+    // Sync if filter is cleared from outside
+    useEffect(() => {
+        if (initialValue !== localValue) {
+            setLocalValue(initialValue);
+        }
+    }, [initialValue]);
+
+    return (
+        <div className="flex flex-col gap-1.5">
+            <span className="flex items-center gap-1 whitespace-nowrap">
+                {Icon && <Icon className="w-3 h-3 text-blue-500" />} {label}
+            </span>
+            <input
+                type="text"
+                placeholder={placeholder}
+                value={localValue}
+                onChange={(e) => setLocalValue(e.target.value)}
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[10px] rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal placeholder-slate-400 shadow-sm dark:text-white"
+            />
+        </div>
+    );
+};
 
 // ---
 // Main Page
@@ -206,8 +259,7 @@ export default function ContractRoomPage() {
     };
 
     useEffect(() => {
-        const timer = setTimeout(fetchRooms, 400);
-        return () => clearTimeout(timer);
+        fetchRooms();
     }, [filterSearch, filterRusunawa, filterBuilding, filterFloor, filterUnit]);
 
     useEffect(() => {
@@ -230,7 +282,7 @@ export default function ContractRoomPage() {
             return;
         }
         const safePath = path.replace(/\\/g, '/');
-        await handleDownload(`/api/${safePath}`, undefined, true);
+        await handleDownload(`/${safePath}`, undefined, true);
     };
 
     // State for document dropdown
@@ -368,51 +420,35 @@ export default function ContractRoomPage() {
         }),
         columnHelper.accessor('floor', {
             header: () => (
-                <div className="flex flex-col gap-1.5 items-center w-full">
-                    <span className="flex items-center gap-1 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Lantai</span>
-                    <select
-                        value={filterFloor}
-                        onChange={(e) => setFilterFloor(e.target.value)}
-                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[10px] rounded px-0.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal shadow-sm text-center w-full"
-                    >
-                        <option value="">Semua</option>
-                        <option value="1">I</option>
-                        <option value="2">II</option>
-                        <option value="3">III</option>
-                        <option value="4">IV</option>
-                        <option value="5">V</option>
-                    </select>
-                </div>
+                <TableSearchHeader 
+                    label="Lantai" 
+                    placeholder="Lantai..." 
+                    initialValue={filterFloor} 
+                    onSearch={setFilterFloor} 
+                />
             ),
             cell: info => <span className="font-bold text-slate-900 dark:text-white text-sm text-center block">{toRoman(info.getValue())}</span>,
         }),
         columnHelper.accessor('unit_number', {
             header: () => (
-                <div className="flex flex-col gap-1.5 items-center w-full">
-                    <span className="flex items-center gap-1 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Unit</span>
-                    <input
-                        type="text"
-                        value={filterUnit}
-                        placeholder="Semua"
-                        onChange={(e) => setFilterUnit(e.target.value)}
-                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[10px] rounded px-0.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal shadow-sm text-center w-full placeholder-slate-400"
-                    />
-                </div>
+                <TableSearchHeader 
+                    label="Unit" 
+                    placeholder="Unit..." 
+                    initialValue={filterUnit} 
+                    onSearch={setFilterUnit} 
+                />
             ),
             cell: info => <span className="font-bold text-slate-900 dark:text-white text-sm text-center block">{info.getValue()}</span>,
         }),
         columnHelper.accessor('tenant_name', {
             header: () => (
-                <div className="flex flex-col gap-1.5">
-                    <span className="flex items-center gap-1"><Filter className="w-3 h-3 text-blue-500" /> Nama Penghuni</span>
-                    <input
-                        type="text"
-                        placeholder="Cari penghuni..."
-                        value={filterSearch}
-                        onChange={(e) => setFilterSearch(e.target.value)}
-                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[11px] rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal placeholder-slate-400 shadow-sm dark:text-white"
-                    />
-                </div>
+                <TableSearchHeader 
+                    label="Nama Penghuni" 
+                    placeholder="Cari penghuni..." 
+                    initialValue={filterSearch} 
+                    onSearch={setFilterSearch} 
+                    icon={Filter}
+                />
             ),
             cell: info => {
                 const r = info.row.original;
@@ -607,7 +643,15 @@ export default function ContractRoomPage() {
                                 {/* Document Download Dropdown */}
                                 <div className="relative">
                                     <button
-                                        onClick={() => setDocDropdownOpen(prev => prev === r.id ? null : r.id)}
+                                        onClick={(e) => {
+                                            const btn = e.currentTarget;
+                                            const rect = btn.getBoundingClientRect();
+                                            setDocDropdownOpen(prev => prev === r.id ? null : r.id);
+                                            // Store button position for fixed dropdown
+                                            if (docDropdownOpen !== r.id) {
+                                                (window as any).__docDropdownPos = { top: rect.bottom + 6, right: window.innerWidth - rect.right };
+                                            }
+                                        }}
                                         className={`p-1.5 rounded-lg transition-all flex items-center gap-0.5 ${hasAnyDoc ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200" : "text-slate-300 dark:text-slate-600 cursor-not-allowed"}`}
                                         disabled={!hasAnyDoc}
                                         title={hasAnyDoc ? "Unduh Dokumen" : "Belum ada dokumen"}
@@ -619,7 +663,13 @@ export default function ContractRoomPage() {
                                         <>
                                             {/* Backdrop to close */}
                                             <div className="fixed inset-0 z-40" onClick={() => setDocDropdownOpen(null)} />
-                                            <div className="absolute right-0 top-full mt-1.5 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 min-w-[180px] animate-in fade-in slide-in-from-top-1">
+                                            <div
+                                                className="fixed z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 min-w-[180px] animate-in fade-in slide-in-from-top-1"
+                                                style={{
+                                                    top: (window as any).__docDropdownPos?.top ?? 0,
+                                                    right: (window as any).__docDropdownPos?.right ?? 0,
+                                                }}
+                                            >
                                                 <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dokumen Bundle</div>
                                                 {DOC_LIST.map((doc, idx) => (
                                                     <button
@@ -672,7 +722,7 @@ export default function ContractRoomPage() {
                 );
             }
         }),
-    ], [filterRusunawa, filterBuilding, filterFloor, filterUnit, filterStatus, filterSearch, invoiceMap, filterYear, loadingInvoices]);
+    ], [filterRusunawa, filterBuilding, filterFloor, filterUnit, filterStatus, filterSearch, invoiceMap, filterYear, loadingInvoices, docDropdownOpen]);
 
     const table = useReactTable({
         data: filteredRooms,

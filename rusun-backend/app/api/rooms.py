@@ -59,6 +59,8 @@ class RoomExtendedRead(RoomRead):
 def get_extended_rooms(
     rusunawa: Optional[RusunawaSite] = None,
     building: Optional[str] = None,
+    floor: Optional[str] = None,
+    unit_number: Optional[str] = None,
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 1000,
@@ -80,6 +82,10 @@ def get_extended_rooms(
         query = query.where(Room.rusunawa == rusunawa)
     if building:
         query = query.where(Room.building == building)
+    if floor is not None:
+        query = query.where(Room.floor == floor)
+    if unit_number is not None:
+        query = query.where(Room.unit_number == unit_number)
     if search:
         search_filter = f"%{search}%"
         # Search by room number or tenant's full name

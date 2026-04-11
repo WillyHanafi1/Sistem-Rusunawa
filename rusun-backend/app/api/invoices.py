@@ -357,7 +357,7 @@ def _prepare_invoice_context(result: Any, session: Session, doc_type: Optional[D
         "floor_roman": ROMAN.get(r_fl, str(r_fl)),
         "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
         "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
-        "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
+        "info_rekening": "123-DUMMY-GUARANTEE-ACC / Rekening Jaminan" if doc_type == DocumentType.jaminan else "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
         
         # Data Surat
         "nomor_surat": getattr(inv_obj, f"{doc_type.value}_number", "-") or "-",
@@ -503,7 +503,7 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "floor_roman": ROMAN.get(r_fl, str(r_fl)),
                 "rusunawa": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
                 "location_name": (r_ru.value if hasattr(r_ru, 'value') else str(r_ru)),
-                "info_rekening": "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
+                "info_rekening": "123-DUMMY-GUARANTEE-ACC / Rekening Jaminan" if actual_doc_type == DocumentType.jaminan else "0083 0732 92001/ Bendahara Penerimaan Disperkim Kota Cimahi",
 
                 # Data Surat
                 "nomor_surat": getattr(inv_obj, f"{actual_doc_type.value}_number", "-") or "-",
@@ -1252,7 +1252,8 @@ def update_invoice(
     # HIGH-02: Explicit field whitelist — prevent status/amount manipulation
     ALLOWED_UPDATE_FIELDS = {
         "water_charge", "electricity_charge", "other_charge", 
-        "notes", "due_date", "parking_charge"
+        "notes", "due_date", "parking_charge",
+        "jaminan_number", "jaminan_date", "skrd_number", "skrd_date"
     }
     update_data = invoice_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():

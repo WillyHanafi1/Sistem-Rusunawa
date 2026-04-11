@@ -1103,11 +1103,12 @@ export default function RentInvoicesPage() {
                 />
             )}
 
-            {/* ========== FULL-SCREEN MASS ACTION PANEL ========== */}
+            {/* ========== CENTERED MASS ACTION MODAL (GLASSMORPHISM) ========== */}
             {massActionPanelOpen && (
-                <div className="fixed inset-0 z-[200] bg-white dark:bg-slate-950 flex flex-col overflow-hidden">
-                    {/* Panel Header */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/80 shrink-0">
+                <div className="fixed inset-0 z-[200] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-4 md:p-8 overflow-hidden">
+                    <div className="w-full max-w-7xl h-full max-h-[92vh] bg-white dark:bg-slate-950 rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/5">
+                        {/* Panel Header */}
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900/80 shrink-0">
                         <div className="flex items-center gap-3">
                             <Layers className="w-6 h-6 text-blue-500" />
                             <div>
@@ -1509,7 +1510,8 @@ export default function RentInvoicesPage() {
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
+        )}
         </div>
     );
 }

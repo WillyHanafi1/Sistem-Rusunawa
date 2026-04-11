@@ -98,6 +98,8 @@ export default function InterviewsPage() {
     const [psDate, setPsDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [sipNumber, setSipNumber] = useState("");
     const [sipDate, setSipDate] = useState(format(new Date(), "yyyy-MM-dd"));
+    const [baNumber, setBaNumber] = useState("");
+    const [baDate, setBaDate] = useState(format(new Date(), "yyyy-MM-dd"));
     const [entryTime, setEntryTime] = useState("08:00");
 
     const fetchData = async () => {
@@ -162,8 +164,10 @@ export default function InterviewsPage() {
         setSkDate(format(new Date(), "yyyy-MM-dd"));
         setPsNumber(`648.1/PS/01.${app.id}/${yearSuffix}`);
         setPsDate(format(new Date(), "yyyy-MM-dd"));
-        setSipNumber(`648.1/SIP/01.001/${yearSuffix}`);
+        setSipNumber(`648.1/SIP/01.${app.id < 10 ? '00' + app.id : app.id < 100 ? '0' + app.id : app.id}/${yearSuffix}`);
         setSipDate(format(new Date(), "yyyy-MM-dd"));
+        setBaNumber(`648.1/BA/01.${app.id < 10 ? '00' + app.id : app.id < 100 ? '0' + app.id : app.id}/${yearSuffix}`);
+        setBaDate(format(new Date(), "yyyy-MM-dd"));
         setEntryTime("08:00");
     };
 
@@ -190,6 +194,11 @@ export default function InterviewsPage() {
     };
 
     const handleCloseModal = () => {
+        if (currentStep > 0 && !interviewResult) {
+            if (!confirm("Apakah Anda yakin ingin keluar? Data yang telah diisi akan hilang.")) {
+                return;
+            }
+        }
         setIsModalOpen(false);
         setSelectedApp(null);
         setInterviewResult(null);
@@ -233,6 +242,8 @@ export default function InterviewsPage() {
                 ps_date: psDate,
                 sip_number: sipNumber,
                 sip_date: sipDate,
+                ba_number: baNumber,
+                ba_date: baDate,
                 entry_time: entryTime
             };
 
@@ -254,6 +265,33 @@ export default function InterviewsPage() {
             }
         } catch (error: any) {
             alert(error.response?.data?.detail || "Gagal menyimpan keputusan wawancara.");
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const handleReject = async () => {
+        if (!selectedApp) return;
+        
+        const reason = prompt("Masukkan alasan penolakan:");
+        if (reason === null) return; // Cancelled
+        if (!reason.trim()) {
+            alert("Alasan penolakan harus diisi.");
+            return;
+        }
+
+        try {
+            setActionLoading(true);
+            await api.post(`/applications/${selectedApp.id}/interview`, {
+                status: "rejected",
+                notes: reason,
+                room_id: null
+            });
+            handleCloseModal();
+            fetchData();
+            alert("Pengajuan telah ditolak.");
+        } catch (error: any) {
+            alert(error.response?.data?.detail || "Gagal menolak pengajuan.");
         } finally {
             setActionLoading(false);
         }
@@ -385,12 +423,32 @@ export default function InterviewsPage() {
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 {activeTab === "antrean" ? (
-                                                    <button
-                                                        onClick={() => handleOpenModal(app)}
-                                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow-blue-500/25"
-                                                    >
-                                                        Mulai Wawancara
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedApp(app);
+                                                                const reason = prompt("Masukkan alasan penolakan:");
+                                                                if (reason) {
+                                                                    api.post(`/applications/${app.id}/interview`, {
+                                                                        status: "rejected",
+                                                                        notes: reason,
+                                                                        room_id: null
+                                                                    }).then(() => fetchData()).catch(err => alert(err.response?.data?.detail || "Gagal menolak"));
+                                                                }
+                                                            }}
+                                                            className="inline-flex items-center gap-2 px-3 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-lg text-sm font-medium transition-all"
+                                                            title="Tolak Pengajuan"
+                                                        >
+                                                            <UserX className="w-4 h-4" />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleOpenModal(app)}
+                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm hover:shadow-blue-500/25"
+                                                        >
+                                                            Mulai Wawancara
+                                                        </button>
+                                                    </div>
                                                 ) : (
                                                     <button
                                                         onClick={() => handleOpenModal(app)}
@@ -429,7 +487,7 @@ export default function InterviewsPage() {
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm"
-                            onClick={handleCloseModal}
+                            // Removed onClick to prevent accidental progress loss
                         />
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -444,9 +502,22 @@ export default function InterviewsPage() {
                                         <h2 className="text-xl font-bold text-slate-900 dark:text-white">Formulir Wawancara & Kontrak</h2>
                                         <p className="text-sm text-slate-500">Pemohon: {selectedApp.full_name} ({selectedApp.nik})</p>
                                     </div>
-                                    <button type="button" onClick={handleCloseModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500">
-                                        &times;
-                                    </button>
+                                    <div className="flex items-center gap-3">
+                                        {activeTab === "antrean" && !interviewResult && (
+                                            <button 
+                                                type="button" 
+                                                onClick={handleReject}
+                                                disabled={actionLoading}
+                                                className="flex items-center gap-2 px-4 py-2 bg-red-100 hover:bg-red-200 text-red-600 rounded-xl text-sm font-bold transition-all"
+                                            >
+                                                <UserX className="w-4 h-4" />
+                                                Tolak
+                                            </button>
+                                        )}
+                                        <button type="button" onClick={handleCloseModal} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500">
+                                            &times;
+                                        </button>
+                                    </div>
                                 </div>
                                 {/* Body Scrollable Area */}
                                 <div className="p-6 space-y-8 min-h-[500px]">
@@ -632,30 +703,58 @@ export default function InterviewsPage() {
                                              <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-lg">
                                                 <FileText className="w-5 h-5 text-blue-500" /> Penomoran & Administrasi Surat
                                             </h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-800">
-                                                <div className="space-y-4">
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-6">
+                                                {/* Row 1: SK Wawancara */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Nomor SK Wawancara</label>
                                                         <input type="text" value={skNumber} onChange={e => setSkNumber(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
                                                     </div>
                                                     <div>
+                                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Tanggal SK</label>
+                                                        <input type="date" value={skDate} onChange={e => setSkDate(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 2: Perjanjian Sewa */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
                                                         <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Nomor Perjanjian Sewa (PS)</label>
                                                         <input type="text" value={psNumber} onChange={e => setPsNumber(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
                                                     </div>
                                                     <div>
+                                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Tanggal PS</label>
+                                                        <input type="date" value={psDate} onChange={e => setPsDate(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 3: SIP */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
                                                         <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Nomor SIP</label>
                                                         <input type="text" value={sipNumber} onChange={e => setSipNumber(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
                                                     </div>
-                                                </div>
-                                                <div className="space-y-4">
                                                     <div>
-                                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Tanggal SK & Dokumen</label>
-                                                        <input type="date" value={skDate} onChange={e => {
-                                                            setSkDate(e.target.value);
-                                                            setPsDate(e.target.value);
-                                                            setSipDate(e.target.value);
-                                                        }} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
+                                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Tanggal SIP</label>
+                                                        <input type="date" value={sipDate} onChange={e => setSipDate(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
                                                     </div>
+                                                </div>
+
+                                                {/* Row 4: BAST */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Nomor BAST (BA)</label>
+                                                        <input type="text" value={baNumber} onChange={e => setBaNumber(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Tanggal BAST</label>
+                                                        <input type="date" value={baDate} onChange={e => setBaDate(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
+                                                    </div>
+                                                </div>
+
+                                                {/* Row 5: Time (Special case) */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="hidden md:block"></div>
                                                     <div>
                                                         <label className="block text-xs font-bold text-slate-400 uppercase mb-1.5 pl-1">Jam Masuk (Untuk SIP)</label>
                                                         <input type="time" value={entryTime} onChange={e => setEntryTime(e.target.value)} className="w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-sm" />
