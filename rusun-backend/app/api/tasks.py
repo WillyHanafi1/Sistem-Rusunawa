@@ -12,7 +12,7 @@ from app.core.security import require_admin
 from app.models.invoice import Invoice, InvoiceStatus, DocumentType
 from app.models.user import User
 from app.core.config import settings
-from app.api.invoices import internal_mass_generate_invoices, pre_generate_invoices_task
+from app.api.invoices import internal_mass_generate_invoices
 
 from app.models.sequence import SystemSequence
 from app.models.room import Room, RusunawaSite
@@ -408,10 +408,6 @@ def mass_escalate_documents(
             
     if processed_count > 0:
         session.commit()
-        # Trigger background PDF generation
-        invoice_ids = [inv.id for inv in eligible_invoices]
-        background_tasks.add_task(pre_generate_invoices_task, invoice_ids)
-
         
     return {
         "success": True,

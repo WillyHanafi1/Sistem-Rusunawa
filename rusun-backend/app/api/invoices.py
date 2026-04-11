@@ -7,7 +7,11 @@ from decimal import Decimal
 import math
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
-from app.models.invoice import Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceTeguranMassGenerate, InvoiceReadWithRoom, InvoiceBulkPay
+from app.models.invoice import (
+    Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, 
+    DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceTeguranMassGenerate, 
+    InvoiceReadWithRoom, InvoiceBulkPay, PrintJob, PrintJobStatus
+)
 from app.models.tenant import Tenant
 from app.models.room import Room, ROMAN, ROMAN_TO_INT, RusunawaSite
 from app.models.user import User, UserRole
@@ -26,9 +30,7 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 # Storage format: {token: {"type": "single|bulk", "data": {...}, "expires_at": datetime}}
 _preview_tokens: Dict[str, Any] = {}
 
-# In-memory storage for async bulk print jobs
-# Format: {job_id: {"status": "processing"|"completed"|"failed", "total": int, "processed": int, "file_path": str, "error": str}}
-_bulk_print_jobs: Dict[str, Any] = {}
+
 
 def _cleanup_expired_tokens():
     """Removes expired tokens from the in-memory dictionary."""
@@ -373,8 +375,8 @@ def pre_generate_invoices_task(invoice_ids: List[int]):
         for inv_id in invoice_ids:
             try:
                 statement = select(
-                    Invoice, Room.number, Room.rusunawa, Room.building, Room.floor, Room.unit_number, Tenant.name, Tenant.nik
-                ).join(Tenant, Invoice.tenant_id == Tenant.id).join(Room, Tenant.room_id == Room.id).where(Invoice.id == inv_id)
+                    Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number, User.name, Tenant.nik
+                ).join(Tenant, Invoice.tenant_id == Tenant.id).join(User, Tenant.user_id == User.id).join(Room, Tenant.room_id == Room.id).where(Invoice.id == inv_id)
                 
                 result = session.exec(statement).first()
                 if not result: continue
@@ -561,50 +563,69 @@ def _process_bulk_pdf_background(
     from app.core.db import engine
     
     with Session(engine) as session:
-        query = (
-            select(
-                Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
-                User.name.label("tenant_name"), Tenant.nik,
-            )
-            .join(Tenant, Invoice.tenant_id == Tenant.id)
-            .join(Room, Tenant.room_id == Room.id)
-            .join(User, Tenant.user_id == User.id)
-            .where(Invoice.period_month == month)
-            .where(Invoice.period_year == year)
-        )
-        if building: query = query.where(Room.building == building)
-        if doc_type: query = query.where(Invoice.document_type == doc_type)
-        query = query.order_by(Room.building, Room.floor, Room.unit_number)
-        results = session.exec(query).all()
-        
-        if not results:
-            _bulk_print_jobs[job_id]["status"] = "failed"
-            _bulk_print_jobs[job_id]["error"] = "Tidak ada data untuk dicetak"
+        # Get the job record
+        job = session.get(PrintJob, job_id)
+        if not job:
             return
-            
-        _bulk_print_jobs[job_id]["total"] = len(results)
-    
-        merger = PdfWriter()
-        temp_files_to_merge = 0
+
         try:
-            for i, row in enumerate(results):
-                # Update progress
-                _bulk_print_jobs[job_id]["processed"] = i
+            query = (
+                select(
+                    Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+                    User.name.label("tenant_name"), Tenant.nik,
+                )
+                .join(Tenant, Invoice.tenant_id == Tenant.id)
+                .join(Room, Tenant.room_id == Room.id)
+                .join(User, Tenant.user_id == User.id)
+                .where(Invoice.period_month == month)
+                .where(Invoice.period_year == year)
+            )
+            if building: query = query.where(Room.building == building)
+            if doc_type: query = query.where(Invoice.document_type == doc_type)
+            query = query.order_by(Room.building, Room.floor, Room.unit_number)
+            results = session.exec(query).all()
+            
+            if not results:
+                job.status = PrintJobStatus.failed
+                job.error = "Tidak ada data untuk dicetak"
+                job.updated_at = datetime.now(timezone.utc)
+                session.add(job)
+                session.commit()
+                return
                 
-                inv_obj = row[0] # The first item in the Tuple is the Invoice object
+            job.total = len(results)
+            job.status = PrintJobStatus.processing
+            session.add(job)
+            session.commit()
+    
+            merger = PdfWriter()
+            temp_files_to_merge = 0
+            
+            for i, row in enumerate(results):
+                # Update progress in DB every 5 items or at the end to avoid excessive DB writes
+                if i % 5 == 0 or i == len(results) - 1:
+                    job.processed = i
+                    job.updated_at = datetime.now(timezone.utc)
+                    session.add(job)
+                    session.commit()
+                
+                inv_obj = row[0]
                 actual_doc_type = doc_type or inv_obj.document_type
                 
                 context = _prepare_invoice_context(row, session, actual_doc_type)
-
                 file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
                 full_path = os.path.abspath(file_path)
+                
                 if full_path.endswith(".pdf"):
                     merger.append(full_path)
                     temp_files_to_merge += 1
             
             if temp_files_to_merge == 0:
-                 _bulk_print_jobs[job_id]["status"] = "failed"
-                 _bulk_print_jobs[job_id]["error"] = "Gagal men-generate PDF untuk digabungkan."
+                 job.status = PrintJobStatus.failed
+                 job.error = "Gagal men-generate PDF untuk digabungkan."
+                 job.updated_at = datetime.now(timezone.utc)
+                 session.add(job)
+                 session.commit()
                  return
 
             output_filename = f"BULK_{doc_type.value if doc_type else 'INVOICES'}_{month}_{year}_{job_id[:6]}.pdf"
@@ -615,15 +636,21 @@ def _process_bulk_pdf_background(
             with open(output_path, "wb") as f:
                 merger.write(f)
                 
-            _bulk_print_jobs[job_id]["status"] = "completed"
-            _bulk_print_jobs[job_id]["processed"] = temp_files_to_merge
-            _bulk_print_jobs[job_id]["file_path"] = output_path
+            job.status = PrintJobStatus.completed
+            job.processed = temp_files_to_merge
+            job.file_path = output_path
+            job.updated_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            _bulk_print_jobs[job_id]["status"] = "failed"
-            _bulk_print_jobs[job_id]["error"] = str(e)
+            job.status = PrintJobStatus.failed
+            job.error = str(e)
+            job.updated_at = datetime.now(timezone.utc)
+            session.add(job)
+            session.commit()
         finally:
             merger.close()
 
@@ -634,38 +661,71 @@ def start_bulk_print_async(
     year: int,
     doc_type: Optional[DocumentType] = None,
     building: Optional[str] = None,
+    session: Session = Depends(get_session),
     current_user: User = Depends(require_admin),
 ):
-    """Mulai task cetak massal secara asynchronous dan kembalikan job_id."""
+    """Mulai task cetak massal secara asynchronous atau kembalikan job yang sudah ada."""
+    
+    # Check for existing job
+    statement = (
+        select(PrintJob)
+        .where(PrintJob.month == month)
+        .where(PrintJob.year == year)
+        .where(PrintJob.doc_type == (doc_type.value if doc_type else "all"))
+        .where(PrintJob.building == building)
+        .where(PrintJob.status.in_([PrintJobStatus.processing, PrintJobStatus.completed]))
+    )
+    existing_job = session.exec(statement).first()
+    
+    if existing_job:
+        # If completed, check if file still exists
+        if existing_job.status == PrintJobStatus.completed:
+            if existing_job.file_path and os.path.exists(existing_job.file_path):
+                return {"job_id": existing_job.id, "message": "File cetak sudah tersedia", "recovered": True}
+            else:
+                # File missing, allow restart
+                existing_job.status = PrintJobStatus.failed
+                existing_job.error = "File cetak sebelumnya hilang, silakan coba lagi."
+                session.add(existing_job)
+                session.commit()
+        else:
+            # Still processing
+            return {"job_id": existing_job.id, "message": "Proses cetak sedang berjalan...", "recovered": True}
+
+    # Start new job
     job_id = secrets.token_hex(16)
-    _bulk_print_jobs[job_id] = {
-        "status": "processing",
-        "total": 0,
-        "processed": 0,
-        "file_path": None,
-        "error": None
-    }
+    new_job = PrintJob(
+        id=job_id,
+        month=month,
+        year=year,
+        doc_type=doc_type.value if doc_type else "all",
+        building=building,
+        status=PrintJobStatus.pending
+    )
+    session.add(new_job)
+    session.commit()
+    
     background_tasks.add_task(_process_bulk_pdf_background, job_id, month, year, doc_type, building)
     return {"job_id": job_id, "message": "Proses cetak massal dimulai di background"}
 
 @router.get("/print-bulk/status/{job_id}")
-def check_bulk_print_status(job_id: str):
-    """Cek progress task cetak massal."""
-    job = _bulk_print_jobs.get(job_id)
+def check_bulk_print_status(job_id: str, session: Session = Depends(get_session)):
+    """Cek progress task cetak massal dari database."""
+    job = session.get(PrintJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job ID tidak ditemukan")
     return job
 
 @router.get("/print-bulk/download/{job_id}")
-def download_bulk_print_result(job_id: str):
+def download_bulk_print_result(job_id: str, session: Session = Depends(get_session)):
     """Download hasil cetak massal yang sudah completed."""
-    job = _bulk_print_jobs.get(job_id)
+    job = session.get(PrintJob, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job ID tidak ditemukan")
-    if job["status"] != "completed" or not job["file_path"]:
+    if job.status != PrintJobStatus.completed or not job.file_path:
         raise HTTPException(status_code=400, detail="Job belum selesai atau gagal")
         
-    full_path = os.path.abspath(job["file_path"])
+    full_path = os.path.abspath(job.file_path)
     if not os.path.exists(full_path):
         raise HTTPException(status_code=404, detail="File hasil cetak tidak ditemukan")
         
@@ -731,10 +791,14 @@ def internal_mass_generate_invoices(
 
     # 4. Filter tenant yang belum ditagih dan siapkan object Invoice baru
     new_invoices = []
+    skipped_already_billed = 0
+    skipped_future_contract = 0
+    skipped_no_room = 0
     
     for tenant in active_tenants:
         if tenant.id in billed_tenant_ids:
             print(f"  - Skipping Tenant ID {tenant.id}: Already billed for {period_month}/{period_year}")
+            skipped_already_billed += 1
             continue
             
         # 3. Check Overlap Kontrak
@@ -747,10 +811,12 @@ def internal_mass_generate_invoices(
         # tetap menagih penghuni yang masih aktif meskipun masa kontrak formalnya habis.
         if tenant.contract_start > end_of_period:
             print(f"  - Skipping Tenant ID {tenant.id}: Contract starts at {tenant.contract_start}, which is after period {period_month}/{period_year}")
+            skipped_future_contract += 1
             continue
 
         room = room_dict.get(tenant.room_id)
         if not room:
+            skipped_no_room += 1
             continue
 
         base_rent = room.price
@@ -830,12 +896,17 @@ def internal_mass_generate_invoices(
 
         new_invoices.append(inv)
 
+    msg_parts_dry = [f"Ditemukan {len(new_invoices)} penghuni yang akan di-generate tagihan."]
+    if skipped_already_billed > 0: msg_parts_dry.append(f"{skipped_already_billed} di-skip (sudah terbit).")
+    if skipped_future_contract > 0: msg_parts_dry.append(f"{skipped_future_contract} di-skip (kontrak periode depan).")
+    if skipped_no_room > 0: msg_parts_dry.append(f"{skipped_no_room} di-skip (kamar tidak valid).")
+
     if dry_run:
         return {
             "success": True,
             "generated": len(new_invoices),
             "total_active": len(active_tenants),
-            "message": f"Ditemukan {len(new_invoices)} penghuni yang akan di-generate tagihan.",
+            "message": " ".join(msg_parts_dry),
             "dry_run": True,
             "preview_data": [i._preview for i in new_invoices]
         }
@@ -849,13 +920,18 @@ def internal_mass_generate_invoices(
         session.commit()
         # Refresh to get IDs
         invoice_ids = [inv.id for inv in new_invoices]
+        
+    msg_parts_live = [f"Berhasil generate {count_generated} tagihan."]
+    if skipped_already_billed > 0: msg_parts_live.append(f"{skipped_already_billed} tagihan sudah ada/di-skip.")
+    if skipped_future_contract > 0: msg_parts_live.append(f"{skipped_future_contract} tagihan di-skip (kontrak periode depan).")
+    if skipped_no_room > 0: msg_parts_live.append(f"{skipped_no_room} tagihan di-skip (kamar tidak valid).")
 
     return {
         "success": True, 
         "generated": count_generated, 
         "invoice_ids": invoice_ids,
         "total_active": len(active_tenants),
-        "message": f"Berhasil generate {count_generated} tagihan. {len(billed_tenant_ids) + (len(active_tenants) - count_generated - len(billed_tenant_ids))} tagihan sudah ada/di-skip."
+        "message": " ".join(msg_parts_live)
     }
 
 
@@ -883,10 +959,6 @@ def mass_generate_invoices(
             dry_run=mass_in.dry_run
         )
         
-        # Trigger background PDF generation for new invoices
-        if result.get("invoice_ids"):
-            background_tasks.add_task(pre_generate_invoices_task, result["invoice_ids"])
-            
         return result
 
     except Exception as e:
@@ -1025,11 +1097,6 @@ def mass_generate_teguran_endpoint(
             building=req.building,
             notes=req.notes
         )
-        
-        # Trigger background PDF generation
-        if result.get("invoice_ids"):
-            background_tasks.add_task(pre_generate_invoices_task, result["invoice_ids"])
-            
         return result
 
     except Exception as e:

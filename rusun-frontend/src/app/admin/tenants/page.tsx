@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api, { handleDownload } from "@/lib/api";
-import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle } from "lucide-react";
+import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle, Edit } from "lucide-react";
 import { format, addMonths } from "date-fns";
 import {
     createColumnHelper,
@@ -31,6 +31,8 @@ interface Room {
     tenant_id?: number | null;
     notes?: string | null;
     renewal_count?: number;
+    email?: string | null;
+    nik?: string | null;
 }
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -132,6 +134,19 @@ export default function ContractRoomPage() {
     const [renewNotes, setRenewNotes] = useState("");
     const [renewLoading, setRenewLoading] = useState(false);
 
+    // Edit Logic
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [selectedRoomForEdit, setSelectedRoomForEdit] = useState<Room | null>(null);
+    const [editLoading, setEditLoading] = useState(false);
+    const [editFormData, setEditFormData] = useState({
+        name: "",
+        nik: "",
+        email: "",
+        contract_start: "",
+        contract_end: "",
+        motor_count: 0
+    });
+
     const userRole = getRole();
 
     useEffect(() => {
@@ -211,6 +226,41 @@ export default function ContractRoomPage() {
             await handleDownload(`/api/${safePath}`, undefined, true);
         } else {
             alert("File kontrak tidak ditemukan.");
+        }
+    };
+
+    const handleOpenEdit = (room: Room) => {
+        setSelectedRoomForEdit(room);
+        setEditFormData({
+            name: room.tenant_name || "",
+            nik: room.nik || "",
+            email: room.email || "",
+            contract_start: room.contract_start ? format(new Date(room.contract_start), "yyyy-MM-dd") : "",
+            contract_end: room.contract_end ? format(new Date(room.contract_end), "yyyy-MM-dd") : "",
+            motor_count: room.motor_count || 0,
+        });
+        setEditModalOpen(true);
+    };
+
+    const handleEditSubmit = async () => {
+        if (!selectedRoomForEdit?.tenant_id) return;
+        setEditLoading(true);
+        try {
+            await api.patch(`/tenants/${selectedRoomForEdit.tenant_id}`, {
+                name: editFormData.name,
+                nik: editFormData.nik,
+                email: editFormData.email,
+                contract_start: editFormData.contract_start,
+                contract_end: editFormData.contract_end,
+                motor_count: editFormData.motor_count
+            });
+            setEditModalOpen(false);
+            fetchRooms();
+        } catch (error) {
+            console.error("Failed to update tenant:", error);
+            alert("Gagal menyimpan perubahan. Pastikan email/NIK tidak duplikat.");
+        } finally {
+            setEditLoading(false);
         }
     };
 
@@ -552,6 +602,13 @@ export default function ContractRoomPage() {
                                     <PlusCircle className="w-4 h-4" />
                                 </button>
                                 <button
+                                    onClick={() => handleOpenEdit(r)}
+                                    className="p-1.5 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200 rounded-lg transition-all"
+                                    title="Edit Data Penghuni"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                </button>
+                                <button
                                     onClick={() => r.tenant_id && handleDeactivate(r.tenant_id)}
                                     className="p-1.5 text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 border border-transparent hover:border-red-200 rounded-lg transition-all"
                                     title="Akhiri Sewa"
@@ -709,6 +766,17 @@ export default function ContractRoomPage() {
                 onNotesChange={setRenewNotes}
                 onSubmit={handleRenewSubmit}
             />
+
+            {/* Edit Tenant Modal */}
+            <EditTenantModal
+                isOpen={editModalOpen}
+                room={selectedRoomForEdit}
+                formData={editFormData}
+                loading={editLoading}
+                onClose={() => setEditModalOpen(false)}
+                onChange={(field, value) => setEditFormData(prev => ({ ...prev, [field]: value }))}
+                onSubmit={handleEditSubmit}
+            />
         </div>
     );
 }
@@ -797,6 +865,121 @@ function RenewModal({ isOpen, room, newEndDate, notes, loading, onClose, onNewEn
                         >
                             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
                             Simpan Perpanjangan
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+interface EditTenantModalProps {
+    isOpen: boolean;
+    room: Room | null;
+    formData: { name: string, nik: string, email: string, contract_start: string, contract_end: string, motor_count: number };
+    loading: boolean;
+    onClose: () => void;
+    onChange: (field: string, value: string | number) => void;
+    onSubmit: () => Promise<void>;
+}
+
+function EditTenantModal({ isOpen, room, formData, loading, onClose, onChange, onSubmit }: EditTenantModalProps) {
+    if (!isOpen || !room) return null;
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden border border-white/20">
+                <div className="p-6 max-h-[85vh] overflow-y-auto">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-500/20 flex items-center justify-center">
+                            <Edit className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Edit Penghuni</h2>
+                            <p className="text-xs text-slate-500">Kamar {room.room_number}</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nama Lengkap</label>
+                            <input
+                                type="text"
+                                value={formData.name}
+                                onChange={(e) => onChange('name', e.target.value)}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">NIK</label>
+                            <input
+                                type="text"
+                                value={formData.nik}
+                                onChange={(e) => onChange('nik', e.target.value)}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                        </div>
+
+                         <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email</label>
+                            <input
+                                type="email"
+                                value={formData.email}
+                                onChange={(e) => onChange('email', e.target.value)}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                        </div>
+
+                         <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Jumlah Motor</label>
+                            <input
+                                type="number"
+                                min={0}
+                                value={formData.motor_count}
+                                onChange={(e) => onChange('motor_count', parseInt(e.target.value) || 0)}
+                                className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                            />
+                        </div>
+
+                         <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mulai Kontrak</label>
+                                <input
+                                    type="date"
+                                    value={formData.contract_start}
+                                    onChange={(e) => onChange('contract_start', e.target.value)}
+                                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Akhir Kontrak</label>
+                                <input
+                                    type="date"
+                                    value={formData.contract_end}
+                                    onChange={(e) => onChange('contract_end', e.target.value)}
+                                    className="w-full px-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                                />
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div className="flex gap-3 mt-8">
+                        <button
+                            onClick={onClose}
+                            className="flex-1 px-6 py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-600 dark:text-slate-300 rounded-2xl font-bold transition-all"
+                        >
+                            Batal
+                        </button>
+                        <button
+                            disabled={loading || !formData.name}
+                            onClick={onSubmit}
+                            className="flex-[2] px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-2xl font-bold shadow-lg shadow-blue-600/20 transition-all flex items-center justify-center gap-2"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Edit className="w-4 h-4" />}
+                            Simpan Perubahan
                         </button>
                     </div>
                 </div>

@@ -138,8 +138,24 @@ def update_tenant(
     if not tenant:
         raise HTTPException(status_code=404, detail="Data penghuni tidak ditemukan")
     update_data = tenant_in.model_dump(exclude_unset=True)
+    
+    # Handle user-specific updates (name, email)
+    user_updates = {}
+    if "name" in update_data:
+        user_updates["name"] = update_data.pop("name")
+    if "email" in update_data:
+        user_updates["email"] = update_data.pop("email")
+        
+    if user_updates:
+        user = session.get(User, tenant.user_id)
+        if user:
+            for k, v in user_updates.items():
+                setattr(user, k, v)
+            session.add(user)
+
     for key, value in update_data.items():
-        setattr(tenant, key, value)
+        if hasattr(tenant, key):
+            setattr(tenant, key, value)
 
     # Cascade motor_count change to unpaid/overdue invoices
     if "motor_count" in update_data:

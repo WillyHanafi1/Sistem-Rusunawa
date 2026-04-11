@@ -40,3 +40,11 @@ GEMINI.md
 docs/
 *.db.*
 rusun-backend/verify_db.py
+
+# Local scratch & experimental scripts
+scratch/
+rusun-backend/scratch/
+rusun-backend/scripts/cleanup_data.py
+rusun-backend/scripts/clear_uploads.py
+rusun-backend/scripts/generate_template.py
+rusun-backend/scripts/fix_enums.py

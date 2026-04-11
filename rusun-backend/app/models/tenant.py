@@ -57,6 +57,10 @@ class TenantUpdate(SQLModel):
     kk_doc_path: Optional[str] = None
     nik: Optional[str] = Field(default=None, max_length=16, min_length=1)
     
+    # User Updates (Handled separately in API)
+    name: Optional[str] = None
+    email: Optional[str] = None
+
     # Bio Updates
     place_of_birth: Optional[str] = None
     date_of_birth: Optional[date] = None

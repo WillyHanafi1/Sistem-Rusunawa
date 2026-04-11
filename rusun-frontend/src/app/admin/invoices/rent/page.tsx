@@ -349,6 +349,29 @@ export default function RentInvoicesPage() {
         };
     }, [printJobId, printJobData?.status]);
 
+    // --- Auto-Recover Active Print Job ---
+    useEffect(() => {
+        const checkActiveJob = async () => {
+            if (!massActionPanelOpen) return;
+            try {
+                // We use the same 'async' endpoint which now returns existing job if found
+                const res = await api.get(`/invoices/print-bulk/async?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
+                if (res.data.job_id && (res.data.status === 'processing' || res.data.status === 'completed')) {
+                    setPrintJobId(res.data.job_id);
+                    setPrintJobData(res.data);
+                    if (res.data.recovered) {
+                        console.log("Recovered an existing print job:", res.data.job_id);
+                    }
+                }
+            } catch (err) {
+                // Silently fail for auto-check
+                console.log("No active job found or failed to check:", err);
+            }
+        };
+
+        checkActiveJob();
+    }, [massActionPanelOpen, massActionMonth, massActionYear, massActionTarget]);
+
     const triggerMassPreview = useCallback(async () => {
         if (massActionTarget === "skrd" && !skrdStartNo) {
             alert("Nomor urut SKRD wajib diisi untuk melihat pratinjau.");
@@ -453,7 +476,12 @@ export default function RentInvoicesPage() {
         try {
             const res = await api.get(`/invoices/print-bulk/async?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
             setPrintJobId(res.data.job_id);
-            setPrintJobData({ status: "processing", processed: 0, total: 100 }); // Optimistic start
+            setPrintJobData(res.data); // Use full data from response
+            
+            if (res.data.recovered) {
+                // Success message for recovery
+                console.log("Resuming existing print job...");
+            }
         } catch (err: any) {
             alert(err.response?.data?.detail || err.message || "Gagal memulai tugas cetak massal.");
         } finally {
@@ -1432,24 +1460,28 @@ export default function RentInvoicesPage() {
 
                                 {/* ====== Action Buttons ====== */}
                                 <div className="flex items-center gap-3 mt-8 pt-6 border-t border-slate-200 dark:border-white/10">
-                                    {!massActionDone && !printJobData && (
+                                    {!printJobData && (
                                         <>
-                                            <button
-                                                onClick={triggerMassPreview}
-                                                disabled={isMassActionLoading}
-                                                className="px-6 py-3 rounded-xl font-bold text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-white/10 transition-all disabled:opacity-50 flex items-center gap-2"
-                                            >
-                                                {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                                                Pratinjau
-                                            </button>
-                                            <button
-                                                onClick={confirmMassAction}
-                                                disabled={isMassActionLoading || (!massActionPreview)}
-                                                className="px-6 py-3 rounded-xl font-bold text-sm bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center gap-2"
-                                            >
-                                                {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                                                Eksekusi Generate
-                                            </button>
+                                            {!massActionDone && (
+                                                <>
+                                                    <button
+                                                        onClick={triggerMassPreview}
+                                                        disabled={isMassActionLoading}
+                                                        className="px-6 py-3 rounded-xl font-bold text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-white/10 transition-all disabled:opacity-50 flex items-center gap-2"
+                                                    >
+                                                        {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                                                        Pratinjau
+                                                    </button>
+                                                    <button
+                                                        onClick={confirmMassAction}
+                                                        disabled={isMassActionLoading || (!massActionPreview)}
+                                                        className="px-6 py-3 rounded-xl font-bold text-sm bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center gap-2"
+                                                    >
+                                                        {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                                        Eksekusi Generate
+                                                    </button>
+                                                </>
+                                            )}
                                             <button
                                                 onClick={handleMassPrintAsync}
                                                 disabled={isMassActionLoading}

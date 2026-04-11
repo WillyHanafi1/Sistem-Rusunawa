@@ -150,3 +150,26 @@ class InvoiceReadWithRoom(InvoiceRead):
 class InvoiceBulkPay(SQLModel):
     invoice_ids: list[int]
     paid_at: datetime
+
+
+class PrintJobStatus(str, Enum):
+    pending = "pending"
+    processing = "processing"
+    completed = "completed"
+    failed = "failed"
+
+
+class PrintJob(SQLModel, table=True):
+    __tablename__ = "print_jobs"
+    id: str = Field(primary_key=True)
+    month: int
+    year: int
+    doc_type: str
+    building: Optional[str] = None
+    status: PrintJobStatus = PrintJobStatus.pending
+    total: int = 0
+    processed: int = 0
+    file_path: Optional[str] = None
+    error: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
