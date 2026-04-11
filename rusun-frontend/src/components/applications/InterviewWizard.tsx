@@ -102,7 +102,7 @@ export default function InterviewWizard({ application, isDirectOnboarding = fals
     // Step: Unit & Financial
     const [selectedRoomId, setSelectedRoomId] = useState<number | "">("");
     const [contractStart, setContractStart] = useState(format(new Date(), "yyyy-MM-dd"));
-    const [contractEnd, setContractEnd] = useState(format(addYears(new Date(), 1), "yyyy-MM-dd"));
+    const [contractEnd, setContractEnd] = useState(format(addYears(new Date(), 2), "yyyy-MM-dd"));
     const [depositAmount, setDepositAmount] = useState(0);
     const [motorCount, setMotorCount] = useState(0);
     const [notes, setNotes] = useState("");

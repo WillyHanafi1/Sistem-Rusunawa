@@ -152,6 +152,17 @@ class InvoiceReadWithRoom(InvoiceRead):
     contract_end: date
 
 
+class InvoiceSummary(SQLModel):
+    id: int
+    tenant_id: int
+    period_month: int
+    period_year: int
+    status: InvoiceStatus
+    document_type: DocumentType
+    due_date: date
+    total_amount: float
+
+
 class InvoiceBulkPay(SQLModel):
     invoice_ids: list[int]
     paid_at: datetime

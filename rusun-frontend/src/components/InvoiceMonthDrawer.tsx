@@ -96,6 +96,7 @@ const BreakdownRow = ({ icon, label, value, highlight }: { icon: React.ReactNode
 // Document type config for print buttons
 const DOC_TYPES = [
     { key: "skrd", label: "SKRD", icon: <FileText className="w-3.5 h-3.5" />, numberField: "skrd_number", dateField: "skrd_date" },
+    { key: "jaminan", label: "JKRD", icon: <FileText className="w-3.5 h-3.5" />, numberField: "skrd_number", dateField: "skrd_date" },
     { key: "strd", label: "STRD", icon: <ReceiptText className="w-3.5 h-3.5" />, numberField: "strd_number", dateField: "strd_date" },
     { key: "teguran1", label: "Teguran 1", icon: <AlertTriangle className="w-3.5 h-3.5" />, numberField: "teguran1_number", dateField: "teguran1_date" },
     { key: "teguran2", label: "Teguran 2", icon: <AlertTriangle className="w-3.5 h-3.5" />, numberField: "teguran2_number", dateField: "teguran2_date" },
@@ -218,15 +219,26 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
                                 <ReceiptText className="w-5 h-5 text-blue-500" />
                             </div>
                             <div>
-                                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Detail Tagihan</p>
+                                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                                    {invoice.document_type === "jaminan" ? "Deposit Keamanan" : "Tagihan Bulanan"}
+                                </p>
                                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                                    {MONTHS_LONG[invoice.period_month - 1]} {invoice.period_year}
+                                    {invoice.document_type === "jaminan" 
+                                        ? "Uang Jaminan" 
+                                        : `${MONTHS_LONG[invoice.period_month - 1]} ${invoice.period_year}`}
                                 </h2>
                             </div>
                         </div>
-                        <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-all">
-                            <X className="w-5 h-5" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                            {invoice.document_type === "jaminan" && (
+                                <span className="px-2 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-500/20 mr-2">
+                                    JKRD
+                                </span>
+                            )}
+                            <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 rounded-xl transition-all">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -263,7 +275,7 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
 
                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-white/5 px-5 py-1">
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider pt-4 pb-2">Rincian Tagihan</p>
-                        <BreakdownRow icon={<Wallet className="w-4 h-4" />} label="Sewa Kamar" value={Number(invoice.base_rent)} />
+                        <BreakdownRow icon={<Wallet className="w-4 h-4" />} label={invoice.document_type === "jaminan" ? "Uang Jaminan" : "Sewa Kamar"} value={Number(invoice.base_rent)} />
                         <BreakdownRow icon={<Car className="w-4 h-4" />} label="Parkir Motor" value={Number(invoice.parking_charge)} />
                         {Number(invoice.water_charge || 0) > 0 && (
                             <BreakdownRow icon={<Droplets className="w-4 h-4" />} label="Air Bersih" value={Number(invoice.water_charge)} />
@@ -289,22 +301,37 @@ export default function InvoiceMonthDrawer({ invoice: initialInvoice, tenantName
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Dokumen Penagihan</p>
                         <div className="space-y-2">
                             {DOC_TYPES.map(doc => {
+                                // Logic: Only show JKRD (jaminan) for 'jaminan' type.
+                                // Only show SKRD, STRD, Teguran for 'skrd' type (or others).
+                                const isJaminanInvoice = invoice.document_type === "jaminan";
+                                const isJaminanButton = doc.key === "jaminan";
+                                
+                                if (isJaminanInvoice && !isJaminanButton) return null;
+                                if (!isJaminanInvoice && isJaminanButton) return null;
+
                                 const number = (invoice as any)[doc.numberField] as string | null | undefined;
                                 const hasDocument = !!number;
                                 const isEditing = editingKey === doc.key;
                                 
                                 const isSkrd = doc.key === "skrd";
+                                const isJaminan = doc.key === "jaminan";
                                 const isStrd = doc.key === "strd";
                                 const isTeguran1 = doc.key === "teguran1";
                                 const isTeguran2 = doc.key === "teguran2";
                                 const isTeguran3 = doc.key === "teguran3";
                                 
+                                // logic to show which docs are applicable
+                                if (isJaminan && invoice.document_type !== "jaminan") return null;
+                                if (isSkrd && invoice.document_type === "jaminan") return null;
+                                // Invoices with jaminan type usually don't have STRD/Teguran
+                                if ((isStrd || isTeguran1 || isTeguran2 || isTeguran3) && invoice.document_type === "jaminan") return null;
+
                                 const today = new Date();
                                 const dueDate = new Date(invoice.due_date);
                                 const timeDiff = today.getTime() - dueDate.getTime();
                                 const daysOverdue = Math.floor(timeDiff / (1000 * 3600 * 24));
                                 
-                                let canPrint = isSkrd;
+                                let canPrint = isSkrd || isJaminan;
                                 if (isStrd) canPrint = isUnpaidOrOverdue;
                                 if (isTeguran1) canPrint = isUnpaidOrOverdue;
                                 if (isTeguran2) canPrint = isUnpaidOrOverdue && (!!invoice.teguran1_number || daysOverdue >= 14);

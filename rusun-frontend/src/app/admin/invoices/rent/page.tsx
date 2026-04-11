@@ -137,6 +137,57 @@ function SummaryCard({ icon, label, value, subtext, color }: { icon: React.React
     );
 }
 
+// --- Helper Components for Table Optimization ---
+const TableSearchHeader = ({ 
+    label, 
+    placeholder, 
+    initialValue, 
+    onSearch,
+    icon: Icon 
+}: { 
+    label: string, 
+    placeholder: string, 
+    initialValue: string, 
+    onSearch: (val: string) => void,
+    icon?: any
+}) => {
+    const [localValue, setLocalValue] = useState(initialValue);
+    const [isFirstRender, setIsFirstRender] = useState(true);
+
+    useEffect(() => {
+        if (isFirstRender) {
+            setIsFirstRender(false);
+            return;
+        }
+        const timer = setTimeout(() => {
+            onSearch(localValue);
+        }, 1000); // 1 second as requested
+        return () => clearTimeout(timer);
+    }, [localValue]);
+
+    // Sync if filter is cleared from outside
+    useEffect(() => {
+        if (initialValue !== localValue) {
+            setLocalValue(initialValue);
+        }
+    }, [initialValue]);
+
+    return (
+        <div className="flex flex-col gap-1.5 font-bold uppercase tracking-tight">
+            <span className="flex items-center gap-1 whitespace-nowrap">
+                {Icon && <Icon className="w-3 h-3 text-blue-500" />} {label}
+            </span>
+            <input
+                type="text"
+                placeholder={placeholder}
+                value={localValue}
+                onChange={(e) => setLocalValue(e.target.value)}
+                className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[10px] rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal placeholder-slate-400 shadow-sm dark:text-white"
+            />
+        </div>
+    );
+};
+
 // ---
 // Main Page
 // ---
@@ -180,7 +231,12 @@ export default function RentInvoicesPage() {
 
     // Filters & Search State
     const [filterSearch, setFilterSearch] = useState("");
-    const [filterRusunawa, setFilterRusunawa] = useState("");
+    const [filterRusunawa, setFilterRusunawa] = useState<string>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('admin_filter_rusunawa') || "Cigugur Tengah";
+        }
+        return "Cigugur Tengah";
+    });
     const [filterBuilding, setFilterBuilding] = useState("");
     const [filterFloor, setFilterFloor] = useState("");
     const [filterUnit, setFilterUnit] = useState("");
@@ -249,6 +305,11 @@ export default function RentInvoicesPage() {
             if (filterUnit) params.append("unit_number", filterUnit);
             const res = await api.get(`/rooms/extended/all?${params.toString()}`);
             setRooms(res.data);
+
+            // Persist filter
+            if (typeof window !== 'undefined' && filterRusunawa) {
+                localStorage.setItem('admin_filter_rusunawa', filterRusunawa);
+            }
         } catch (err) {
             console.error("Failed to fetch extended rooms:", err);
         } finally {
@@ -256,16 +317,21 @@ export default function RentInvoicesPage() {
         }
     };
 
-    // --- Fetch all invoices for selected year ---
+    // --- Fetch all invoices for selected year (Lightweight Summary) ---
     const fetchInvoicesForYear = async (year: number) => {
         setLoadingInvoices(true);
         try {
-            const res = await api.get(`/invoices?year=${year}&limit=9999`);
+            const params = new URLSearchParams({ year: year.toString() });
+            if (filterRusunawa && !filterSearch) params.append("rusunawa", filterRusunawa);
+            
+            const res = await api.get(`/invoices/summary?${params.toString()}`);
             const invoices: InvoiceDetail[] = res.data;
+            
+            console.log(`[Matrix Debug] Loaded ${invoices.length} summaries for year ${year}`);
 
-            // Build Map<tenant_id, Map<month, Invoice>>
             const map = new Map<number, Map<number, InvoiceDetail>>();
             for (const inv of invoices) {
+                if (inv.document_type === "jaminan") continue;
                 const tId = Number(inv.tenant_id);
                 if (!map.has(tId)) {
                     map.set(tId, new Map());
@@ -274,7 +340,7 @@ export default function RentInvoicesPage() {
             }
             setInvoiceMap(map);
         } catch (err) {
-            console.error("Failed to fetch invoices for year:", err);
+            console.error("Failed to fetch invoice summaries:", err);
         } finally {
             setLoadingInvoices(false);
         }
@@ -595,17 +661,7 @@ export default function RentInvoicesPage() {
         columnHelper.accessor('rusunawa', {
             header: () => (
                 <div className="flex flex-col gap-1.5 min-w-[120px]">
-                    <span className="flex items-center gap-1"><Filter className="w-3 h-3 text-blue-500" /> Rusunawa</span>
-                    <select
-                        value={filterRusunawa}
-                        onChange={(e) => setFilterRusunawa(e.target.value)}
-                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[11px] rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal shadow-sm dark:text-white"
-                    >
-                        <option value="">Semua</option>
-                        <option value="Cigugur Tengah">Cigugur Tengah</option>
-                        <option value="Cibeureum">Cibeureum</option>
-                        <option value="Leuwigajah">Leuwigajah</option>
-                    </select>
+                    <span className="flex items-center gap-1 font-semibold text-slate-500 py-2.5">Rusunawa</span>
                 </div>
             ),
             cell: info => (
@@ -653,31 +709,24 @@ export default function RentInvoicesPage() {
         }),
         columnHelper.accessor('unit_number', {
             header: () => (
-                <div className="flex flex-col gap-1 items-center w-full min-w-[50px]">
-                    <span className="flex items-center gap-0.5 leading-tight"><Filter className="w-3 h-3 text-blue-500" /> Unit</span>
-                    <input
-                        type="text"
-                        value={filterUnit}
-                        placeholder="Cari..."
-                        onChange={(e) => setFilterUnit(e.target.value)}
-                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[10px] rounded px-0 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal shadow-sm text-center w-full placeholder-slate-400"
-                    />
-                </div>
+                <TableSearchHeader
+                    label="Unit"
+                    placeholder="Cari..."
+                    initialValue={filterUnit}
+                    onSearch={setFilterUnit}
+                />
             ),
             cell: info => <span className="font-bold text-slate-900 dark:text-white text-sm text-center block">{info.getValue()}</span>,
         }),
         columnHelper.accessor('tenant_name', {
             header: () => (
-                <div className="flex flex-col gap-1.5">
-                    <span className="flex items-center gap-1"><Filter className="w-3 h-3 text-blue-500" /> Nama Penghuni</span>
-                    <input
-                        type="text"
-                        placeholder="Cari penghuni..."
-                        value={filterSearch}
-                        onChange={(e) => setFilterSearch(e.target.value)}
-                        className="bg-white dark:bg-slate-900 border border-slate-300 dark:border-white/10 text-[11px] rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-blue-500 font-normal placeholder-slate-400 shadow-sm dark:text-white"
-                    />
-                </div>
+                <TableSearchHeader
+                    label="Nama Penghuni"
+                    placeholder="Cari penghuni..."
+                    initialValue={filterSearch}
+                    onSearch={setFilterSearch}
+                    icon={Filter}
+                />
             ),
             cell: info => {
                 const r = info.row.original;
@@ -961,6 +1010,28 @@ export default function RentInvoicesPage() {
                     <span className="font-bold">Aksi Massal</span>
                 </button>
             </header>
+
+            {/* Site Tabs */}
+            <div className="flex items-center gap-1 mb-8 p-1 bg-slate-100 dark:bg-slate-800/50 rounded-2xl w-fit border border-slate-200/60 dark:border-white/5 shadow-inner">
+                {[
+                    { label: "Cigugur Tengah", value: "Cigugur Tengah" },
+                    { label: "Cibeureum", value: "Cibeureum" },
+                    { label: "Leuwigajah", value: "Leuwigajah" },
+                    { label: "Semua Site", value: "" },
+                ].map((opt) => (
+                    <button
+                        key={opt.value}
+                        onClick={() => setFilterRusunawa(opt.value)}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 ${
+                            filterRusunawa === opt.value 
+                                ? "bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm" 
+                                : "text-slate-500 hover:text-slate-700 dark:text-slate-400 hover:bg-white/40 dark:hover:bg-white/5"
+                        }`}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </div>
 
             {/* Summary Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">

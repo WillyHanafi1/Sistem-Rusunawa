@@ -331,13 +331,40 @@ def submit_interview(
     app_id: int,
     decision: InterviewDecision,
     session: Session = Depends(get_session),
-    _: User = Depends(require_admin),
+    current_user: User = Depends(require_admin),
 ):
+    """
+    Simpan hasil wawancara, alokasikan kamar, buat user login (jika baru), 
+    buat data Tenant, dan terbitkan tagihan awal (SKRD & Jaminan).
+    """
+    logger.info(f"Processing interview for App ID: {app_id}")
+    
     application = session.get(Application, app_id)
     if not application:
         raise HTTPException(status_code=404, detail="Data pengajuan tidak ditemukan")
-    
-    # Jika ditolak, proses cepat & abaikan validasi kamar
+
+    # 0. GUARD: Cegah pemrosesan ulang
+    if application.status == ApplicationStatus.contract_created:
+        logger.warning(f"Attempted to re-submit interview for App ID: {app_id} which is already in status 'contract_created'")
+        # Kembalikan aplikasi yang sudah ada daripada error 400 jika pemanggilnya butuh idempotensi,
+        # tapi di sini kita berikan error 400 supaya Admin tahu ada aksi ganda.
+        raise HTTPException(status_code=400, detail="Pengajuan ini sudah memproses kontrak (SIPA).")
+
+    # 0. GUARD: Cek apakah Tenant sudah ada (Berbasis ID yang sama)
+    existing_tenant = session.get(Tenant, app_id)
+    if existing_tenant:
+        # SMART LOGIC: Jika NIK berbeda, berarti ini adalah records "ghost/yatim" 
+        # dari instalasi/import sebelumnya yang tertinggal di DB (terutama di SQLite).
+        # Kita hapus record lama tersebut agar pendaftaran baru bisa masuk.
+        if existing_tenant.nik != application.nik:
+            logger.warning(f"Ghost Tenant record found at ID {app_id} (NIK: {existing_tenant.nik}) while processing NIK: {application.nik}. Deleting ghost record.")
+            session.delete(existing_tenant)
+            session.flush()
+        else:
+            logger.warning(f"Tenant already exists for App ID: {app_id} with matching NIK")
+            raise HTTPException(status_code=400, detail="Penyewa untuk pengajuan ini sudah terdaftar.")
+
+    # Jika ditolak, langsung update status dan selesai
     if decision.status == ApplicationStatus.rejected:
         application.status = ApplicationStatus.rejected
         if decision.notes:
@@ -780,16 +807,17 @@ def direct_onboarding(
     if not re.match(r"^\d{10,16}$", payload.nik):
         raise HTTPException(status_code=400, detail="NIK tidak valid. Harus 10-16 digit angka.")
     
-    # Check duplicate pending application
+    # Check duplicate non-rejected application or existing tenant
     existing = session.exec(
         select(Application)
         .where(Application.nik == payload.nik)
-        .where(Application.status == ApplicationStatus.pending)
+        .where(Application.status != ApplicationStatus.rejected)
     ).first()
     if existing:
+        status_msg = "sedang diproses" if existing.status != ApplicationStatus.contract_created else "sudah memiliki kontrak"
         raise HTTPException(
             status_code=400,
-            detail=f"Pengajuan dengan NIK '{payload.nik}' masih dalam status TUNDA."
+            detail=f"Pengajuan dengan NIK '{payload.nik}' {status_msg}."
         )
     
     # 1. Create Application with auto-verified status

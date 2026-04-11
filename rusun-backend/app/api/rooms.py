@@ -77,8 +77,8 @@ def get_extended_rooms(
         .join(User, User.id == Tenant.user_id, isouter=True)
     )
 
-    # Filter
-    if rusunawa:
+    # Filter - Only apply site filter if NOT searching globally
+    if rusunawa and not search:
         query = query.where(Room.rusunawa == rusunawa)
     if building:
         query = query.where(Room.building == building)

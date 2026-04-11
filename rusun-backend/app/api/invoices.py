@@ -10,7 +10,8 @@ from app.core.security import require_admin, get_current_user
 from app.models.invoice import (
     Invoice, InvoiceCreate, InvoiceRead, InvoiceUpdate, InvoiceStatus, 
     DocumentType, MOTOR_RATE, InvoiceMassGenerate, InvoiceTeguranMassGenerate, 
-    InvoiceReadWithRoom, InvoiceBulkPay, PrintJob, PrintJobStatus
+    InvoiceReadWithRoom, InvoiceBulkPay, PrintJob, PrintJobStatus,
+    InvoiceSummary
 )
 from app.models.tenant import Tenant
 from app.models.room import Room, ROMAN, ROMAN_TO_INT, RusunawaSite
@@ -154,6 +155,55 @@ def list_invoices(
             "contract_start": c_start, "contract_end": c_end
         })
         output.append(InvoiceReadWithRoom(**inv_dict))
+    return output
+
+@router.get("/summary", response_model=List[InvoiceSummary])
+def get_invoice_summary(
+    year: int,
+    tenant_ids: Optional[str] = None, # Comma separated
+    rusunawa: Optional[RusunawaSite] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Lightweight endpoint for billing matrix."""
+    query = select(Invoice).where(Invoice.period_year == year)
+    
+    if rusunawa:
+        query = query.join(Tenant, Invoice.tenant_id == Tenant.id).join(Room, Tenant.room_id == Room.id).where(Room.rusunawa == rusunawa)
+    
+    if tenant_ids:
+        ids = [int(i) for i in tenant_ids.split(",") if i.isdigit()]
+        if ids:
+            query = query.where(Invoice.tenant_id.in_(ids))
+            
+    # Security: Penghuni only see their own
+    if current_user.role == UserRole.penghuni:
+        query = query.join(Tenant, Invoice.tenant_id == Tenant.id).where(Tenant.user_id == current_user.id)
+
+    results = session.exec(query).all()
+    
+    # Real-time status update for UI consistency (same logic as InvoiceRead validator)
+    # We don't save to DB here, just for the response
+    today = date.today()
+    output = []
+    for inv in results:
+        status = inv.status
+        if status == InvoiceStatus.unpaid:
+            if inv.paid_at:
+                status = InvoiceStatus.paid
+            elif inv.due_date and inv.due_date < today:
+                status = InvoiceStatus.overdue
+        
+        output.append(InvoiceSummary(
+            id=inv.id,
+            tenant_id=inv.tenant_id,
+            period_month=inv.period_month,
+            period_year=inv.period_year,
+            status=status,
+            document_type=inv.document_type,
+            due_date=inv.due_date,
+            total_amount=inv.total_amount,
+        ))
     return output
 
 @router.get("/print-bulk")
@@ -835,7 +885,8 @@ def internal_mass_generate_invoices(
     existing_invoices = session.exec(
         select(Invoice).where(
             Invoice.period_month == period_month,
-            Invoice.period_year == period_year
+            Invoice.period_year == period_year,
+            Invoice.document_type == DocumentType.skrd
         )
     ).all()
     
