@@ -24,9 +24,9 @@ class DocumentType(str, Enum):
 
 
 class InvoiceBase(SQLModel):
-    tenant_id: int = Field(foreign_key="tenants.id")
+    tenant_id: int = Field(foreign_key="tenants.id", index=True)
     period_month: int  # 1-12
-    period_year: int
+    period_year: int = Field(index=True)
     base_rent: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     water_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
     electricity_charge: Decimal = Field(default=0, max_digits=10, decimal_places=2)
@@ -35,7 +35,7 @@ class InvoiceBase(SQLModel):
     penalty_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     total_amount: Decimal = Field(default=0, max_digits=12, decimal_places=2)
     due_date: date
-    status: InvoiceStatus = InvoiceStatus.unpaid
+    status: InvoiceStatus = Field(default=InvoiceStatus.unpaid, index=True)
     document_type: DocumentType = DocumentType.skrd
     document_status_updated_at: Optional[datetime] = None
     skrd_number: Optional[str] = None
