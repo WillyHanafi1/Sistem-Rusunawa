@@ -33,9 +33,8 @@ const navItems: NavItem[] = [
         label: "Penghuni",
         icon: Users,
         children: [
-            { href: "/admin/applications", label: "Pengajuan", icon: ClipboardList },
-            { href: "/admin/tenants/interviews", label: "Wawancara", icon: Users },
-            { href: "/admin/tenants", label: "Kontrak", icon: UserCheck },
+            { href: "/admin/applications", label: "Pengajuan & Kontrak", icon: ClipboardList },
+            { href: "/admin/tenants", label: "Data Penghuni", icon: UserCheck },
             { href: "/admin/checkouts", label: "Putus Kontrak", icon: History },
             { href: "/admin/tenants/history", label: "Riwayat / Alumni", icon: History }
         ]

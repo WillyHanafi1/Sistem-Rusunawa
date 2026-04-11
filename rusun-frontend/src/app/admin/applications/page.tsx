@@ -7,6 +7,7 @@ import { id } from "date-fns/locale";
 import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FilePreview } from "@/components/FilePreview";
+import InterviewWizard from "@/components/applications/InterviewWizard";
 
 interface Application {
     id: number;
@@ -28,6 +29,12 @@ interface Application {
     photo_file_path: string | null;
     has_signed_statement: boolean;
     created_at: string;
+    // Bio-data fields (for interview wizard)
+    place_of_birth: string | null;
+    date_of_birth: string | null;
+    religion: string | null;
+    occupation: string | null;
+    previous_address: string | null;
 }
 
 const EMPTY_FORM = {
@@ -70,6 +77,11 @@ export default function ApplicationsPage() {
     // Document Preview
     const [viewingDocsApp, setViewingDocsApp] = useState<Application | null>(null);
     const [verifying, setVerifying] = useState(false);
+
+    // Interview Wizard State
+    const [wizardApp, setWizardApp] = useState<Application | null>(null);
+    const [showWizard, setShowWizard] = useState(false);
+    const [isDirectOnboarding, setIsDirectOnboarding] = useState(false);
 
     const fetchApplications = async () => {
         try {
@@ -268,6 +280,12 @@ export default function ApplicationsPage() {
                     <button onClick={openCreate} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm shadow-blue-500/20 active:scale-95">
                         <Plus className="w-4 h-4" /> Tambah Pengajuan
                     </button>
+                    <button
+                        onClick={() => { setWizardApp(null); setIsDirectOnboarding(true); setShowWizard(true); }}
+                        className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-all shadow-sm shadow-emerald-500/20 active:scale-95"
+                    >
+                        <CheckCircle2 className="w-4 h-4" /> Tambah Kontrak
+                    </button>
                 </div>
             </div>
 
@@ -287,6 +305,14 @@ export default function ApplicationsPage() {
                     <div className="px-4 py-2 bg-yellow-50 text-yellow-700 rounded-lg flex items-center gap-2 border border-yellow-100 whitespace-nowrap">
                         <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
                         {apps.filter(x => x.status === "pending").length} Pending
+                    </div>
+                    <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg flex items-center gap-2 border border-blue-100 whitespace-nowrap">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        {apps.filter(x => x.status === "interview").length} Wawancara
+                    </div>
+                    <div className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg flex items-center gap-2 border border-indigo-100 whitespace-nowrap">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                        {apps.filter(x => x.status === "contract_created").length} Kontrak
                     </div>
                 </div>
             </div>
@@ -397,6 +423,16 @@ export default function ApplicationsPage() {
                                                                 Tolak
                                                             </button>
                                                         </>
+                                                    )}
+                                                    {app.status === "interview" && (
+                                                        <button
+                                                            onClick={() => { setWizardApp(app); setIsDirectOnboarding(false); setShowWizard(true); }}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-500 text-emerald-600 hover:text-white border border-emerald-200 hover:border-emerald-500 rounded-lg text-xs font-semibold transition-all shadow-sm"
+                                                            title="Mulai Wawancara"
+                                                        >
+                                                            <CheckCircle2 className="w-3.5 h-3.5" />
+                                                            Mulai Wawancara
+                                                        </button>
                                                     )}
                                                     
                                                     {/* Edit & Delete Action Buttons (Tersedia bagi semua status, atau bisa dibatasi if needed) */}
@@ -791,6 +827,17 @@ export default function ApplicationsPage() {
                     </motion.div>
                 </div>
             )}
+            {/* Interview Wizard Modal */}
+            <AnimatePresence>
+                {showWizard && (
+                    <InterviewWizard
+                        application={wizardApp}
+                        isDirectOnboarding={isDirectOnboarding}
+                        onClose={() => { setShowWizard(false); setWizardApp(null); }}
+                        onSuccess={fetchApplications}
+                    />
+                )}
+            </AnimatePresence>
         </div>
     );
 }

@@ -36,8 +36,6 @@ upgrade_*.py
 .vscode/
 
 # AI Rules & Documentation
-GEMINI.md
-docs/
 *.db.*
 rusun-backend/verify_db.py
 

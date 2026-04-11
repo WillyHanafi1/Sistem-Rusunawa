@@ -8,7 +8,7 @@ from app.models.application import Application, ApplicationCreate, ApplicationRe
 from app.models.user import User, UserRole
 from app.models.tenant import Tenant
 from app.models.invoice import Invoice, InvoiceStatus, DocumentType, MOTOR_RATE
-from app.models.room import Room, RoomStatus
+from app.models.room import Room, RoomStatus, RusunawaSite
 from app.models.family_member import FamilyMember, FamilyMemberCreate
 from app.core.security import hash_password
 import os
@@ -725,6 +725,131 @@ def submit_interview(
     except Exception as e:
         session.rollback()
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses wawancara: {str(e)}")
+
+class DirectOnboardingRequest(BaseModel):
+    """Admin fast-track: create application + interview in one step."""
+    # Required registration fields
+    nik: str
+    full_name: str
+    phone_number: str
+    email: str
+    rusunawa_target: str
+    family_members_count: int = 1
+    
+    # Bio Data
+    place_of_birth: Optional[str] = None
+    date_of_birth: Optional[date] = None
+    religion: Optional[str] = "Islam"
+    marital_status: Optional[str] = "Belum Kawin"
+    occupation: Optional[str] = None
+    previous_address: Optional[str] = None
+    
+    # Interview / Contract fields
+    room_id: int
+    contract_start: Optional[date] = None
+    contract_end: Optional[date] = None
+    deposit_amount: Optional[float] = None
+    motor_count: int = 0
+    notes: Optional[str] = None
+    
+    # Family Members
+    family_members: Optional[List[FamilyMemberCreate]] = []
+    
+    # Document Numbers
+    sk_number: Optional[str] = None
+    sk_date: Optional[date] = None
+    ps_number: Optional[str] = None
+    ps_date: Optional[date] = None
+    sip_number: Optional[str] = None
+    sip_date: Optional[date] = None
+    ba_number: Optional[str] = None
+    ba_date: Optional[date] = None
+    entry_time: Optional[str] = None
+
+@router.post("/direct-onboarding", response_model=ApplicationRead, status_code=201)
+def direct_onboarding(
+    payload: DirectOnboardingRequest,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    """
+    Admin fast-track: Buat Application + proses interview dalam satu langkah.
+    Melewati upload dokumen dan verifikasi otomatis.
+    """
+    # Validate NIK
+    if not re.match(r"^\d{10,16}$", payload.nik):
+        raise HTTPException(status_code=400, detail="NIK tidak valid. Harus 10-16 digit angka.")
+    
+    # Check duplicate pending application
+    existing = session.exec(
+        select(Application)
+        .where(Application.nik == payload.nik)
+        .where(Application.status == ApplicationStatus.pending)
+    ).first()
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pengajuan dengan NIK '{payload.nik}' masih dalam status TUNDA."
+        )
+    
+    # 1. Create Application with auto-verified status
+    try:
+        rusunawa_enum = RusunawaSite(payload.rusunawa_target)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Rusunawa target '{payload.rusunawa_target}' tidak valid.")
+    
+    application = Application(
+        nik=payload.nik,
+        full_name=payload.full_name,
+        phone_number=payload.phone_number,
+        email=payload.email,
+        rusunawa_target=rusunawa_enum,
+        family_members_count=payload.family_members_count,
+        marital_status=payload.marital_status,
+        place_of_birth=payload.place_of_birth,
+        date_of_birth=payload.date_of_birth,
+        religion=payload.religion,
+        occupation=payload.occupation,
+        previous_address=payload.previous_address,
+        status=ApplicationStatus.interview,
+        is_documents_verified=True,  # Auto-verified for admin direct input
+        has_signed_statement=True,
+    )
+    session.add(application)
+    session.flush()  # Get application.id
+    
+    logger.info(f"[DirectOnboarding] Application created for {payload.full_name} (NIK: {payload.nik}), ID: {application.id}")
+    
+    # 2. Build InterviewDecision and delegate to existing submit_interview logic
+    decision = InterviewDecision(
+        room_id=payload.room_id,
+        contract_start=payload.contract_start,
+        contract_end=payload.contract_end,
+        deposit_amount=payload.deposit_amount,
+        motor_count=payload.motor_count,
+        notes=payload.notes,
+        status=ApplicationStatus.contract_created,
+        place_of_birth=payload.place_of_birth,
+        date_of_birth=payload.date_of_birth,
+        religion=payload.religion,
+        marital_status=payload.marital_status,
+        occupation=payload.occupation,
+        previous_address=payload.previous_address,
+        family_members=payload.family_members,
+        sk_number=payload.sk_number,
+        sk_date=payload.sk_date,
+        ps_number=payload.ps_number,
+        ps_date=payload.ps_date,
+        sip_number=payload.sip_number,
+        sip_date=payload.sip_date,
+        ba_number=payload.ba_number,
+        ba_date=payload.ba_date,
+        entry_time=payload.entry_time,
+    )
+    
+    # Reuse submit_interview logic (it handles user/tenant/room/invoice/document generation)
+    return submit_interview(application.id, decision, session, _)
+
 
 @router.delete("/{app_id}", status_code=204)
 def delete_application(
