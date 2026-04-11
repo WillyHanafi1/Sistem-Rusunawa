@@ -41,10 +41,24 @@ docs/
 *.db.*
 rusun-backend/verify_db.py
 
-# Local scratch & experimental scripts
+# Local scratch, experimental, & temp scripts
 scratch/
 rusun-backend/scratch/
+tmp/
+*.resolved
+implementation_plan.md
+result.txt
+backend_logs.txt
+
+# Database backups & snapshots
+*.bak
+*.backup*
+*.dev_snapshot
+*.cleanup_backup
+
+# Local utility scripts
 rusun-backend/scripts/cleanup_data.py
 rusun-backend/scripts/clear_uploads.py
 rusun-backend/scripts/generate_template.py
 rusun-backend/scripts/fix_enums.py
+rusun-backend/scripts/fix_overdue_dates.py
