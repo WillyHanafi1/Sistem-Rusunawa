@@ -25,16 +25,17 @@ def upgrade() -> None:
     
     inspector = sa.inspect(bind)
     
-    # Check if we need to rename enums
-    result = bind.execute(sa.text("SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = 'rusunawasite'")).fetchall()
-    enum_vals = [r[0] for r in result]
-    
-    if 'cigugur_tengah' in enum_vals:
-        op.execute("ALTER TYPE rusunawasite RENAME VALUE 'cigugur_tengah' TO 'Cigugur Tengah'")
-    if 'cibeureum' in enum_vals:
-        op.execute("ALTER TYPE rusunawasite RENAME VALUE 'cibeureum' TO 'Cibeureum'")
-    if 'leuwigajah' in enum_vals:
-        op.execute("ALTER TYPE rusunawasite RENAME VALUE 'leuwigajah' TO 'Leuwigajah'")
+    # Check if we need to rename enums (PostgreSQL only)
+    if bind.dialect.name == 'postgresql':
+        result = bind.execute(sa.text("SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = 'rusunawasite'")).fetchall()
+        enum_vals = [r[0] for r in result]
+        
+        if 'cigugur_tengah' in enum_vals:
+            op.execute("ALTER TYPE rusunawasite RENAME VALUE 'cigugur_tengah' TO 'Cigugur Tengah'")
+        if 'cibeureum' in enum_vals:
+            op.execute("ALTER TYPE rusunawasite RENAME VALUE 'cibeureum' TO 'Cibeureum'")
+        if 'leuwigajah' in enum_vals:
+            op.execute("ALTER TYPE rusunawasite RENAME VALUE 'leuwigajah' TO 'Leuwigajah'")
 
     if not inspector.has_table('system_sequences'):
         op.create_table('system_sequences',
@@ -97,11 +98,13 @@ def downgrade() -> None:
     # ### end Alembic commands ###
 
     # --- Manual addition: restore rusunawasite enum labels ---
-    result = bind.execute(sa.text("SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = 'rusunawasite'")).fetchall()
-    enum_vals = [r[0] for r in result]
-    if 'Cigugur Tengah' in enum_vals:
-        op.execute("ALTER TYPE rusunawasite RENAME VALUE 'Cigugur Tengah' TO 'cigugur_tengah'")
-    if 'Cibeureum' in enum_vals:
-        op.execute("ALTER TYPE rusunawasite RENAME VALUE 'Cibeureum' TO 'cibeureum'")
-    if 'Leuwigajah' in enum_vals:
-        op.execute("ALTER TYPE rusunawasite RENAME VALUE 'Leuwigajah' TO 'leuwigajah'")
+    # --- Manual addition: restore rusunawasite enum labels (PostgreSQL only) ---
+    if bind.dialect.name == 'postgresql':
+        result = bind.execute(sa.text("SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = 'rusunawasite'")).fetchall()
+        enum_vals = [r[0] for r in result]
+        if 'Cigugur Tengah' in enum_vals:
+            op.execute("ALTER TYPE rusunawasite RENAME VALUE 'Cigugur Tengah' TO 'cigugur_tengah'")
+        if 'Cibeureum' in enum_vals:
+            op.execute("ALTER TYPE rusunawasite RENAME VALUE 'Cibeureum' TO 'cibeureum'")
+        if 'Leuwigajah' in enum_vals:
+            op.execute("ALTER TYPE rusunawasite RENAME VALUE 'Leuwigajah' TO 'leuwigajah'")
