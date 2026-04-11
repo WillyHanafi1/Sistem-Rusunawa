@@ -15,6 +15,13 @@ export default function CigugurTengahPage() {
   const [formData, setFormData] = useState({
     lokasi: "Rusunawa Cigugur Tengah",
     nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1,
+    marital_status: "Belum Kawin",
+    place_of_birth: "",
+    date_of_birth: "",
+    religion: "Islam",
+    occupation: "",
+    previous_address: "",
+    family_members: [] as { name: string; age: string; relation: string; gender: string }[],
     ktp_file: null as File | null,
     kk_file: null as File | null,
     sku_file: null as File | null,
@@ -47,6 +54,18 @@ export default function CigugurTengahPage() {
       payload.append("email", formData.email);
       payload.append("rusunawa_target", "Cigugur Tengah");
       payload.append("family_members_count", formData.jmlKeluarga.toString());
+      payload.append("marital_status", formData.marital_status);
+      payload.append("place_of_birth", formData.place_of_birth);
+      payload.append("date_of_birth", formData.date_of_birth);
+      payload.append("religion", formData.religion);
+      payload.append("occupation", formData.occupation);
+      payload.append("previous_address", formData.previous_address);
+      
+      // Serialize family members as JSON
+      if (formData.family_members.length > 0) {
+        payload.append("family_members", JSON.stringify(formData.family_members));
+      }
+
       payload.append("ktp_file", formData.ktp_file);
       payload.append("kk_file", formData.kk_file);
       if (formData.sku_file) payload.append("sku_file", formData.sku_file);
@@ -61,6 +80,8 @@ export default function CigugurTengahPage() {
       alert("Pendaftaran berhasil dikirim! Silakan tunggu petugas kami menghubungi Anda.");
       setFormData({
         ...formData, nik: "", nama: "", noWa: "", email: "", jmlKeluarga: 1,
+        place_of_birth: "", date_of_birth: "", occupation: "", previous_address: "",
+        family_members: [],
         ktp_file: null, kk_file: null, sku_file: null, photo_file: null, has_signed_statement: false
       });
     } catch (err: any) {
@@ -330,10 +351,110 @@ export default function CigugurTengahPage() {
               <input required type="email" placeholder="email@gmail.com" value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
             </div>
 
-            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6">
-              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Jml Anggota Keluarga <span className="text-red-500">*</span></label>
-              <input required type="number" min={1} max={10} placeholder="Termasuk Kepala Keluarga" value={formData.jmlKeluarga} onChange={e => setFormData({ ...formData, jmlKeluarga: Number(e.target.value) })} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+            <div className="pt-6 border-t border-slate-200 dark:border-white/5">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Data Personal Tambahan</h3>
             </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Status Marital <span className="text-red-500">*</span></label>
+              <select required value={formData.marital_status} onChange={e => setFormData({ ...formData, marital_status: e.target.value })} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white">
+                <option value="Belum Kawin">Belum Kawin</option>
+                <option value="Kawin">Kawin</option>
+                <option value="Cerai Hidup">Cerai Hidup</option>
+                <option value="Cerai Mati">Cerai Mati</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Tempat & Tgl Lahir <span className="text-red-500">*</span></label>
+              <div className="md:w-3/4 flex gap-4">
+                <input required type="text" placeholder="Kota Lahir" value={formData.place_of_birth} onChange={e => setFormData({ ...formData, place_of_birth: e.target.value })} className="w-1/2 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+                <input required type="date" value={formData.date_of_birth} onChange={e => setFormData({ ...formData, date_of_birth: e.target.value })} className="w-1/2 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Agama <span className="text-red-500">*</span></label>
+              <select required value={formData.religion} onChange={e => setFormData({ ...formData, religion: e.target.value })} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white">
+                <option value="Islam">Islam</option>
+                <option value="Kristen">Kristen</option>
+                <option value="Katolik">Katolik</option>
+                <option value="Hindu">Hindu</option>
+                <option value="Budha">Budha</option>
+                <option value="Konghucu">Konghucu</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Pekerjaan <span className="text-red-500">*</span></label>
+              <input required type="text" placeholder="Contoh: Karyawan Swasta" value={formData.occupation} onChange={e => setFormData({ ...formData, occupation: e.target.value })} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-2 md:gap-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300 pt-3">Alamat Asal <span className="text-red-500">*</span></label>
+              <textarea required placeholder="Alamat lengkap sebelumnya" value={formData.previous_address} onChange={e => setFormData({ ...formData, previous_address: e.target.value })} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white min-h-[100px]" />
+            </div>
+
+            <div className="pt-6 border-t border-slate-200 dark:border-white/5">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Anggota Keluarga</h3>
+              <p className="text-xs text-slate-500 mb-6 italic">* Masukkan rincian anggota keluarga yang akan tinggal bersama Anda</p>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6">
+              <label className="md:w-1/4 text-sm font-semibold text-slate-700 dark:text-slate-300">Total Penghuni <span className="text-red-500">*</span></label>
+              <input required type="number" min={1} max={10} placeholder="Termasuk Kepala Keluarga" value={formData.jmlKeluarga} onChange={e => {
+                const count = Number(e.target.value);
+                const newFamily = [...formData.family_members];
+                if (count > 1) {
+                  // Adjust family_members array size (count - 1 because applicant is the 1st)
+                  const requiredMembers = count - 1;
+                  if (newFamily.length < requiredMembers) {
+                    for (let i = newFamily.length; i < requiredMembers; i++) {
+                      newFamily.push({ name: "", age: "", relation: "", gender: "Laki-laki" });
+                    }
+                  } else if (newFamily.length > requiredMembers) {
+                    newFamily.splice(requiredMembers);
+                  }
+                } else {
+                  newFamily.length = 0;
+                }
+                setFormData({ ...formData, jmlKeluarga: count, family_members: newFamily });
+              }} className="md:w-3/4 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition-all dark:text-white" />
+            </div>
+
+            {formData.family_members.map((member, index) => (
+              <div key={index} className="p-6 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5 space-y-4">
+                <p className="text-xs font-bold text-blue-600 uppercase tracking-wider">Anggota Keluarga #{index + 2}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input required type="text" placeholder="Nama Lengkap" value={member.name} onChange={e => {
+                    const newFamily = [...formData.family_members];
+                    newFamily[index].name = e.target.value;
+                    setFormData({ ...formData, family_members: newFamily });
+                  }} className="p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg outline-none transition-all dark:text-white text-sm" />
+                  
+                  <div className="flex gap-2">
+                    <input required type="number" placeholder="Umur" value={member.age} onChange={e => {
+                      const newFamily = [...formData.family_members];
+                      newFamily[index].age = e.target.value;
+                      setFormData({ ...formData, family_members: newFamily });
+                    }} className="w-1/3 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg outline-none transition-all dark:text-white text-sm" />
+                    
+                    <select required value={member.relation} onChange={e => {
+                      const newFamily = [...formData.family_members];
+                      newFamily[index].relation = e.target.value;
+                      setFormData({ ...formData, family_members: newFamily });
+                    }} className="w-2/3 p-3 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg outline-none transition-all dark:text-white text-sm">
+                      <option value="">Hubungan</option>
+                      <option value="Istri">Istri</option>
+                      <option value="Suami">Suami</option>
+                      <option value="Anak">Anak</option>
+                      <option value="Orang Tua">Orang Tua</option>
+                      <option value="Saudara">Saudara</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ))}
 
             <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 pb-6 border-t border-slate-200 dark:border-white/5 pt-6">
               <div className="md:w-1/4">

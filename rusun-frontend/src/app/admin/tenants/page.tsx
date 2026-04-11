@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api, { handleDownload } from "@/lib/api";
-import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle, Edit } from "lucide-react";
+import { Loader2, Filter, Download, UserX, Building2, Home, ChevronLeft, ChevronRight, FileSpreadsheet, Calendar, PlusCircle, AlertCircle, Edit, FileText, ChevronDown } from "lucide-react";
 import { format, addMonths } from "date-fns";
 import {
     createColumnHelper,
@@ -33,6 +33,13 @@ interface Room {
     renewal_count?: number;
     email?: string | null;
     nik?: string | null;
+    motor_count?: number;
+    // Interview Bundle Document Paths
+    ba_wawancara_path?: string | null;
+    permohonan_doc_path?: string | null;
+    sip_doc_path?: string | null;
+    pk_doc_path?: string | null;
+    sp_doc_path?: string | null;
 }
 
 const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
@@ -217,17 +224,17 @@ export default function ContractRoomPage() {
         }
     };
 
-    const handleDownloadContract = async (notes: string | undefined) => {
-        if (!notes) return;
-        const contractMatch = notes.match(/Kontrak path: (.*)/);
-        const contractPath = contractMatch ? contractMatch[1] : null;
-        if (contractPath) {
-            const safePath = contractPath.replace(/\\/g, '/');
-            await handleDownload(`/api/${safePath}`, undefined, true);
-        } else {
-            alert("File kontrak tidak ditemukan.");
+    const handleDownloadDoc = async (path: string | null | undefined) => {
+        if (!path) {
+            alert("File dokumen tidak ditemukan.");
+            return;
         }
+        const safePath = path.replace(/\\/g, '/');
+        await handleDownload(`/api/${safePath}`, undefined, true);
     };
+
+    // State for document dropdown
+    const [docDropdownOpen, setDocDropdownOpen] = useState<number | null>(null);
 
     const handleOpenEdit = (room: Room) => {
         setSelectedRoomForEdit(room);
@@ -583,17 +590,57 @@ export default function ContractRoomPage() {
             header: () => <div className="text-center py-2.5 text-slate-500 font-semibold">Aksi</div>,
             cell: info => {
                 const r = info.row.original;
+
+                const DOC_LIST = [
+                    { label: "Perjanjian (PK)", path: r.pk_doc_path },
+                    { label: "SIP", path: r.sip_doc_path },
+                    { label: "Surat Pernyataan", path: r.sp_doc_path },
+                    { label: "BA Wawancara", path: r.ba_wawancara_path },
+                    { label: "Permohonan", path: r.permohonan_doc_path },
+                ];
+                const hasAnyDoc = DOC_LIST.some(d => !!d.path);
+
                 return (
                     <div className="flex justify-center gap-1.5">
                         {r.status === 'isi' ? (
                             <>
-                                <button
-                                    onClick={() => handleDownloadContract(r.notes!)}
-                                    className={`p-1.5 rounded-lg transition-all ${r.notes ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200" : "text-slate-200 cursor-not-allowed"}`}
-                                    title={r.notes ? "Unduh Kontrak" : "Kontrak belum diunggah"}
-                                >
-                                    <Download className="w-4 h-4" />
-                                </button>
+                                {/* Document Download Dropdown */}
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setDocDropdownOpen(prev => prev === r.id ? null : r.id)}
+                                        className={`p-1.5 rounded-lg transition-all flex items-center gap-0.5 ${hasAnyDoc ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-transparent hover:border-blue-200" : "text-slate-300 dark:text-slate-600 cursor-not-allowed"}`}
+                                        disabled={!hasAnyDoc}
+                                        title={hasAnyDoc ? "Unduh Dokumen" : "Belum ada dokumen"}
+                                    >
+                                        <FileText className="w-4 h-4" />
+                                        <ChevronDown className="w-3 h-3" />
+                                    </button>
+                                    {docDropdownOpen === r.id && (
+                                        <>
+                                            {/* Backdrop to close */}
+                                            <div className="fixed inset-0 z-40" onClick={() => setDocDropdownOpen(null)} />
+                                            <div className="absolute right-0 top-full mt-1.5 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 min-w-[180px] animate-in fade-in slide-in-from-top-1">
+                                                <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dokumen Bundle</div>
+                                                {DOC_LIST.map((doc, idx) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => { handleDownloadDoc(doc.path); setDocDropdownOpen(null); }}
+                                                        disabled={!doc.path}
+                                                        className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${
+                                                            doc.path
+                                                                ? "text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-blue-500/10"
+                                                                : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                                                        }`}
+                                                    >
+                                                        <Download className={`w-3.5 h-3.5 ${doc.path ? "text-blue-500" : "text-slate-300 dark:text-slate-600"}`} />
+                                                        {doc.label}
+                                                        {!doc.path && <span className="ml-auto text-[9px] italic">N/A</span>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                                 <button
                                     onClick={() => handleOpenRenew(r)}
                                     className="p-1.5 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 border border-transparent hover:border-emerald-200 rounded-lg transition-all"

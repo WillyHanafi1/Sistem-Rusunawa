@@ -15,8 +15,9 @@ import logging
 from datetime import datetime
 import uuid
 import re
-
-logger = logging.getLogger(__name__)
+import json
+from app.core.utils import format_rupiah_terbilang, terbilang as terbilang_func
+from datetime import datetime, date
 
 # Base direktori untuk menyimpan file upload
 UPLOAD_DIR = "uploads"
@@ -56,6 +57,12 @@ async def create_application(
     rusunawa_target: str = Form(...),
     family_members_count: int = Form(1),
     marital_status: Optional[str] = Form(None),
+    place_of_birth: Optional[str] = Form(None),
+    date_of_birth: Optional[date] = Form(None),
+    religion: Optional[str] = Form(None),
+    occupation: Optional[str] = Form(None),
+    previous_address: Optional[str] = Form(None),
+    family_members: Optional[str] = Form(None), # JSON string
     ktp_file: UploadFile = File(...),
     kk_file: Optional[UploadFile] = File(None),
     marriage_cert_file: Optional[UploadFile] = File(None),
@@ -147,6 +154,11 @@ async def create_application(
         rusunawa_target=rusunawa_target,
         family_members_count=family_members_count,
         marital_status=marital_status,
+        place_of_birth=place_of_birth,
+        date_of_birth=date_of_birth,
+        religion=religion,
+        occupation=occupation,
+        previous_address=previous_address,
         ktp_file_path=ktp_path,
         kk_file_path=kk_path,
         marriage_cert_file_path=marriage_path,
@@ -161,6 +173,26 @@ async def create_application(
     session.add(application)
     session.commit()
     session.refresh(application)
+    
+    # Process family members if provided
+    if family_members:
+        try:
+            family_list = json.loads(family_members)
+            for fm in family_list:
+                family_member = FamilyMember(
+                    name=fm.get("name"),
+                    age=int(fm.get("age", 0)),
+                    gender=fm.get("gender", "-"),
+                    relation=fm.get("relation"),
+                    application_id=application.id
+                )
+                session.add(family_member)
+            session.commit()
+        except Exception as e:
+            logging.error(f"Error parsing/saving family members: {str(e)}")
+            # Don't fail the whole application if family member parsing fails,
+            # but log it.
+    
     return application
 
 
@@ -256,14 +288,14 @@ from app.core.document_service import DocumentService
 
 class InterviewDecision(BaseModel):
     room_id: int
-    contract_start: date
-    contract_end: date
-    deposit_amount: float
+    contract_start: Optional[date] = None # Default: today
+    contract_end: Optional[date] = None   # Default: 24 months from start
+    deposit_amount: Optional[float] = None # Default: 2x room price
     motor_count: int = 0
     status: ApplicationStatus = ApplicationStatus.contract_created
     notes: Optional[str] = None
     
-    # Bio Data
+    # Bio Data (Fallback to application if None)
     place_of_birth: Optional[str] = None
     date_of_birth: Optional[date] = None
     religion: Optional[str] = None
@@ -281,6 +313,8 @@ class InterviewDecision(BaseModel):
     ps_date: Optional[date] = None
     sip_number: Optional[str] = None
     sip_date: Optional[date] = None
+    ba_number: Optional[str] = None
+    ba_date: Optional[date] = None
     entry_time: Optional[str] = None
 
 @router.post("/{app_id}/interview", response_model=ApplicationRead)
@@ -306,6 +340,27 @@ def submit_interview(
         raise HTTPException(status_code=400, detail="Kamar tidak ditemukan atau tidak kosong")
 
     from app.core.config import settings
+
+    # --- Automation & Fallback Logic ---
+    # 1. Dates
+    if not decision.contract_start:
+        decision.contract_start = date.today()
+    if not decision.contract_end:
+        # Default 2 tahun (24 bulan)
+        from dateutil.relativedelta import relativedelta
+        decision.contract_end = decision.contract_start + relativedelta(years=2)
+
+    # 2. Deposit
+    if decision.deposit_amount is None or decision.deposit_amount == 0:
+        decision.deposit_amount = room.price * settings.DEPOSIT_MULTIPLIER
+
+    # 3. Bio Data Fallback (If not provided in interview, take from registration)
+    if not decision.place_of_birth: decision.place_of_birth = application.place_of_birth
+    if not decision.date_of_birth: decision.date_of_birth = application.date_of_birth
+    if not decision.religion: decision.religion = application.religion
+    if not decision.marital_status: decision.marital_status = application.marital_status
+    if not decision.occupation: decision.occupation = application.occupation
+    if not decision.previous_address: decision.previous_address = application.previous_address
 
     # Validasi Deposit 2x Sewa (Perwal)
     expected_deposit = room.price * settings.DEPOSIT_MULTIPLIER
@@ -344,6 +399,8 @@ def submit_interview(
             application.ps_date = decision.ps_date
             application.sip_number = decision.sip_number
             application.sip_date = decision.sip_date
+            application.ba_number = decision.ba_number
+            application.ba_date = decision.ba_date
             application.entry_time = decision.entry_time
             
             session.add(application)
@@ -427,7 +484,7 @@ def submit_interview(
                         "no": idx,
                         "nama": fm.name,
                         "umur": fm.age,
-                        "lp": fm.gender,
+                        "lp": fm.gender[0].upper() if fm.gender else "-",
                         "agama": fm.religion,
                         "status": fm.marital_status,
                         "hub": fm.relation,
@@ -439,52 +496,122 @@ def submit_interview(
             MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
             now = datetime.now()
             
+            # Indonesian Date Formatter Helper
+            def fmt_indo(d: date):
+                if not d: return "-"
+                return f"{d.day} {MONTHS[d.month-1]} {d.year}"
+
             doc_context = {
+                # Pihak Pertama (Management)
+                "nama_kepala_uptd": context.get("nama_kepala_uptd", "KOKO, S.E., M.M."),
+                "nip_kepala_uptd": context.get("nip_kepala_uptd", "19810323 200801 1 004"),
+                "pangkat_kepala_uptd": context.get("pangkat_kepala_uptd", "Pembina"),
+                "jabatan_kepala_uptd": "Kepala UPTD Rumah Susun Sederhana Sewa (RUSUNAWA) Dinas Perumahan Dan Kawasan Permukiman – Kota Cimahi.",
+                
+                # Kordinator (For BAST)
+                "nama_kordinator": context.get("nama_kordinator", "ASEP SURYANA MASDUKI"),
+                "nip_kordinator": context.get("nip_kordinator", "19820410 200901 1 005"),
+                "pangkat_kordinator": context.get("pangkat_kordinator", "Penata"),
+                "jabatan_kordinator": f"Kordinator Rusun {application.rusunawa_target}",
+                
+                # Pihak Kedua (Tenant)
                 "nama_penyewa": application.full_name,
                 "nik": application.nik,
                 "telepon": application.phone_number,
                 "email": application.email,
+                "agama": decision.religion,
+                "status_perkawinan": decision.marital_status,
+                "pekerjaan": decision.occupation,
+                "alamat_sebelumnya": decision.previous_address,
+                "tempat_tgl_lahir_penyewa": f"{decision.place_of_birth}, {fmt_indo(decision.date_of_birth)}",
+                "jumlah_keluarga": len(decision.family_members) if decision.family_members else 0,
+                "jumlah_keluarga_terbilang": f"{len(decision.family_members)} ({terbilang_func(len(decision.family_members))})" if decision.family_members else "0 (Nol)",
+                
+                # Lokasi & Dokumen
                 "rusunawa": application.rusunawa_target,
+                "nama_rusunawa": application.rusunawa_target,
                 "nomor_kamar": room.room_number,
                 "lantai": room.floor,
                 "gedung": room.building,
                 "unit": room.unit_number,
-                "harga_sewa": f"Rp {room.price:,.2f}",
-                "deposit": f"Rp {decision.deposit_amount:,.2f}",
+                "lokasi_lengkap": f"{room.building} {ROMAN.get(room.floor, room.floor)} {room.unit_number} Rusunawa {application.rusunawa_target}",
+                
+                "ps_number": decision.ps_number,
+                "sk_number": decision.sk_number,
+                "sk_date_indo": fmt_indo(decision.sk_date),
+                "hari_sk": DAYS[decision.sk_date.weekday()],
+                "tanggal_sk": decision.sk_date.day,
+                "tanggal_sk_terbilang": terbilang_func(decision.sk_date.day),
+                "bulan_sk_indo": MONTHS[decision.sk_date.month - 1],
+                "tahun_sk": decision.sk_date.year,
+                "tahun_sk_terbilang": terbilang_func(decision.sk_date.year),
+                "sip_number": decision.sip_number,
+                "sip_date_indo": fmt_indo(decision.sip_date),
+                
+                "ba_number": decision.ba_number,
+                "ba_date_indo": fmt_indo(decision.ba_date) if decision.ba_date else fmt_indo(decision.sip_date),
+                "hari_ba": DAYS[decision.ba_date.weekday()] if decision.ba_date else DAYS[decision.sip_date.weekday()] if decision.sip_date else DAYS[now.weekday()],
+                "tanggal_ba": (decision.ba_date.day if decision.ba_date else decision.sip_date.day if decision.sip_date else now.day),
+                "tanggal_ba_terbilang": terbilang_func(decision.ba_date.day if decision.ba_date else decision.sip_date.day if decision.sip_date else now.day),
+                "bulan_ba_indo": MONTHS[(decision.ba_date.month - 1) if decision.ba_date else (decision.sip_date.month - 1) if decision.sip_date else (now.month - 1)],
+                "tahun_ba": (decision.ba_date.year if decision.ba_date else decision.sip_date.year if decision.sip_date else now.year),
+                "tahun_ba_terbilang": terbilang_func(decision.ba_date.year if decision.ba_date else decision.sip_date.year if decision.sip_date else now.year),
+                
+                "lantai_romawi": ROMAN.get(room.floor, str(room.floor)),
+                "nama_penyewa_kapital": application.full_name.upper(),
+                
+                "permohonan_number": application.id,
+                "permohonan_date_indo": fmt_indo(application.created_at.date()),
+                
+                # Financials
+                "harga_sewa": f"Rp {room.price:,.0f}".replace(",", "."),
+                "harga_sewa_terbilang": format_rupiah_terbilang(room.price),
+                "deposit": f"Rp {decision.deposit_amount:,.0f}".replace(",", "."),
+                "deposit_terbilang": format_rupiah_terbilang(decision.deposit_amount),
+                
+                # Timestamps & Formatted Dates
                 "tanggal_mulai": decision.contract_start.strftime("%d-%m-%Y"),
+                "tanggal_mulai_indo": fmt_indo(decision.contract_start),
                 "tanggal_selesai": decision.contract_end.strftime("%d-%m-%Y"),
-                "jumlah_motor": decision.motor_count,
-                "tanggal_wawancara": now.strftime("%d-%m-%Y"),
-                "hari": DAYS[now.weekday()],
-                "tanggal_indo": f"{now.day} {MONTHS[now.month-1]} {now.year}",
-                "bulan_indo": MONTHS[now.month-1],
-                "tahun": now.year,
-                
-                # Bio Data
-                "tempat_lahir": decision.place_of_birth,
-                "tgl_lahir": decision.date_of_birth.strftime("%d-%m-%Y") if decision.date_of_birth else "",
-                "agama": decision.religion,
-                "status_kawin": decision.marital_status,
-                "pekerjaan": decision.occupation,
-                "alamat_asal": decision.previous_address,
-                
-                # Documents metadata
-                "sk_nomor": decision.sk_number,
-                "sk_tanggal": decision.sk_date.strftime("%d-%m-%Y") if decision.sk_date else "",
-                "ps_nomor": decision.ps_number,
-                "ps_tanggal": decision.ps_date.strftime("%d-%m-%Y") if decision.ps_date else "",
-                "sip_nomor": decision.sip_number,
-                "sip_tanggal": decision.sip_date.strftime("%d-%m-%Y") if decision.sip_date else "",
-                "jam_masuk": decision.entry_time,
-                
+                "tanggal_selesai_indo": fmt_indo(decision.contract_end),
+                "entry_time": decision.entry_time,
+                "hari_masuk": DAYS[decision.contract_start.weekday()],
+                "tanggal_masuk_indo": fmt_indo(decision.contract_start),
+                "tanggal_now_indo": fmt_indo(decision.sip_date) if decision.sip_date else fmt_indo(now.date()),
+                "tanggal_terbilang": terbilang_func(decision.sip_date.day if decision.sip_date else now.day),
+                "hari_now": DAYS[decision.sip_date.weekday()] if decision.sip_date else DAYS[now.weekday()],
+                "bulan_now_indo": MONTHS[(decision.sip_date.month-1) if decision.sip_date else (now.month-1)],
+                "tahun_now": decision.sip_date.year if decision.sip_date else now.year,
+                "tahun_terbilang": terbilang_func(decision.sip_date.year if decision.sip_date else now.year),
+
                 # Family List
                 "keluarga": family_list,
-                "jumlah_keluarga": len(family_list)
+                "hasil_verifikasi": "Lolos",
+                
+                # Legacy Support/Aliases
+                "sk_nomor": decision.sk_number,
+                "ps_nomor": decision.ps_number,
+                "sip_nomor": decision.sip_number,
+                "room_number": room.room_number,
+                "nama_rusunawa": f"{application.rusunawa_target}",
             }
             
             bundle = DocumentService.generate_bundle(doc_context, application.nik)
             
-            # Simpan informasi bundle di catatan tenant
+            # Simpan path dokumen ke kolom dedicated di tenant
+            BUNDLE_TO_COLUMN = {
+                "ba_wawancara": "ba_wawancara_path",
+                "pengajuan": "permohonan_doc_path",
+                "sip": "sip_doc_path",
+                "kontrak": "pk_doc_path",
+                "surat_jalan": "sp_doc_path",
+                "bast": "bast_doc_path",
+            }
+            for bundle_key, column_name in BUNDLE_TO_COLUMN.items():
+                if bundle_key in bundle:
+                    setattr(new_tenant, column_name, bundle[bundle_key])
+            
+            # Tetap simpan ringkasan di notes untuk referensi legacy
             doc_links = "\n".join([f"{k.upper()}: {v}" for k, v in bundle.items()])
             new_tenant.notes = f"Dokumen Bundle:\n{doc_links}"
             application.notes = f"INTERVIEW_SUCCESS|{doc_links}"

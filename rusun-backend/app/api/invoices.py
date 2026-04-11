@@ -265,15 +265,35 @@ def print_invoice(
     result = session.exec(query).first()
     if not result:
         raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    inv_obj = result[0]
+    # MED-01: Ownership Validation for document access
+    if current_user.role == UserRole.penghuni:
+        # Check if the tenant associated with this invoice belongs to the current user
+        tenant = session.get(Tenant, inv_obj.tenant_id)
+        if not tenant or tenant.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not own this document")
+
     return _get_single_invoice_pdf(result, invoice_id, session, doc_type)
 
 @router.get("/{invoice_id}/token")
 def get_print_token(
     invoice_id: int,
     doc_type: Optional[DocumentType] = None,
-    current_user: User = Depends(require_admin),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """Generates a one-time use token for PDF preview that expires in 60 seconds."""
+    # Ownership Validation for document access
+    if current_user.role == UserRole.penghuni:
+        invoice = session.get(Invoice, invoice_id)
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        
+        # Check if the tenant associated with this invoice belongs to the current user
+        tenant = session.get(Tenant, invoice.tenant_id)
+        if not tenant or tenant.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not own this document")
     token = secrets.token_urlsafe(32)
     _preview_tokens[token] = {
         "type": "single",
@@ -350,7 +370,16 @@ def _prepare_invoice_context(result: Any, session: Session, doc_type: Optional[D
         "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
         "tahun_tagihan": str(inv_obj.period_year),
         "year": str(inv_obj.period_year),
-        "tenggat_bayar": fmt_date(inv_obj.due_date),
+        "tenggat_bayar": fmt_date(
+            (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()) + timedelta(days=7)
+            if doc_type in (DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3)
+            else inv_obj.due_date
+        ),
+        "tenggat_waktu": fmt_date(
+            (getattr(inv_obj, f"{doc_type.value}_date", None) or date.today()) + timedelta(days=7)
+            if doc_type in (DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3)
+            else inv_obj.due_date
+        ),
         
         # Rincian Biaya
         "sewa_price": fmt_decimal(inv_obj.base_rent),
@@ -368,27 +397,7 @@ def _prepare_invoice_context(result: Any, session: Session, doc_type: Optional[D
     }
     return context
 
-def pre_generate_invoices_task(invoice_ids: List[int]):
-    """Background task to pre-generate PDF documents for a list of invoices."""
-    from app.core.db import engine
-    with Session(engine) as session:
-        for inv_id in invoice_ids:
-            try:
-                statement = select(
-                    Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number, User.name, Tenant.nik
-                ).join(Tenant, Invoice.tenant_id == Tenant.id).join(User, Tenant.user_id == User.id).join(Room, Tenant.room_id == Room.id).where(Invoice.id == inv_id)
-                
-                result = session.exec(statement).first()
-                if not result: continue
-                
-                inv_obj = result[0]
-                doc_type = inv_obj.document_type
-                
-                context = _prepare_invoice_context(result, session, doc_type)
-                # Note: DocumentService uses a thread lock internally
-                DocumentService.generate_invoice_document(context, doc_type.value, inv_id)
-            except Exception as e:
-                print(f"[BG PDF] Error ID {inv_id}: {str(e)}")
+
 
 def _get_single_invoice_pdf(result: Any, invoice_id: int, session: Session, doc_type: Optional[DocumentType] = None) -> Response:
     inv_obj, r_num, r_ru, r_bu, r_fl, r_un, t_name, t_nik = result
@@ -506,7 +515,11 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "billing_month": months_id.get(inv_obj.period_month, str(inv_obj.period_month)),
                 "tahun_tagihan": str(inv_obj.period_year),
                 "year": str(inv_obj.period_year),
-                "tenggat_bayar": (inv_obj.due_date or date.today()).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
+                "tenggat_bayar": (
+                    (getattr(inv_obj, f"{actual_doc_type.value}_date", None) or date.today()) + timedelta(days=7)
+                    if actual_doc_type in (DocumentType.teguran1, DocumentType.teguran2, DocumentType.teguran3)
+                    else (inv_obj.due_date or date.today())
+                ).strftime("%d %B %Y").replace("January", "Januari").replace("February", "Februari").replace("March", "Maret").replace("April", "April").replace("May", "Mei").replace("June", "Juni").replace("July", "Juli").replace("August", "Agustus").replace("September", "September").replace("October", "Oktober").replace("November", "November").replace("December", "Desember"),
 
                 # Rincian Biaya
                 "sewa_price": fmt_decimal(inv_obj.base_rent),
@@ -653,6 +666,50 @@ def _process_bulk_pdf_background(
             session.commit()
         finally:
             merger.close()
+
+@router.get("/print-bulk/check")
+def check_existing_print_job(
+    month: int,
+    year: int,
+    doc_type: Optional[DocumentType] = None,
+    building: Optional[str] = None,
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin),
+):
+    """Read-only: Cek apakah ada print job aktif TANPA membuat yang baru.
+    Digunakan oleh frontend auto-recovery agar tidak men-trigger cetak massal."""
+    statement = (
+        select(PrintJob)
+        .where(PrintJob.month == month)
+        .where(PrintJob.year == year)
+        .where(PrintJob.doc_type == (doc_type.value if doc_type else "all"))
+        .where(PrintJob.building == building)
+        .where(PrintJob.status.in_([PrintJobStatus.processing, PrintJobStatus.completed]))
+    )
+    existing_job = session.exec(statement).first()
+
+    if not existing_job:
+        return {"active": False, "message": "Tidak ada job cetak aktif"}
+
+    # Jika completed tapi file hilang, tandai failed
+    if existing_job.status == PrintJobStatus.completed:
+        if not existing_job.file_path or not os.path.exists(existing_job.file_path):
+            existing_job.status = PrintJobStatus.failed
+            existing_job.error = "File cetak sebelumnya hilang, silakan coba lagi."
+            session.add(existing_job)
+            session.commit()
+            return {"active": False, "message": "File cetak sebelumnya hilang"}
+
+    return {
+        "active": True,
+        "job_id": existing_job.id,
+        "status": existing_job.status.value,
+        "processed": existing_job.processed,
+        "total": existing_job.total,
+        "message": "Ditemukan job cetak aktif",
+        "recovered": True,
+    }
+
 
 @router.get("/print-bulk/async")
 def start_bulk_print_async(

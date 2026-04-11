@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.api.invoices import internal_mass_generate_invoices
 
 from app.models.sequence import SystemSequence
-from app.models.room import Room, RusunawaSite
+from app.models.room import Room, RusunawaSite, ROMAN
 from app.models.tenant import Tenant
 
 class MassEscalateRequest(BaseModel):
@@ -310,7 +310,7 @@ def mass_escalate_documents(
             user = session.exec(user_stmt).first()
             
             tenant_name = user.name if user else "Unknown"
-            room_label = f"{room.building.split(' - ')[-1]} {app.models.room.ROMAN.get(room.floor, str(room.floor))} {room.unit_number}" if room else "Unknown"
+            room_label = f"{room.building.split(' - ')[-1]} {ROMAN.get(room.floor, str(room.floor))} {room.unit_number}" if room else "Unknown"
             rusunawa_name = room.rusunawa.value if room and hasattr(room.rusunawa, 'value') else str(room.rusunawa) if room else "Unknown"
             
             # calculate expected penalty

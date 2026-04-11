@@ -35,6 +35,14 @@ class Tenant(TenantBase, table=True):
     ktp_doc_path: Optional[str] = None
     kk_doc_path: Optional[str] = None
 
+    # Interview Bundle Document Paths
+    ba_wawancara_path: Optional[str] = None
+    permohonan_doc_path: Optional[str] = None
+    sip_doc_path: Optional[str] = None
+    pk_doc_path: Optional[str] = None
+    sp_doc_path: Optional[str] = None
+    bast_doc_path: Optional[str] = None
+
 
 class TenantCreate(TenantBase):
     pass
@@ -44,6 +52,14 @@ class TenantRead(TenantBase):
     id: int
     ktp_doc_path: Optional[str] = None
     kk_doc_path: Optional[str] = None
+
+    # Interview Bundle Document Paths
+    ba_wawancara_path: Optional[str] = None
+    permohonan_doc_path: Optional[str] = None
+    sip_doc_path: Optional[str] = None
+    pk_doc_path: Optional[str] = None
+    sp_doc_path: Optional[str] = None
+    bast_doc_path: Optional[str] = None
 
 
 class TenantUpdate(SQLModel):

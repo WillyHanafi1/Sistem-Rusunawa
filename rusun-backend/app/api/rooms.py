@@ -47,6 +47,13 @@ class RoomExtendedRead(RoomRead):
     email: Optional[str] = None
     renewal_count: int = 0
 
+    # Interview Bundle Document Paths
+    ba_wawancara_path: Optional[str] = None
+    permohonan_doc_path: Optional[str] = None
+    sip_doc_path: Optional[str] = None
+    pk_doc_path: Optional[str] = None
+    sp_doc_path: Optional[str] = None
+
 
 @router.get("/extended/all", response_model=List[RoomExtendedRead])
 def get_extended_rooms(
@@ -127,6 +134,13 @@ def get_extended_rooms(
             data["total_unpaid_bill"] = Decimal(str(unpaid_totals.get(tenant.id, 0)))
             data["email"] = user.email
             data["nik"] = tenant.nik
+
+            # Interview Bundle Document Paths
+            data["ba_wawancara_path"] = tenant.ba_wawancara_path
+            data["permohonan_doc_path"] = tenant.permohonan_doc_path
+            data["sip_doc_path"] = tenant.sip_doc_path
+            data["pk_doc_path"] = tenant.pk_doc_path
+            data["sp_doc_path"] = tenant.sp_doc_path
         else:
             data["tenant_name"] = None
             data["contract_start"] = None

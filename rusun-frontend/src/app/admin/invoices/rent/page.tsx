@@ -349,19 +349,21 @@ export default function RentInvoicesPage() {
         };
     }, [printJobId, printJobData?.status]);
 
-    // --- Auto-Recover Active Print Job ---
+    // --- Auto-Recover Active Print Job (Safe: read-only check, no job creation) ---
     useEffect(() => {
         const checkActiveJob = async () => {
             if (!massActionPanelOpen) return;
             try {
-                // We use the same 'async' endpoint which now returns existing job if found
-                const res = await api.get(`/invoices/print-bulk/async?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
-                if (res.data.job_id && (res.data.status === 'processing' || res.data.status === 'completed')) {
+                // SAFE: Uses /check endpoint which only reads DB, never creates jobs
+                const res = await api.get(`/invoices/print-bulk/check?month=${massActionMonth}&year=${massActionYear}&doc_type=${massActionTarget}`);
+                if (res.data.active && res.data.job_id) {
                     setPrintJobId(res.data.job_id);
-                    setPrintJobData(res.data);
-                    if (res.data.recovered) {
-                        console.log("Recovered an existing print job:", res.data.job_id);
-                    }
+                    setPrintJobData({
+                        status: res.data.status,
+                        processed: res.data.processed ?? 0,
+                        total: res.data.total ?? 0,
+                    });
+                    console.log("Recovered an existing print job:", res.data.job_id);
                 }
             } catch (err) {
                 // Silently fail for auto-check
@@ -1460,28 +1462,31 @@ export default function RentInvoicesPage() {
 
                                 {/* ====== Action Buttons ====== */}
                                 <div className="flex items-center gap-3 mt-8 pt-6 border-t border-slate-200 dark:border-white/10">
-                                    {!printJobData && (
+                                    {/* Phase 1 & 2: Pratinjau + Eksekusi (before generate) */}
+                                    {!massActionDone && !printJobData && (
                                         <>
-                                            {!massActionDone && (
-                                                <>
-                                                    <button
-                                                        onClick={triggerMassPreview}
-                                                        disabled={isMassActionLoading}
-                                                        className="px-6 py-3 rounded-xl font-bold text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-white/10 transition-all disabled:opacity-50 flex items-center gap-2"
-                                                    >
-                                                        {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                                                        Pratinjau
-                                                    </button>
-                                                    <button
-                                                        onClick={confirmMassAction}
-                                                        disabled={isMassActionLoading || (!massActionPreview)}
-                                                        className="px-6 py-3 rounded-xl font-bold text-sm bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center gap-2"
-                                                    >
-                                                        {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                                                        Eksekusi Generate
-                                                    </button>
-                                                </>
-                                            )}
+                                            <button
+                                                onClick={triggerMassPreview}
+                                                disabled={isMassActionLoading}
+                                                className="px-6 py-3 rounded-xl font-bold text-sm bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-white/10 transition-all disabled:opacity-50 flex items-center gap-2"
+                                            >
+                                                {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                                                Pratinjau
+                                            </button>
+                                            <button
+                                                onClick={confirmMassAction}
+                                                disabled={isMassActionLoading || (!massActionPreview)}
+                                                className="px-6 py-3 rounded-xl font-bold text-sm bg-blue-500 hover:bg-blue-600 text-white shadow-lg shadow-blue-500/30 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex items-center gap-2"
+                                            >
+                                                {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                                                Eksekusi Generate
+                                            </button>
+                                        </>
+                                    )}
+
+                                    {/* Phase 3: Cetak Masal (ONLY after generate is done) */}
+                                    {massActionDone && !printJobData && (
+                                        <>
                                             <button
                                                 onClick={handleMassPrintAsync}
                                                 disabled={isMassActionLoading}
@@ -1490,16 +1495,14 @@ export default function RentInvoicesPage() {
                                                 {isMassActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
                                                 Cetak Masal
                                             </button>
+                                            <button
+                                                onClick={() => setMassActionPanelOpen(false)}
+                                                className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 transition-all active:scale-95 flex items-center gap-2"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                Selesai & Kembali
+                                            </button>
                                         </>
-                                    )}
-                                    {massActionDone && (
-                                        <button
-                                            onClick={() => setMassActionPanelOpen(false)}
-                                            className="px-6 py-3 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 transition-all active:scale-95 flex items-center gap-2"
-                                        >
-                                            <CheckCircle2 className="w-4 h-4" />
-                                            Selesai & Kembali
-                                        </button>
                                     )}
                                 </div>
                             </div>

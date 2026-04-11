@@ -5,7 +5,7 @@ import Cookies from "js-cookie";
 import api from "@/lib/api";
 import { logout, getUserName, isLoggedIn } from "@/lib/auth";
 import { initiatePayment } from "@/lib/payment";
-import { Building2, LogOut, FileText, Loader2, ExternalLink, CreditCard, Banknote, ClipboardList, Info, AlertTriangle, X } from "lucide-react";
+import { Building2, LogOut, FileText, Loader2, ExternalLink, CreditCard, Banknote, ClipboardList, Info, AlertTriangle, X, Download, Bell, FileDown } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import PaymentFallbackModal from "@/components/PaymentFallbackModal";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +21,13 @@ interface Invoice {
     due_date: string;
     status: string;
     payment_url?: string;
+    
+    // Document numbers
+    skrd_number?: string;
+    strd_number?: string;
+    teguran1_number?: string;
+    teguran2_number?: string;
+    teguran3_number?: string;
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -132,6 +139,20 @@ export default function PortalPage() {
             setPayingId(null);
         }
     };
+    
+    const handleViewDocument = async (invoiceId: number, docType: string) => {
+        try {
+            const res = await api.get(`/invoices/${invoiceId}/token?doc_type=${docType}`);
+            const { token } = res.data;
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+            // Use the public preview endpoint with the one-time token
+            const url = `${baseUrl}/api/invoices/preview/${token}`;
+            window.open(url, "_blank");
+        } catch (err: any) {
+            console.error("Gagal mendapatkan token dokumen:", err);
+            toast.error("Gagal membuka dokumen. Silakan coba lagi.");
+        }
+    };
 
     const unpaid = invoices.filter(i => i.status === "unpaid");
     const totalUnpaid = unpaid.reduce((sum, i) => sum + Number(i.total_amount), 0);
@@ -159,6 +180,25 @@ export default function PortalPage() {
             </header>
 
             <div className="max-w-3xl mx-auto px-6 py-8">
+                {/* Notification Area */}
+                {invoices.some(inv => inv.teguran1_number || inv.teguran2_number || inv.teguran3_number) && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 mb-6 flex items-start gap-4"
+                    >
+                        <div className="p-2 bg-red-500 rounded-xl text-white">
+                            <Bell className="w-5 h-5 animate-pulse" />
+                        </div>
+                        <div>
+                            <p className="text-red-600 dark:text-red-400 font-bold text-sm">Pemberitahuan Penting</p>
+                            <p className="text-slate-600 dark:text-slate-400 text-xs mt-1 leading-relaxed">
+                                Terdapat Surat Teguran untuk unit Anda. Silakan unduh dokumen pada daftar tagihan di bawah dan segera lakukan pelunasan untuk menghindari sanksi lebih lanjut.
+                            </p>
+                        </div>
+                    </motion.div>
+                )}
+
                 {/* Summary card */}
                 {unpaid.length > 0 && (
                     <div className="bg-white dark:bg-gradient-to-r dark:from-amber-500/10 dark:to-orange-500/10 border border-amber-200 dark:border-amber-500/20 shadow-sm dark:shadow-none rounded-2xl p-6 mb-6 transition-colors duration-300">
@@ -210,6 +250,55 @@ export default function PortalPage() {
                                                     )}
                                                 </button>
                                             </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Documents Section */}
+                                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5">
+                                    <div className="flex flex-wrap gap-2">
+                                        {/* SKRD always exists */}
+                                        <button 
+                                            onClick={() => handleViewDocument(inv.id, "skrd")}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                                        >
+                                            <FileDown className="w-3 h-3" /> SKRD (Invoice)
+                                        </button>
+
+                                        {inv.strd_number && (
+                                            <button 
+                                                onClick={() => handleViewDocument(inv.id, "strd")}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium hover:bg-slate-200 dark:hover:bg-white/10 transition-colors"
+                                            >
+                                                <FileDown className="w-3 h-3" /> STRD
+                                            </button>
+                                        )}
+
+                                        {inv.teguran1_number && (
+                                            <button 
+                                                onClick={() => handleViewDocument(inv.id, "teguran1")}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/20 transition-colors"
+                                            >
+                                                <AlertTriangle className="w-3 h-3" /> Teguran 1
+                                            </button>
+                                        )}
+
+                                        {inv.teguran2_number && (
+                                            <button 
+                                                onClick={() => handleViewDocument(inv.id, "teguran2")}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 text-red-600 dark:text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/20 transition-colors"
+                                            >
+                                                <AlertTriangle className="w-3 h-3" /> Teguran 2
+                                            </button>
+                                        )}
+
+                                        {inv.teguran3_number && (
+                                            <button 
+                                                onClick={() => handleViewDocument(inv.id, "teguran3")}
+                                                className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-colors"
+                                            >
+                                                <AlertTriangle className="w-3 h-3" /> Teguran 3 (PENTING)
+                                            </button>
                                         )}
                                     </div>
                                 </div>

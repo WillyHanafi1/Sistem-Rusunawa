@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { FilePreview } from "@/components/FilePreview";
 
 interface Application {
     id: number;
@@ -606,14 +607,13 @@ export default function ApplicationsPage() {
                                         KTP / Identitas
                                     </h3>
                                     {viewingDocsApp.ktp_file_path ? (
-                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.ktp_file_path}`} 
+                                        <div className="aspect-[3/2] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <FilePreview 
+                                                path={viewingDocsApp.ktp_file_path!} 
                                                 alt="KTP" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.ktp_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.ktp_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (
@@ -628,14 +628,13 @@ export default function ApplicationsPage() {
                                         Kartu Keluarga (KK)
                                     </h3>
                                     {viewingDocsApp.kk_file_path ? (
-                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.kk_file_path}`} 
+                                        <div className="aspect-[3/2] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <FilePreview 
+                                                path={viewingDocsApp.kk_file_path!} 
                                                 alt="KK" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.kk_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.kk_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (
@@ -650,14 +649,13 @@ export default function ApplicationsPage() {
                                         Surat Nikah (Opsional)
                                     </h3>
                                     {viewingDocsApp.marriage_cert_file_path ? (
-                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.marriage_cert_file_path}`} 
+                                        <div className="aspect-[3/2] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <FilePreview 
+                                                path={viewingDocsApp.marriage_cert_file_path!} 
                                                 alt="Surat Nikah" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.marriage_cert_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.marriage_cert_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (
@@ -674,14 +672,13 @@ export default function ApplicationsPage() {
                                         SKU / Slip Gaji
                                     </h3>
                                     {viewingDocsApp.sku_file_path ? (
-                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.sku_file_path}`} 
+                                        <div className="aspect-[3/2] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <FilePreview 
+                                                path={viewingDocsApp.sku_file_path!} 
                                                 alt="SKU" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.sku_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.sku_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (
@@ -696,14 +693,13 @@ export default function ApplicationsPage() {
                                         SKCK
                                     </h3>
                                     {viewingDocsApp.skck_file_path ? (
-                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.skck_file_path}`} 
+                                        <div className="aspect-[3/2] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <FilePreview 
+                                                path={viewingDocsApp.skck_file_path!} 
                                                 alt="SKCK" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.skck_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.skck_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (
@@ -718,14 +714,13 @@ export default function ApplicationsPage() {
                                         Surat Keterangan Sehat
                                     </h3>
                                     {viewingDocsApp.health_cert_file_path ? (
-                                        <div className="aspect-[3/2] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.health_cert_file_path}`} 
+                                        <div className="aspect-[3/2] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group">
+                                            <FilePreview 
+                                                path={viewingDocsApp.health_cert_file_path!} 
                                                 alt="Surat Sehat" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.health_cert_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.health_cert_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (
@@ -740,14 +735,13 @@ export default function ApplicationsPage() {
                                         Pasfoto 3x4
                                     </h3>
                                     {viewingDocsApp.photo_file_path ? (
-                                        <div className="aspect-[3/4] rounded-2xl overflow-hidden border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group max-w-[150px] mx-auto">
-                                            <img 
-                                                src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8100'}/api/${viewingDocsApp.photo_file_path}`} 
+                                        <div className="aspect-[3/4] border-2 border-slate-100 dark:border-slate-800 bg-slate-50 relative group max-w-[150px] mx-auto">
+                                            <FilePreview 
+                                                path={viewingDocsApp.photo_file_path!} 
                                                 alt="Pasfoto" 
-                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                                             />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
-                                                <button onClick={() => handleDownloadFile(viewingDocsApp.photo_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg"><Download className="w-5 h-5" /></button>
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 pointer-events-none">
+                                                <button onClick={() => handleDownloadFile(viewingDocsApp.photo_file_path!)} className="p-3 bg-white text-slate-900 rounded-full hover:scale-110 transition-transform shadow-lg pointer-events-auto"><Download className="w-5 h-5" /></button>
                                             </div>
                                         </div>
                                     ) : (

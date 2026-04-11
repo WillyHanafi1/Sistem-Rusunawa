@@ -132,6 +132,7 @@ class DocumentService:
             # Find specific roles for document tags
             kepala = next((s for s in management_staff if "kepala" in s.role.lower()), None)
             bendahara = next((s for s in management_staff if "bendahara" in s.role.lower()), None)
+            kasubag = next((s for s in management_staff if "kasubag" in s.role.lower()), None)
             
             if kepala:
                 context["nama_kepala_uptd"] = kepala.name
@@ -150,6 +151,10 @@ class DocumentService:
                 context["bendahara_name"] = bendahara.name
                 context["bendahara_nip"] = bendahara.nip
                 context["bendahara_pangkat"] = bendahara.pangkat
+            if kasubag:
+                context["nama_kasubag_tu"] = kasubag.name
+                context["nip_kasubag_tu"] = kasubag.nip
+                context["pangkat_kasubag_tu"] = kasubag.pangkat
 
         generated_docs = {}
 

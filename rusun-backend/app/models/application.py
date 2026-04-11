@@ -49,7 +49,17 @@ class ApplicationBase(SQLModel):
     ps_date: Optional[date] = None
     sip_number: Optional[str] = None
     sip_date: Optional[date] = None
+    ba_number: Optional[str] = None
+    ba_date: Optional[date] = None
     entry_time: Optional[str] = None # e.g. "10:00"
+    
+    # Bundle Paths
+    ba_wawancara_path: Optional[str] = None
+    permohonan_doc_path: Optional[str] = None
+    sip_doc_path: Optional[str] = None
+    pk_doc_path: Optional[str] = None
+    sp_doc_path: Optional[str] = None
+    bast_doc_path: Optional[str] = None
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -118,4 +128,6 @@ class ApplicationUpdate(SQLModel):
     ps_date: Optional[date] = None
     sip_number: Optional[str] = None
     sip_date: Optional[date] = None
+    ba_number: Optional[str] = None
+    ba_date: Optional[date] = None
     entry_time: Optional[str] = None
