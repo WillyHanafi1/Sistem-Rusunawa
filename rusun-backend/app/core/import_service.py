@@ -271,3 +271,25 @@ async def process_tenant_import(file_content: bytes, session: Session, filename:
         session.rollback()
         logger.error(f"Import error: {str(e)}")
         return {"success": False, "error": f"Internal Server Error: {str(e)}"}
+
+async def bg_process_tenant_import(file_content: bytes, filename: str):
+    """
+    Background worker for tenant import. 
+    Handles its own session to ensure it can run after the main request context is closed.
+    """
+    from app.core.db import engine
+    from sqlmodel import Session
+    
+    logger.info(f"Starting background tenant import for file: {filename}")
+    
+    with Session(engine) as session:
+        try:
+            result = await process_tenant_import(file_content, session, filename)
+            if result["success"]:
+                logger.info(f"Background import SUCCESS: {result['message']}")
+            else:
+                logger.error(f"Background import FAILED: {result.get('error')}")
+                if "details" in result:
+                    logger.error(f"Error details: {result['details']}")
+        except Exception as e:
+            logger.error(f"CRITICAL error in background import: {str(e)}")

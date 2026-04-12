@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlmodel import Session, select
 from typing import List, Optional
 from datetime import date
@@ -12,7 +12,7 @@ from app.models.room import Room, RoomStatus
 from app.models.user import User, UserRole
 from app.models.invoice import Invoice, InvoiceRead
 from app.models.ticket import Ticket, TicketRead
-from app.core.import_service import process_tenant_import
+from app.core.import_service import process_tenant_import, bg_process_tenant_import
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
 
@@ -49,8 +49,9 @@ def get_tenant_history(
     }
 
 
-@router.post("/import", status_code=200)
+@router.post("/import", status_code=202)
 async def import_tenants(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
     _: User = Depends(require_super_admin),
@@ -59,12 +60,14 @@ async def import_tenants(
         raise HTTPException(status_code=400, detail="File harus berupa format Excel (.xlsx, .xls) atau CSV (.csv)")
     
     content = await file.read()
-    result = await process_tenant_import(content, session, filename=file.filename)
     
-    if not result["success"]:
-        raise HTTPException(status_code=400, detail=result)
-        
-    return result
+    # Jalankan proses import di background agar tidak timeout 524
+    background_tasks.add_task(bg_process_tenant_import, content, file.filename)
+    
+    return {
+        "success": True, 
+        "message": "Proses import telah dimulai di latar belakang. Silakan cek log atau halaman penghuni dalam beberapa saat untuk melihat hasilnya."
+    }
 
 
 @router.get("", response_model=List[TenantRead])
