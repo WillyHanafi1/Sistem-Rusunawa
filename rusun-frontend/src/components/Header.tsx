@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Building2, ArrowRight, ChevronDown } from "lucide-react";
+import Image from "next/image";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 const locations = [
@@ -60,14 +61,33 @@ export function Header() {
         }`}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
-            <Building2 className="w-5 h-5 text-white" />
+        <Link href="/" className="flex items-center gap-4 group">
+          <div className="flex items-center gap-2">
+            <div className="relative w-[52px] h-[52px] group-hover:scale-105 transition-transform">
+              <Image
+                src="/images/logos/logo-cimahi.png"
+                alt="Logo Kota Cimahi"
+                fill
+                className="object-contain"
+              />
+            </div>
+            <div className="relative w-[52px] h-[52px] group-hover:scale-105 transition-transform">
+              <Image
+                src="/images/logos/logo-rusun.png"
+                alt="Logo Rusunawa"
+                fill
+                className="object-contain"
+              />
+            </div>
           </div>
-          <span className={`font-bold text-lg tracking-tight transition-colors ${scrolled ? "text-slate-900 dark:text-white" : "text-white"
-            }`}>
-            UPTD Rusunawa Cimahi
-          </span>
+          <div className="flex flex-col">
+            <span className={`font-bold text-base md:text-lg leading-tight tracking-tight transition-colors ${scrolled ? "text-slate-900 dark:text-white" : "text-white"}`}>
+              UPTD Rusunawa
+            </span>
+            <span className={`font-medium text-[10px] md:text-xs tracking-wide transition-colors ${scrolled ? "text-slate-500 dark:text-slate-400" : "text-white/80"}`}>
+              Kota Cimahi
+            </span>
+          </div>
         </Link>
 
         <nav className="hidden lg:flex items-center gap-8">

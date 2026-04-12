@@ -54,11 +54,7 @@ const EMPTY_FORM = {
     photo_file: null as File | null
 };
 
-const SITE_ORDER: Record<string, number> = {
-    "Cigugur Tengah": 1,
-    "Cibeureum": 2,
-    "Leuwigajah": 3
-};
+
 
 export default function ApplicationsPage() {
     const [apps, setApps] = useState<Application[]>([]);
@@ -254,14 +250,7 @@ export default function ApplicationsPage() {
                 app.nik.includes(search)
             )
             .sort((a, b) => {
-                const priorityA = SITE_ORDER[a.rusunawa_target] || 99;
-                const priorityB = SITE_ORDER[b.rusunawa_target] || 99;
-                
-                if (priorityA !== priorityB) {
-                    return priorityA - priorityB;
-                }
-                
-                // Secondary sort: Newest first
+                // Return strictly newest first (chronological)
                 return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
             });
     }, [apps, search]);

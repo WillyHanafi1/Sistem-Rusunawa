@@ -390,8 +390,13 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 md:grid-cols-4 gap-12 md:gap-8">
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-cyan-400 rounded-lg flex items-center justify-center">
-                <Building2 className="w-4 h-4 text-white" />
+              <div className="relative w-12 h-12">
+                <Image
+                  src="/images/logos/logo-rusun.png"
+                  alt="Logo Rusunawa"
+                  fill
+                  className="object-contain"
+                />
               </div>
               <span className="text-slate-900 dark:text-white font-bold tracking-tight">Pengelola UPTD Rusunawa Kota Cimahi</span>
             </div>

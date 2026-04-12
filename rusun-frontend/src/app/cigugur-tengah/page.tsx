@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Header } from "@/components/Header";
 import { FloorPlan } from "@/components/FloorPlan";
+import Image from "next/image";
 import {
   ArrowLeft, Building2, MapPin, Layers, Users,
   ShieldCheck, ShowerHead, Car, Tag, ListTodo, Loader2
@@ -151,48 +152,19 @@ export default function CigugurTengahPage() {
             <div className="w-24 h-1 bg-yellow-400 mx-auto rounded-full" />
           </div>
 
-          <div className="flex flex-col lg:grid lg:grid-cols-2 gap-4">
-            {/* Kiri: 1 Foto Besar */}
-            <div className="group relative rounded-3xl overflow-hidden shadow-lg border border-slate-200 dark:border-white/10 h-[300px] lg:h-[500px]">
+          <div className="max-w-5xl mx-auto">
+            <div className="group relative rounded-3xl overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 h-[520px] md:h-[780px]">
               <img
                 src="/images/buildings/cigugur.jpg"
-                alt="Gedung Rusunawa"
+                alt="Gedung Rusunawa Cigugur Tengah"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80 transition-opacity group-hover:opacity-100" />
-              <div className="absolute bottom-6 left-6 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                <span className="px-4 py-1.5 bg-blue-600/90 backdrop-blur-md text-white text-xs font-bold rounded-full mb-3 inline-block shadow-lg">Tipe 21</span>
-                <h3 className="text-white text-2xl font-bold shadow-sm">Ruang Keluarga & Dapur</h3>
-                <p className="text-slate-200 text-sm mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">Nyaman dan sirkulasi udara baik</p>
-              </div>
-            </div>
-
-            {/* Kanan: 2 Foto Sedang Susun Atas Bawah */}
-            <div className="flex flex-col lg:grid lg:grid-rows-2 gap-4 lg:h-[500px]">
-              {/* Foto Kanan Atas */}
-              <div className="group relative rounded-3xl overflow-hidden shadow-lg border border-slate-200 dark:border-white/10 h-[250px] lg:h-auto">
-                <img
-                  src="https://images.unsplash.com/photo-1540518614846-7eded433c457?q=80&w=2057&auto=format&fit=crop"
-                  alt="Kamar Tidur"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80" />
-                <div className="absolute bottom-5 left-5">
-                  <h3 className="text-white text-xl font-bold">Kamar Tidur Nyaman</h3>
-                </div>
-              </div>
-
-              {/* Foto Kanan Bawah */}
-              <div className="group relative rounded-3xl overflow-hidden shadow-lg border border-slate-200 dark:border-white/10 h-[250px] lg:h-auto">
-                <img
-                  src="https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=1950&auto=format&fit=crop"
-                  alt="Kamar Mandi"
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-80" />
-                <div className="absolute bottom-5 left-5">
-                  <h3 className="text-white text-xl font-bold">Kamar Mandi & Area Cuci</h3>
-                </div>
+              <div className="absolute bottom-8 left-8 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                <h3 className="text-white text-2xl md:text-3xl font-bold shadow-sm">Jl. At-Taqwa, Cigugur Tengah, Kec. Cimahi Tengah</h3>
+                <p className="text-blue-400 text-sm md:text-base mt-2 font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100 flex items-center gap-2">
+                  <MapPin className="w-4 h-4" /> Lokasi Strategis & Nyaman
+                </p>
               </div>
             </div>
           </div>
@@ -554,8 +526,18 @@ export default function CigugurTengahPage() {
       </section>
 
       {/* Footer minimalis */}
-      <footer className="py-8 bg-slate-900 border-t border-slate-800 text-center text-slate-400 text-sm">
-        <p>© {new Date().getFullYear()} Rusunawa Cimahi. Hak Cipta Dilindungi.</p>
+      <footer className="py-12 bg-slate-900 border-t border-slate-800 text-center text-slate-400 text-sm">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col items-center gap-4">
+          <div className="relative w-12 h-12 mb-2">
+            <Image
+              src="/images/logos/logo-rusun.png"
+              alt="Logo Rusunawa"
+              fill
+              className="object-contain"
+            />
+          </div>
+          <p>© {new Date().getFullYear()} Rusunawa Cimahi. Hak Cipta Dilindungi.</p>
+        </div>
       </footer>
     </div>
   );
