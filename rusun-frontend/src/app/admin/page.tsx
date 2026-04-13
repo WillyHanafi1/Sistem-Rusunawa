@@ -26,23 +26,8 @@ export default function AdminDashboard() {
 
         const fetchStats = async () => {
             try {
-                const [rooms, tenants, invoices] = await Promise.all([
-                    api.get("/rooms"),
-                    api.get("/tenants"),
-                    api.get("/invoices"),
-                ]);
-                const now = new Date();
-                setStats({
-                    total_rooms: rooms.data.length,
-                    active_tenants: tenants.data.filter((t: any) => t.is_active).length,
-                    unpaid_invoices: invoices.data.filter((i: any) => i.status === "unpaid").length,
-                    paid_this_month: invoices.data.filter(
-                        (i: any) =>
-                            i.status === "paid" &&
-                            i.period_month === now.getMonth() + 1 &&
-                            i.period_year === now.getFullYear()
-                    ).length,
-                });
+                const response = await api.get("/management/stats");
+                setStats(response.data);
             } catch {
                 // ignore
             } finally {

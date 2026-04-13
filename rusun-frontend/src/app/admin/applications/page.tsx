@@ -60,8 +60,9 @@ export default function ApplicationsPage() {
     const [apps, setApps] = useState<Application[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
-
-    // Action State
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [page, setPage] = useState(1);
+    const limit = 50; // Per page
     const [actionLoading, setActionLoading] = useState<number | null>(null);
 
     // Form / Modal State
@@ -79,10 +80,16 @@ export default function ApplicationsPage() {
     const [showWizard, setShowWizard] = useState(false);
     const [isDirectOnboarding, setIsDirectOnboarding] = useState(false);
 
-    const fetchApplications = async () => {
+    const fetchApplications = async (status?: string) => {
         try {
             setLoading(true);
-            const { data } = await api.get("/applications");
+            const params = new URLSearchParams();
+            if (status && status !== "all") params.append("status", status);
+            // Optional: Support pagination on API if you want
+            // params.append("skip", ((page - 1) * limit).toString());
+            // params.append("limit", limit.toString());
+            
+            const { data } = await api.get(`/applications?${params.toString()}`);
             setApps(data);
         } catch (error) {
             console.error("Failed fetching applications:", error);
@@ -92,8 +99,8 @@ export default function ApplicationsPage() {
     };
 
     useEffect(() => {
-        fetchApplications();
-    }, []);
+        fetchApplications(statusFilter);
+    }, [statusFilter]);
 
     const handleUpdateStatus = async (appId: number, status: "approved" | "rejected" | "interview") => {
         if (!confirm(`Apakah Anda yakin ingin mengubah status pengajuan ini menjadi ${status.toUpperCase()}?`)) return;
@@ -291,19 +298,32 @@ export default function ApplicationsPage() {
                         className="w-full pl-9 pr-4 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white"
                     />
                 </div>
-                <div className="flex gap-2 w-full md:w-auto overflow-x-auto text-sm">
-                    <div className="px-4 py-2 bg-yellow-50 text-yellow-700 rounded-lg flex items-center gap-2 border border-yellow-100 whitespace-nowrap">
-                        <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                        {apps.filter(x => x.status === "pending").length} Pending
-                    </div>
-                    <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-lg flex items-center gap-2 border border-blue-100 whitespace-nowrap">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        {apps.filter(x => x.status === "interview").length} Wawancara
-                    </div>
-                    <div className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg flex items-center gap-2 border border-indigo-100 whitespace-nowrap">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                        {apps.filter(x => x.status === "contract_created").length} Kontrak
-                    </div>
+                <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-x-auto no-scrollbar scroll-smooth">
+                    {[
+                        { id: 'all', label: 'Semua', color: 'bg-slate-500' },
+                        { id: 'pending', label: 'Pending', color: 'bg-yellow-500' },
+                        { id: 'interview', label: 'Wawancara', color: 'bg-blue-500' },
+                        { id: 'contract_created', label: 'Kontrak', color: 'bg-indigo-500' },
+                        { id: 'rejected', label: 'Ditolak', color: 'bg-red-500' }
+                    ].map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setStatusFilter(tab.id)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                                statusFilter === tab.id 
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                        >
+                            <span className={`w-1.5 h-1.5 rounded-full ${tab.color} ${statusFilter === tab.id && tab.id === 'pending' ? 'animate-pulse' : ''}`} />
+                            {tab.label}
+                            {statusFilter === tab.id && (
+                                <span className="ml-1 px-1.5 py-0.5 bg-slate-200 dark:bg-slate-900 rounded-md text-[10px]">
+                                    {apps.length}
+                                </span>
+                            )}
+                        </button>
+                    ))}
                 </div>
             </div>
 

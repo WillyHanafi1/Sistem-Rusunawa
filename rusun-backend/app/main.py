@@ -178,9 +178,11 @@ app.add_middleware(
 # Exclude public/webhook endpoints.
 csrf_exempt_urls = [
     re.compile(r"^/api/auth/login"), 
-    re.compile(r"^/api/applications/?$"), 
-    re.compile(r"^/api/webhooks/midtrans"),
-    re.compile(r"^/api/invoices/preview") # OTT Preview is safe (signed token)
+    re.compile(r"^/api/applications/?$"), # Public Registration
+    re.compile(r"^/api/webhooks/midtrans"), # Payment Webhooks
+    re.compile(r"^/api/invoices/preview"), # OTT Preview is safe (protected by signed JWT)
+    re.compile(r"^/api/invoices/mass-generate"), # Admin Mass Actions
+    re.compile(r"^/api/invoices/mass-generate-teguran"),
 ]
 
 app.add_middleware(

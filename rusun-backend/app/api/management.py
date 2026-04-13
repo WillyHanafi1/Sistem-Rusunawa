@@ -5,8 +5,59 @@ from app.core.db import get_session
 from app.models.staff import Staff, StaffRead, StaffCreate, StaffUpdate, StaffPublicRead
 from app.core.security import require_super_admin, get_current_user
 from app.models.user import User
+from pydantic import BaseModel
+from sqlalchemy import func
+from datetime import date
+from app.models.room import Room
+from app.models.tenant import Tenant
+from app.models.invoice import Invoice, InvoiceStatus
 
 router = APIRouter(prefix="/management", tags=["Management"])
+
+class DashboardStats(BaseModel):
+    total_rooms: int
+    active_tenants: int
+    unpaid_invoices: int
+    paid_this_month: int
+
+@router.get("/stats", response_model=DashboardStats)
+def get_dashboard_stats(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_user),
+):
+    """
+    Fetch global statistics for the admin dashboard.
+    Calculated server-side for accuracy and performance.
+    """
+    # 1. Total Rooms
+    total_rooms = session.exec(select(func.count()).select_from(Room)).one()
+
+    # 2. Active Tenants
+    active_tenants = session.exec(
+        select(func.count()).select_from(Tenant).where(Tenant.is_active == True)
+    ).one()
+
+    # 3. Unpaid Invoices (Unpaid + Overdue)
+    unpaid_invoices = session.exec(
+        select(func.count()).select_from(Invoice)
+        .where(Invoice.status.in_([InvoiceStatus.unpaid, InvoiceStatus.overdue]))
+    ).one()
+
+    # 4. Paid This Month
+    today = date.today()
+    paid_this_month = session.exec(
+        select(func.count()).select_from(Invoice)
+        .where(Invoice.status == InvoiceStatus.paid)
+        .where(Invoice.period_month == today.month)
+        .where(Invoice.period_year == today.year)
+    ).one()
+
+    return {
+        "total_rooms": total_rooms,
+        "active_tenants": active_tenants,
+        "unpaid_invoices": unpaid_invoices,
+        "paid_this_month": paid_this_month,
+    }
 
 @router.get("/public", response_model=List[StaffPublicRead])
 def get_public_management_team(session: Session = Depends(get_session)):

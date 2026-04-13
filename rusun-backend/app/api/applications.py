@@ -11,6 +11,7 @@ from app.models.tenant import Tenant
 from app.models.invoice import Invoice, InvoiceStatus, DocumentType, MOTOR_RATE
 from app.models.room import Room, RoomStatus, RusunawaSite
 from app.models.family_member import FamilyMember, FamilyMemberCreate
+from app.services.application_service import ApplicationService
 from app.core.security import hash_password
 import os
 import shutil
@@ -23,11 +24,8 @@ import json
 # Setup logger
 logger = logging.getLogger(__name__)
 
-from app.core.utils import format_rupiah_terbilang, terbilang as terbilang_func
+from app.core.utils import format_rupiah_terbilang
 from datetime import datetime, date
-
-# Segments mapping
-ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V"}
 
 # Base direktori untuk menyimpan file upload
 UPLOAD_DIR = "uploads"
@@ -43,10 +41,13 @@ router = APIRouter(prefix="/applications", tags=["Applications"])
 def list_applications(
     status: Optional[ApplicationStatus] = None,
     skip: int = 0,
-    limit: int = 1000,
+    limit: int = 200,  # Adjusted from default for better admin experience
     session: Session = Depends(get_session),
-    _: User = Depends(require_admin),  # Hanya admin yang bisa melihat daftar pengajuan
+    _: User = Depends(require_admin),
 ):
+    """
+    List applications with optional status filtering.
+    """
     query = select(Application)
     if status:
         query = query.where(Application.status == status)
@@ -202,20 +203,30 @@ async def create_application(
     if family_members:
         try:
             family_list = json.loads(family_members)
+            if not isinstance(family_list, list):
+                raise ValueError("Format data keluarga harus berupa list")
+
             for fm in family_list:
+                if not isinstance(fm, dict): continue
+                
+                # Basic validation for required fields
+                name = fm.get("name")
+                if not name: continue # Skip invalid entry
+                
                 family_member = FamilyMember(
-                    name=fm.get("name"),
-                    age=int(fm.get("age", 0)),
-                    gender=fm.get("gender", "-"),
-                    relation=fm.get("relation"),
+                    name=name,
+                    age=int(fm.get("age") or 0),
+                    gender=fm.get("gender") or "-",
+                    relation=fm.get("relation") or "Lainnya",
                     application_id=application.id
                 )
                 session.add(family_member)
             session.commit()
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Invalid family_members JSON: {e}")
         except Exception as e:
-            logging.error(f"Error parsing/saving family members: {str(e)}")
-            # Don't fail the whole application if family member parsing fails,
-            # but log it.
+            logger.error(f"Error parsing/saving family members: {e}")
+            session.rollback()
     
     return application
 
@@ -242,16 +253,12 @@ def update_application_status(
         # Cek apakah Email sudah jadi User
         existing_user = session.exec(select(User).where(User.email == application.email)).first()
         if not existing_user:
-            # Security Fix: Use a random generated password instead of NIK
-            # Buat user baru untuk login ke portal penghuni
+            # AUTH-01: Enforce secure random password for all environments.
+            # Never use NIK as password, even in development.
             import secrets
             import string
-            if settings.ENVIRONMENT == "development":
-                temp_password = application.nik
-                logger.info(f"[DEV] User account created for {application.email} (password = NIK)")
-            else:
-                temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
-                logger.info(f"User account created for {application.email}. Send password via secure channel.")
+            temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(12))
+            logger.info(f"User account created for App ID: {application.id}. Password generated securely.")
             
             # Buat akun User baru
             new_user = User(
@@ -269,11 +276,12 @@ def update_application_status(
             # Buat entri Tenant awal tanpa kamar (Kamar harus di-assign dari menu Penghuni)
             new_tenant = Tenant(
                 user_id=new_user.id,
-                room_id=0, # Asumsi 0 atau None sesuai skema, kita sementara buat tanpa kamar atau nanti admin assign
+                room_id=0,
+                nik=application.nik,
                 is_active=True,
                 contract_start=datetime.now().date(),
-                contract_end=datetime.now().date()
-                # Field lain perlu dilengkapi manual oleh Admin nanti
+                contract_end=datetime.now().date(),
+                application_id=application.id,
             )
             try:
                 session.add(new_tenant)
@@ -358,401 +366,14 @@ def submit_interview(
     if not application:
         raise HTTPException(status_code=404, detail="Data pengajuan tidak ditemukan")
 
-    # 0. GUARD: Cegah pemrosesan ulang
+    # Guard: Prevent re-processing
     if application.status == ApplicationStatus.contract_created:
-        logger.warning(f"Attempted to re-submit interview for App ID: {app_id} which is already in status 'contract_created'")
-        # Kembalikan aplikasi yang sudah ada daripada error 400 jika pemanggilnya butuh idempotensi,
-        # tapi di sini kita berikan error 400 supaya Admin tahu ada aksi ganda.
         raise HTTPException(status_code=400, detail="Pengajuan ini sudah memproses kontrak (SIPA).")
 
-    # 0. GUARD: Cek apakah Tenant sudah ada (Berbasis application_id)
-    from sqlmodel import select
-    existing_tenant = session.exec(
-        select(Tenant).where(Tenant.application_id == app_id)
-    ).first()
-    
-    if existing_tenant:
-        logger.warning(f"Tenant already exists for App ID: {app_id}")
-        raise HTTPException(status_code=400, detail="Penyewa untuk pengajuan ini sudah terdaftar.")
-
-    # Jika ditolak, langsung update status dan selesai
-    if decision.status == ApplicationStatus.rejected:
-        application.status = ApplicationStatus.rejected
-        if decision.notes:
-            application.notes = decision.notes
-        session.add(application)
-        session.commit()
-        session.refresh(application)
-        return application
-
-    # Validasi Verifikasi Dokumen (Hanya untuk approval)
-    if not application.is_documents_verified:
-        raise HTTPException(
-            status_code=400, 
-            detail="Dokumen pendaftaran belum diverifikasi oleh Admin. Silakan verifikasi dokumen terlebih dahulu."
-        )
-    
-    if decision.room_id is None:
-        raise HTTPException(
-            status_code=400, 
-            detail="Kamar harus dipilih untuk pengajuan yang akan disetujui."
-        )
-
-    room = session.get(Room, decision.room_id)
-    if not room or room.status != RoomStatus.kosong:
-        raise HTTPException(status_code=400, detail="Kamar tidak ditemukan atau tidak kosong")
-
-    from app.core.config import settings
-
-    # --- Automation & Fallback Logic ---
-    # 1. Dates
-    if not decision.contract_start:
-        decision.contract_start = date.today()
-    if not decision.contract_end:
-        # Default 2 tahun (24 bulan)
-        from dateutil.relativedelta import relativedelta
-        decision.contract_end = decision.contract_start + relativedelta(years=2)
-
-    # 2. Deposit
-    if decision.deposit_amount is None or decision.deposit_amount == 0:
-        decision.deposit_amount = room.price * settings.DEPOSIT_MULTIPLIER
-
-    # 3. Bio Data Fallback (If not provided in interview, take from registration)
-    if not decision.place_of_birth: decision.place_of_birth = application.place_of_birth
-    if not decision.date_of_birth: decision.date_of_birth = application.date_of_birth
-    if not decision.religion: decision.religion = application.religion
-    if not decision.marital_status: decision.marital_status = application.marital_status
-    if not decision.occupation: decision.occupation = application.occupation
-    if not decision.previous_address: decision.previous_address = application.previous_address
-
-    # Validasi Deposit 2x Sewa (Perwal)
-    expected_deposit = room.price * settings.DEPOSIT_MULTIPLIER
-    if decision.deposit_amount < expected_deposit:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Uang jaminan sewa minimal {settings.DEPOSIT_MULTIPLIER} bulan sewa (Rp {expected_deposit:,.0f})"
-        )
-
-    # Validasi Durasi Kontrak 6-24 bulan (Perwal)
-    months_diff = (decision.contract_end.year - decision.contract_start.year) * 12 + decision.contract_end.month - decision.contract_start.month
-    if months_diff < settings.MIN_CONTRACT_MONTHS or months_diff > settings.MAX_CONTRACT_MONTHS:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Durasi kontrak harus antara {settings.MIN_CONTRACT_MONTHS} hingga {settings.MAX_CONTRACT_MONTHS} bulan"
-        )
-
     try:
-        # Amankan status baru
-        application.status = decision.status
-        if decision.notes:
-            application.notes = decision.notes
-
-        if decision.status == ApplicationStatus.contract_created:
-            # Update Application Bio & Doc Numbers
-            application.place_of_birth = decision.place_of_birth
-            application.date_of_birth = decision.date_of_birth
-            application.religion = decision.religion
-            application.marital_status = decision.marital_status
-            application.occupation = decision.occupation
-            application.previous_address = decision.previous_address
-            
-            application.sk_number = decision.sk_number
-            application.sk_date = decision.sk_date
-            application.ps_number = decision.ps_number
-            application.ps_date = decision.ps_date
-            application.sip_number = decision.sip_number
-            application.sip_date = decision.sip_date
-            application.ba_number = decision.ba_number
-            application.ba_date = decision.ba_date
-            application.entry_time = decision.entry_time
-            
-            session.add(application)
-            
-            # Save Family Members for Application
-            if decision.family_members:
-                for fm_in in decision.family_members:
-                    fm = FamilyMember.model_validate(fm_in)
-                    fm.application_id = application.id
-                    session.add(fm)
-            
-            # Flush to ensure application changes are ready (though ID exists)
-            session.flush()
-
-            # Cek User
-            existing_user = session.exec(select(User).where(User.email == application.email)).first()
-            if not existing_user:
-                import secrets
-                import string
-                temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for i in range(10))
-                logger.info(f"User account created for {application.email}. Send password via secure channel.")
-
-                new_user = User(
-                    email=application.email,
-                    name=application.full_name,
-                    password_hash=hash_password(temp_password),
-                    phone=application.phone_number,
-                    role=UserRole.penghuni,
-                    is_active=True
-                )
-                session.add(new_user)
-                session.flush() # Get new_user.id
-                user_id = new_user.id
-            else:
-                user_id = existing_user.id
-                
-            # Cek Tenant aktif
-            active_tenant = session.exec(
-                select(Tenant).where(Tenant.user_id == user_id).where(Tenant.is_active == True)
-            ).first()
-            if active_tenant:
-                raise HTTPException(status_code=400, detail="User ini sudah menjadi penghuni aktif.")
-
-            # Buat Tenant
-            new_tenant = Tenant(
-                user_id=user_id,
-                room_id=room.id,
-                nik=application.nik,
-                is_active=True,
-                contract_start=decision.contract_start,
-                application_id=application.id,
-                contract_end=decision.contract_end,
-                deposit_amount=decision.deposit_amount,
-                motor_count=decision.motor_count,
-                # Bio Data to Tenant
-                place_of_birth = decision.place_of_birth,
-                date_of_birth = decision.date_of_birth,
-                religion = decision.religion,
-                marital_status = decision.marital_status,
-                occupation = decision.occupation,
-                previous_address = decision.previous_address
-            )
-            session.add(new_tenant)
-            session.flush() # Get new_tenant.id
-            
-            # Link Family Members to Tenant
-            if decision.family_members:
-                for fm_in in decision.family_members:
-                    fm_tenant = FamilyMember.model_validate(fm_in)
-                    fm_tenant.tenant_id = new_tenant.id
-                    session.add(fm_tenant)
-            
-            # Update Kamar
-            room.status = RoomStatus.isi
-            session.add(room)
-
-            # Generate 4 Dokumen
-            family_list = []
-            if decision.family_members:
-                for idx, fm in enumerate(decision.family_members, 1):
-                    family_list.append({
-                        "no": idx,
-                        "nama": fm.name,
-                        "umur": fm.age,
-                        "lp": fm.gender[0].upper() if fm.gender else "-",
-                        "agama": fm.religion,
-                        "status": fm.marital_status,
-                        "hub": fm.relation,
-                        "pekerjaan": fm.occupation
-                    })
-
-            # Indonesian Day/Month names
-            DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
-            MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
-            now = datetime.now()
-            
-            # Indonesian Date Formatter Helper
-            def fmt_indo(d: date):
-                if not d: return "-"
-                return f"{d.day} {MONTHS[d.month-1]} {d.year}"
-
-            # Fallback context for pimpinan data if not in DB
-            context = {}
-
-            doc_context = {
-                # Pihak Pertama (Management) - Akan di-fetch otomatis oleh DocumentService dari DB Staff
-                # Kordinator (For BAST)
-                "jabatan_kordinator": f"Kordinator Rusun {application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
-                
-                # Pihak Kedua (Tenant)
-                "nama_penyewa": application.full_name,
-                "nik": application.nik,
-                "telepon": application.phone_number,
-                "email": application.email,
-                "agama": decision.religion,
-                "status_perkawinan": decision.marital_status,
-                "pekerjaan": decision.occupation,
-                "alamat_sebelumnya": decision.previous_address,
-                "tempat_tgl_lahir_penyewa": f"{decision.place_of_birth}, {fmt_indo(decision.date_of_birth)}",
-                "jumlah_keluarga": len(decision.family_members) if decision.family_members else 0,
-                "jumlah_keluarga_terbilang": f"{len(decision.family_members)} ({terbilang_func(len(decision.family_members))})" if decision.family_members else "0 (Nol)",
-                
-                # Lokasi & Dokumen
-                "rusunawa": application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target,
-                "nama_rusunawa": application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target,
-                "nomor_kamar": room.room_number,
-                "lantai": room.floor,
-                "gedung": room.building,
-                "unit": room.unit_number,
-                "lokasi_lengkap": f"{room.building} {ROMAN.get(room.floor, room.floor)} {room.unit_number} Rusunawa {application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
-                
-                # --- Guard Mandatory Dates ---
-                "sk_number": decision.sk_number,
-                "sk_date_indo": fmt_indo(decision.sk_date),
-                "hari_sk": DAYS[decision.sk_date.weekday()] if decision.sk_date else "-",
-                "tanggal_sk": decision.sk_date.day if decision.sk_date else "-",
-                "tanggal_sk_terbilang": terbilang_func(decision.sk_date.day) if decision.sk_date else "-",
-                "bulan_sk_indo": MONTHS[decision.sk_date.month - 1] if decision.sk_date else "-",
-                "tahun_sk": decision.sk_date.year if decision.sk_date else "-",
-                "tahun_sk_terbilang": terbilang_func(decision.sk_date.year) if decision.sk_date else "-",
-                
-                "sip_number": decision.sip_number,
-                "sip_date_indo": fmt_indo(decision.sip_date),
-                
-                "ba_number": decision.ba_number,
-                "ba_date_indo": fmt_indo(decision.ba_date) if decision.ba_date else fmt_indo(decision.sip_date),
-                "hari_ba": DAYS[decision.ba_date.weekday()] if decision.ba_date else DAYS[decision.sip_date.weekday()] if decision.sip_date else DAYS[now.weekday()],
-                "tanggal_ba": (decision.ba_date.day if decision.ba_date else decision.sip_date.day if decision.sip_date else now.day),
-                "tanggal_ba_terbilang": terbilang_func(decision.ba_date.day if decision.ba_date else decision.sip_date.day if decision.sip_date else now.day),
-                "bulan_ba_indo": MONTHS[(decision.ba_date.month - 1) if decision.ba_date else (decision.sip_date.month - 1) if decision.sip_date else (now.month - 1)],
-                "tahun_ba": (decision.ba_date.year if decision.ba_date else decision.sip_date.year if decision.sip_date else now.year),
-                "tahun_ba_terbilang": terbilang_func(decision.ba_date.year if decision.ba_date else decision.sip_date.year if decision.sip_date else now.year),
-                
-                "lantai_romawi": ROMAN.get(room.floor, str(room.floor)),
-                "nama_penyewa_kapital": application.full_name.upper(),
-                
-                "permohonan_number": application.id,
-                "permohonan_date_indo": fmt_indo(application.created_at.date()),
-                
-                # Financials
-                "harga_sewa": f"Rp {room.price:,.0f}".replace(",", "."),
-                "harga_sewa_terbilang": format_rupiah_terbilang(room.price),
-                "deposit": f"Rp {decision.deposit_amount:,.0f}".replace(",", "."),
-                "deposit_terbilang": format_rupiah_terbilang(decision.deposit_amount),
-                
-                # Timestamps & Formatted Dates
-                "tanggal_mulai": decision.contract_start.strftime("%d-%m-%Y"),
-                "tanggal_mulai_indo": fmt_indo(decision.contract_start),
-                "tanggal_selesai": decision.contract_end.strftime("%d-%m-%Y"),
-                "tanggal_selesai_indo": fmt_indo(decision.contract_end),
-                "entry_time": decision.entry_time,
-                "hari_masuk": DAYS[decision.contract_start.weekday()],
-                "tanggal_masuk_indo": fmt_indo(decision.contract_start),
-                "tanggal_now_indo": fmt_indo(decision.sip_date) if decision.sip_date else fmt_indo(now.date()),
-                "tanggal_terbilang": terbilang_func(decision.sip_date.day if decision.sip_date else now.day),
-                "hari_now": DAYS[decision.sip_date.weekday()] if decision.sip_date else DAYS[now.weekday()],
-                "bulan_now_indo": MONTHS[(decision.sip_date.month-1) if decision.sip_date else (now.month-1)],
-                "tahun_now": decision.sip_date.year if decision.sip_date else now.year,
-                "tahun_terbilang": terbilang_func(decision.sip_date.year if decision.sip_date else now.year),
-
-                # Family List
-                "keluarga": family_list,
-                "hasil_verifikasi": "Lolos",
-                
-                # Legacy Support/Aliases
-                "sk_nomor": decision.sk_number,
-                "ps_nomor": decision.ps_number,
-                "sip_nomor": decision.sip_number,
-                "room_number": room.room_number,
-            }
-            
-            bundle = DocumentService.generate_bundle(doc_context, application.nik)
-            
-            # Simpan path dokumen ke kolom dedicated di tenant
-            BUNDLE_TO_COLUMN = {
-                "ba_wawancara": "ba_wawancara_path",
-                "pengajuan": "permohonan_doc_path",
-                "sip": "sip_doc_path",
-                "kontrak": "pk_doc_path",
-                "surat_jalan": "sp_doc_path",
-                "bast": "bast_doc_path",
-            }
-            for bundle_key, column_name in BUNDLE_TO_COLUMN.items():
-                if bundle_key in bundle:
-                    setattr(new_tenant, column_name, bundle[bundle_key])
-            
-            # Tetap simpan ringkasan di notes untuk referensi legacy
-            doc_links = "\n".join([f"{k.upper()}: {v}" for k, v in bundle.items()])
-            new_tenant.notes = f"Dokumen Bundle:\n{doc_links}"
-            
-            # --- OTOMATISASI INVOICE (BEST PRACTICE) ---
-            # Cari kode site untuk penomoran
-            site_codes = {"Cigugur Tengah": "01", "Cibeureum": "02", "Leuwigajah": "03"}
-            rusun_name = application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target
-            code = site_codes.get(rusun_name, "00")
-            
-            # Import helper here to avoid circular or dependency issues if needed, 
-            # but we already imported Invoice above.
-            from app.api.tasks import get_next_sequence_value, format_document_number
-            
-            # Check if invoice for this period already exists for this tenant
-            existing_skrd = session.exec(
-                select(Invoice)
-                .where(Invoice.tenant_id == new_tenant.id)
-                .where(Invoice.document_type == DocumentType.skrd)
-                .where(Invoice.period_month == decision.contract_start.month)
-                .where(Invoice.period_year == decision.contract_start.year)
-            ).first()
-
-            if not existing_skrd:
-                # 1. Invoice Sewa (SKRD) - Bulan Pertama
-                next_skrd_seq = get_next_sequence_value(session, "skrd_seq", decision.contract_start.year)
-                skrd_no = format_document_number(code, "SKRD", next_skrd_seq, decision.contract_start.month, decision.contract_start.year)
-                
-                rent_invoice = Invoice(
-                    tenant_id=new_tenant.id,
-                    document_type=DocumentType.skrd,
-                    status=InvoiceStatus.unpaid,
-                    period_month=decision.contract_start.month,
-                    period_year=decision.contract_start.year,
-                    base_rent=room.price,
-                    water_charge=0,
-                    electricity_charge=0,
-                    parking_charge=0,
-                    other_charge=0,
-                    penalty_amount=0,
-                    total_amount=room.price,
-                    due_date=decision.contract_start,
-                    skrd_number=skrd_no,
-                    skrd_date=now.date(),
-                    notes=f"Tagihan Sewa Pertama - Bulan {decision.contract_start.month}/{decision.contract_start.year}"
-                )
-                session.add(rent_invoice)
-            else:
-                logger.info(f"SKRD already exists for tenant {new_tenant.id} period {decision.contract_start.month}/{decision.contract_start.year}")
-
-            # 2. Invoice Jaminan (JKRD) - 2x Sewa
-            existing_jkrd = session.exec(
-                select(Invoice)
-                .where(Invoice.tenant_id == new_tenant.id)
-                .where(Invoice.document_type == DocumentType.jaminan)
-            ).first()
-
-            if not existing_jkrd:
-                next_jkrd_seq = get_next_sequence_value(session, "jkrd_seq", now.year)
-                jkrd_no = format_document_number(code, "JKRD", next_jkrd_seq, now.month, now.year)
-                
-                deposit_invoice = Invoice(
-                    tenant_id=new_tenant.id,
-                    document_type=DocumentType.jaminan,
-                    status=InvoiceStatus.unpaid,
-                    period_month=decision.contract_start.month,
-                    period_year=decision.contract_start.year,
-                    base_rent=decision.deposit_amount,
-                    water_charge=0,
-                    electricity_charge=0,
-                    parking_charge=0,
-                    other_charge=0,
-                    penalty_amount=0,
-                    total_amount=decision.deposit_amount,
-                    due_date=now.date(),
-                    jaminan_number=jkrd_no,
-                    jaminan_date=now.date(),
-                    notes=f"Tagihan Uang Jaminan (Security Deposit)"
-                )
-                session.add(deposit_invoice)
-            
-            application.notes = f"INTERVIEW_SUCCESS|{doc_links}|INVOICES_CREATED"
-
+        # Delegate business logic to Service Layer
+        application = ApplicationService.process_interview_result(session, application, decision)
+        
         session.add(application)
         session.commit()
         session.refresh(application)
@@ -763,6 +384,7 @@ def submit_interview(
         raise
     except Exception as e:
         session.rollback()
+        logger.exception(f"Error processing interview for App ID {app_id}")
         raise HTTPException(status_code=500, detail=f"Terjadi kesalahan saat memproses wawancara: {str(e)}")
 
 class DirectOnboardingRequest(BaseModel):
@@ -858,7 +480,7 @@ def direct_onboarding(
     session.add(application)
     session.flush()  # Get application.id
     
-    logger.info(f"[DirectOnboarding] Application created for {payload.full_name} (NIK: {payload.nik}), ID: {application.id}")
+    logger.info(f"[DirectOnboarding] Application created for App ID: {application.id}")
     
     # 2. Build InterviewDecision and delegate to existing submit_interview logic
     decision = InterviewDecision(

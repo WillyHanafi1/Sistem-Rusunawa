@@ -160,7 +160,27 @@ class InvoiceSummary(SQLModel):
     status: InvoiceStatus
     document_type: DocumentType
     due_date: date
-    total_amount: float
+    total_amount: Decimal
+    base_rent: Decimal
+    water_charge: Decimal
+    electricity_charge: Decimal
+    parking_charge: Decimal
+    other_charge: Decimal = Decimal("0")
+    penalty_amount: Decimal = Decimal("0")
+    skrd_number: Optional[str] = None
+    skrd_date: Optional[date] = None
+    strd_number: Optional[str] = None
+    strd_date: Optional[date] = None
+    teguran1_number: Optional[str] = None
+    teguran1_date: Optional[date] = None
+    teguran2_number: Optional[str] = None
+    teguran2_date: Optional[date] = None
+    teguran3_number: Optional[str] = None
+    teguran3_date: Optional[date] = None
+    payment_url: Optional[str] = None
+    payment_id: Optional[str] = None
+    paid_at: Optional[datetime] = None
+    notes: Optional[str] = None
 
 
 class InvoiceBulkPay(SQLModel):

@@ -178,12 +178,15 @@ export default function ContractRoomPage() {
 
     // Filters & Search State
     const [filterSearch, setFilterSearch] = useState("");
-    const [filterRusunawa, setFilterRusunawa] = useState<string>(() => {
-        if (typeof window !== 'undefined') {
-            return localStorage.getItem('admin_filter_rusunawa') || "Cigugur Tengah";
+    const [filterRusunawa, setFilterRusunawa] = useState<string>("Cigugur Tengah");
+
+    // Load filter from localStorage after mount to avoid hydration mismatch
+    useEffect(() => {
+        const saved = localStorage.getItem('admin_filter_rusunawa');
+        if (saved) {
+            setFilterRusunawa(saved);
         }
-        return "Cigugur Tengah";
-    });
+    }, []);
     const [filterBuilding, setFilterBuilding] = useState("");
     const [filterFloor, setFilterFloor] = useState("");
     const [filterUnit, setFilterUnit] = useState("");

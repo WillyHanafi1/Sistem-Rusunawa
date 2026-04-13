@@ -122,66 +122,69 @@ class DocumentService:
         }
 
     @classmethod
-    def get_management_context(cls, rusun_site: str = None) -> dict:
+    def get_management_context(cls, rusun_site: str = None, active_staff: list = None) -> dict:
         """
         Fetches management staff for document context.
+        If active_staff is provided, uses it instead of querying the DB (Performance optimization).
         """
         context = {}
-        with Session(engine) as session:
-            active_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
+        
+        # PERF-01: Optimized to avoid N+1 queries during bulk generation
+        if active_staff is None:
+            with Session(engine) as session:
+                active_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
+        
+        # 1. Kepala UPTD
+        kepala = next((s for s in active_staff if "kepala" in s.role.lower()), None)
+        if kepala:
+            context.update({
+                "nama_kepala_uptd": kepala.name,
+                "nip_kepala_uptd": kepala.nip,
+                "pangkat_kepala_uptd": kepala.pangkat,
+                "nama_pejabat": kepala.name,
+                "nip_pejabat": kepala.nip,
+                "pangkat_pejabat": kepala.pangkat
+            })
             
-            # 1. Kepala UPTD
-            kepala = next((s for s in active_staff if "kepala" in s.role.lower()), None)
-            if kepala:
-                context.update({
-                    "nama_kepala_uptd": kepala.name,
-                    "nip_kepala_uptd": kepala.nip,
-                    "pangkat_kepala_uptd": kepala.pangkat,
-                    "nama_pejabat": kepala.name,
-                    "nip_pejabat": kepala.nip,
-                    "pangkat_pejabat": kepala.pangkat
-                })
-                
-            # 2. Kasubag TU
-            kasubag = next((s for s in active_staff if "kasubag" in s.role.lower()), None)
-            if kasubag:
-                context.update({
-                    "nama_kasubag_tu": kasubag.name,
-                    "nip_kasubag_tu": kasubag.nip,
-                    "pangkat_kasubag_tu": kasubag.pangkat
-                })
-                
-            # 3. Bendahara
-            bendahara = next((s for s in active_staff if "bendahara" in s.role.lower()), None)
-            if bendahara:
-                context.update({
-                    "nama_bendahara": bendahara.name,
-                    "nip_bendahara": bendahara.nip,
-                    "pangkat_bendahara": bendahara.pangkat,
-                    "bank_account_info": f"0083 0732 92001 / {bendahara.name}" # Fallback bank info
-                })
+        # 2. Kasubag TU
+        kasubag = next((s for s in active_staff if "kasubag" in s.role.lower()), None)
+        if kasubag:
+            context.update({
+                "nama_kasubag_tu": kasubag.name,
+                "nip_kasubag_tu": kasubag.nip,
+                "pangkat_kasubag_tu": kasubag.pangkat
+            })
+            
+        # 3. Bendahara
+        bendahara = next((s for s in active_staff if "bendahara" in s.role.lower()), None)
+        if bendahara:
+            context.update({
+                "nama_bendahara": bendahara.name,
+                "nip_bendahara": bendahara.nip,
+                "pangkat_bendahara": bendahara.pangkat,
+                "bank_account_info": f"0083 0732 92001 / {bendahara.name}" # Fallback bank info
+            })
 
-            # 4. Koordinator (Filtered by site if possible, otherwise first one found)
-            koordinator = None
-            if rusun_site:
-                # Handle Enum if passed
-                site_name = rusun_site.value if hasattr(rusun_site, "value") else str(rusun_site)
-                site_lower = site_name.lower()
-                koordinator = next((s for s in active_staff if "koordinator" in s.role.lower() and site_lower in s.role.lower()), None)
+        # 4. Koordinator (Filtered by site if possible, otherwise first one found)
+        koordinator = None
+        if rusun_site:
+            # Handle Enum if passed
+            site_name = rusun_site.value if hasattr(rusun_site, "value") else str(rusun_site)
+            site_lower = site_name.lower()
+            koordinator = next((s for s in active_staff if "koordinator" in s.role.lower() and site_lower in s.role.lower()), None)
+        
+        if not koordinator:
+            koordinator = next((s for s in active_staff if "koordinator" in s.role.lower()), None)
             
-            if not koordinator:
-                koordinator = next((s for s in active_staff if "koordinator" in s.role.lower()), None)
-                
-            if koordinator:
-                context.update({
-                    "nama_koordinator": koordinator.name,
-                    "nip_koordinator": koordinator.nip,
-                    "pangkat_koordinator": koordinator.pangkat,
-                    # Fallback spelling for legacy templates
-                    "nama_kordinator": koordinator.name,
-                    "nip_kordinator": koordinator.nip,
-                    "pangkat_kordinator": koordinator.pangkat
-                })
+        if koordinator:
+            context.update({
+                "nama_koordinator": koordinator.name,
+                "nip_koordinator": koordinator.nip,
+                "pangkat_koordinator": koordinator.pangkat,
+                "nama_kordinator": koordinator.name,
+                "nip_kordinator": koordinator.nip,
+                "pangkat_kordinator": koordinator.pangkat
+            })
                 
         return context
 
@@ -277,7 +280,9 @@ class DocumentService:
         try:
             # Inject management and date context
             context.update(cls.get_date_context())
-            context.update(cls.get_management_context(rusun_site=context.get("rusunawa")))
+            # Passed-in mgmt_context allows for bulk-caching (Performance Optimization)
+            if "nama_pejabat" not in context:
+                context.update(cls.get_management_context(rusun_site=context.get("rusunawa")))
 
             doc = DocxTemplate(template_path)
             doc.render(context)

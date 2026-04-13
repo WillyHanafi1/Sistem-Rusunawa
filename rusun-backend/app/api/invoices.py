@@ -27,18 +27,9 @@ from datetime import datetime, date, timezone, timedelta
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
-# In-memory storage for preview tokens (One-time use)
-# Storage format: {token: {"type": "single|bulk", "data": {...}, "expires_at": datetime}}
-_preview_tokens: Dict[str, Any] = {}
-
-
-
-def _cleanup_expired_tokens():
-    """Removes expired tokens from the in-memory dictionary."""
-    now = datetime.now(timezone.utc)
-    expired = [k for k, v in _preview_tokens.items() if now > v["expires_at"]]
-    for k in expired:
-        _preview_tokens.pop(k, None)
+# CRIT-01: Removed in-memory _preview_tokens.
+# Using short-lived signed JWTs for stateless previews instead.
+from jose import jwt
 
 def fmt_decimal(val: Decimal):
     """Helper to format currency in Indonesian format."""
@@ -203,8 +194,97 @@ def get_invoice_summary(
             document_type=inv.document_type,
             due_date=inv.due_date,
             total_amount=inv.total_amount,
+            base_rent=inv.base_rent,
+            water_charge=inv.water_charge,
+            electricity_charge=inv.electricity_charge,
+            parking_charge=inv.parking_charge,
+            other_charge=inv.other_charge,
+            penalty_amount=inv.penalty_amount,
+            skrd_number=inv.skrd_number,
+            skrd_date=inv.skrd_date,
+            strd_number=inv.strd_number,
+            strd_date=inv.strd_date,
+            teguran1_number=inv.teguran1_number,
+            teguran1_date=inv.teguran1_date,
+            teguran2_number=inv.teguran2_number,
+            teguran2_date=inv.teguran2_date,
+            teguran3_number=inv.teguran3_number,
+            teguran3_date=inv.teguran3_date,
+            payment_url=inv.payment_url,
+            payment_id=inv.payment_id,
+            paid_at=inv.paid_at,
+            notes=inv.notes,
         ))
     return output
+
+@router.get("/{invoice_id}/token")
+def get_print_token(
+    invoice_id: int,
+    doc_type: Optional[DocumentType] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Generates a one-time use token for PDF preview that expires in 5 minutes."""
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    # Ownership Validation for document access
+    if current_user.role == UserRole.penghuni:
+        # Check if the tenant associated with this invoice belongs to the current user
+        tenant = session.get(Tenant, invoice.tenant_id)
+        if not tenant or tenant.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Forbidden: You do not own this document")
+            
+    # CRIT-01: Stateless Signed Token (Increased to 5 mins for better user experience)
+    expiration = datetime.now(timezone.utc) + timedelta(minutes=5)
+    payload = {
+        "type": "single",
+        "invoice_id": invoice_id,
+        "doc_type": doc_type.value if doc_type else None,
+        "exp": expiration
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+    return {"token": token}
+
+@router.get("/preview/{token}")
+def preview_by_token(token: str, session: Session = Depends(get_session)):
+    """Public endpoint that serves PDF based on a valid one-time token."""
+    try:
+        token_data = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=410, detail="Token kadaluarsa atau tidak valid")
+    
+    # Check expiration
+    if "exp" in token_data and datetime.now(timezone.utc).timestamp() > token_data["exp"]:
+        raise HTTPException(status_code=410, detail="Token sudah kadaluarsa")
+
+    if token_data.get("type") == "single":
+        invoice_id = token_data["invoice_id"]
+        doc_type_val = token_data.get("doc_type")
+        doc_type = DocumentType(doc_type_val) if doc_type_val else None
+        
+        query = (
+            select(
+                Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
+                User.name.label("tenant_name"), Tenant.nik,
+            )
+            .join(Tenant, Invoice.tenant_id == Tenant.id)
+            .join(Room, Tenant.room_id == Room.id)
+            .join(User, Tenant.user_id == User.id)
+            .where(Invoice.id == invoice_id)
+        )
+        result = session.exec(query).first()
+        if not result:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        return _get_single_invoice_pdf(result, invoice_id, session, doc_type)
+        
+    elif token_data.get("type") == "bulk":
+        p = token_data["params"]
+        dt = DocumentType(p["doc_type"]) if p.get("doc_type") else None
+        return _get_bulk_invoice_pdf(session, p["month"], p["year"], dt, p["building"])
+    
+    raise HTTPException(status_code=400, detail="Invalid token type")
 
 @router.get("/print-bulk")
 def print_bulk_invoices(
@@ -245,35 +325,36 @@ def get_bulk_print_token(
     current_user: User = Depends(require_admin),
 ):
     """Generates a one-time use token for BULK PDF preview."""
-    token = secrets.token_urlsafe(32)
-    _preview_tokens[token] = {
+    # CRIT-01: Stateless Signed Token
+    expiration = datetime.now(timezone.utc) + timedelta(minutes=5)
+    payload = {
         "type": "bulk",
-        "params": {"month": month, "year": year, "doc_type": doc_type, "building": building},
-        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=5)
+        "params": {"month": month, "year": year, "doc_type": doc_type.value if doc_type else None, "building": building},
+        "exp": expiration
     }
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
     return {"token": token}
 
 @router.get("/preview/{token}")
 def preview_by_token(token: str, session: Session = Depends(get_session)):
     """Public endpoint that serves PDF based on a valid one-time token."""
-    _cleanup_expired_tokens()
-    
-    token_data = _preview_tokens.get(token)
-    if not token_data:
+    try:
+        token_data = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+    except Exception:
         raise HTTPException(status_code=410, detail="Token kadaluarsa atau tidak valid")
     
-    if datetime.now(timezone.utc) > token_data["expires_at"]:
-        _preview_tokens.pop(token, None)
+    # Check expiration (handled by jwt.decode if exp is present, but manual check for clarity)
+    if "exp" in token_data and datetime.now(timezone.utc).timestamp() > token_data["exp"]:
         raise HTTPException(status_code=410, detail="Token sudah kadaluarsa")
 
-    # Do NOT pop the token immediately! Native browser PDF viewers 
-    # often make multiple byte-range or chunk requests.
-    # We rely on `_cleanup_expired_tokens` to remove it after TTL (60s / 5m).
-    # _preview_tokens.pop(token)
+    # Native browser PDF viewers often make multiple byte-range or chunk requests.
+    # Using JWT allows these multiple requests to succeed statelessly across workers.
 
-    if token_data["type"] == "single":
+    if token_data.get("type") == "single":
         invoice_id = token_data["invoice_id"]
-        doc_type = token_data["doc_type"]
+        doc_type_val = token_data.get("doc_type")
+        doc_type = DocumentType(doc_type_val) if doc_type_val else None
+        
         query = (
             select(
                 Invoice, Room.room_number, Room.rusunawa, Room.building, Room.floor, Room.unit_number,
@@ -289,9 +370,10 @@ def preview_by_token(token: str, session: Session = Depends(get_session)):
             raise HTTPException(status_code=404, detail="Invoice not found")
         return _get_single_invoice_pdf(result, invoice_id, session, doc_type)
         
-    elif token_data["type"] == "bulk":
+    elif token_data.get("type") == "bulk":
         p = token_data["params"]
-        return _get_bulk_invoice_pdf(session, p["month"], p["year"], p["doc_type"], p["building"])
+        dt = DocumentType(p["doc_type"]) if p.get("doc_type") else None
+        return _get_bulk_invoice_pdf(session, p["month"], p["year"], dt, p["building"])
     
     raise HTTPException(status_code=400, detail="Invalid token type")
 
@@ -326,32 +408,6 @@ def print_invoice(
 
     return _get_single_invoice_pdf(result, invoice_id, session, doc_type)
 
-@router.get("/{invoice_id}/token")
-def get_print_token(
-    invoice_id: int,
-    doc_type: Optional[DocumentType] = None,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-):
-    """Generates a one-time use token for PDF preview that expires in 60 seconds."""
-    # Ownership Validation for document access
-    if current_user.role == UserRole.penghuni:
-        invoice = session.get(Invoice, invoice_id)
-        if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
-        
-        # Check if the tenant associated with this invoice belongs to the current user
-        tenant = session.get(Tenant, invoice.tenant_id)
-        if not tenant or tenant.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Forbidden: You do not own this document")
-    token = secrets.token_urlsafe(32)
-    _preview_tokens[token] = {
-        "type": "single",
-        "invoice_id": invoice_id,
-        "doc_type": doc_type,
-        "expires_at": datetime.now(timezone.utc) + timedelta(seconds=60)
-    }
-    return {"token": token}
 
 
 # Helpers
@@ -504,6 +560,7 @@ def _get_bulk_invoice_pdf(
 def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type: Optional[DocumentType]) -> Response:
     merger = PdfWriter()
     temp_files_to_merge = 0
+    mgmt_context = None
     months_id = {
         1: "Januari", 2: "Februari", 3: "Maret", 4: "April", 5: "Mei", 6: "Juni",
         7: "Juli", 8: "Agustus", 9: "September", 10: "Oktober", 11: "November", 12: "Desember"
@@ -585,6 +642,15 @@ def _get_bulk_invoice_pdf_response(results: Any, month: int, year: int, doc_type
                 "total_price": fmt_decimal(display_total),
                 "total_price_words": f"#{terbilang(int(display_total))}#"
             }
+
+            # PERF-01: Shared management context to avoid N+1 queries
+            if mgmt_context is None:
+                from app.models.staff import Staff
+                active_staff = session.exec(select(Staff).where(Staff.is_active == True)).all()
+                mgmt_context = DocumentService.get_management_context(rusun_site=r_ru, active_staff=active_staff)
+            
+            context.update(mgmt_context)
+
             file_path = DocumentService.generate_invoice_document(context, actual_doc_type.value, inv_obj.id)
             full_path = os.path.abspath(file_path)
             if full_path.endswith(".pdf"):
@@ -816,7 +882,11 @@ def start_bulk_print_async(
     return {"job_id": job_id, "message": "Proses cetak massal dimulai di background"}
 
 @router.get("/print-bulk/status/{job_id}")
-def check_bulk_print_status(job_id: str, session: Session = Depends(get_session)):
+def check_bulk_print_status(
+    job_id: str, 
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin)
+):
     """Cek progress task cetak massal dari database."""
     job = session.get(PrintJob, job_id)
     if not job:
@@ -824,7 +894,11 @@ def check_bulk_print_status(job_id: str, session: Session = Depends(get_session)
     return job
 
 @router.get("/print-bulk/download/{job_id}")
-def download_bulk_print_result(job_id: str, session: Session = Depends(get_session)):
+def download_bulk_print_result(
+    job_id: str, 
+    session: Session = Depends(get_session),
+    _: User = Depends(require_admin)
+):
     """Download hasil cetak massal yang sudah completed."""
     job = session.get(PrintJob, job_id)
     if not job:

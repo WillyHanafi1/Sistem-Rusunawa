@@ -57,7 +57,7 @@ async def midtrans_webhook(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    logger.info(f"Midtrans webhook received: {payload}")
+    logger.info(f"Midtrans webhook received for order_id: {payload.get('order_id')}")
 
     # --- Ambil field wajib dari payload ---
     order_id: str = payload.get("order_id", "")
