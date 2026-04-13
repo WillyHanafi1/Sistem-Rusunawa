@@ -19,4 +19,4 @@ midtransclient==1.4.2
 setuptools==69.5.1
 slowapi>=0.1.9
 pypdf==5.1.0
-starlette-csrf==0.3.0
+starlette-csrf==3.0.0
