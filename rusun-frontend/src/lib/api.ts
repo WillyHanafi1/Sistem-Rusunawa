@@ -21,6 +21,21 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Ensures a CSRF token is present in cookies by calling the backend /csrf endpoint.
+ */
+export const ensureCsrfToken = async () => {
+  try {
+    const token = Cookies.get("csrftoken");
+    // If token already exists, we might still want to refresh it or just skip
+    if (!token) {
+      await axios.get("/api/auth/csrf", { withCredentials: true });
+    }
+  } catch (err) {
+    console.error("Failed to fetch CSRF token:", err);
+  }
+};
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;

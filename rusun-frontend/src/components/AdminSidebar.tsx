@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout, getUserName } from "@/lib/auth";
+import { ensureCsrfToken } from "@/lib/api";
 import { useEffect, useState } from "react";
 import Cookies from "js-cookie";
 import { ThemeToggle } from "./ThemeToggle";
@@ -76,6 +77,8 @@ export default function AdminSidebar() {
     // Auto-open menu on mount based on active route
     useEffect(() => {
         setMounted(true);
+        // Ensure CSRF token is present
+        ensureCsrfToken();
         const userName = getUserName();
         if (userName) setName(userName);
 

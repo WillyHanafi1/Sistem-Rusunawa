@@ -30,7 +30,10 @@ class ApplicationBase(SQLModel):
     health_cert_file_path: Optional[str] = None
     photo_file_path: Optional[str] = None
     other_file_path: Optional[str] = None
+    is_signed_statement: bool = Field(default=False) # Deprecated but keep for safety if used
     has_signed_statement: bool = Field(default=False)
+    is_address_cimahi: bool = Field(default=False)
+    is_job_cimahi: bool = Field(default=False)
     is_documents_verified: bool = Field(default=False)
     notes: Optional[str] = None
     
@@ -77,6 +80,8 @@ class ApplicationCreate(SQLModel):
     )
     family_members_count: int = 1
     has_signed_statement: bool = False
+    is_address_cimahi: bool = False
+    is_job_cimahi: bool = False
     notes: Optional[str] = None
     
     # New Bio Fields
@@ -114,6 +119,8 @@ class ApplicationUpdate(SQLModel):
     # Doc Updates
     is_documents_verified: Optional[bool] = None
     has_signed_statement: Optional[bool] = None
+    is_address_cimahi: Optional[bool] = None
+    is_job_cimahi: Optional[bool] = None
     ktp_file_path: Optional[str] = None
     kk_file_path: Optional[str] = None
     marriage_cert_file_path: Optional[str] = None

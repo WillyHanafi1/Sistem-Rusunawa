@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import api, { handleDownload } from "@/lib/api";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Search, Loader2, XCircle, FileText, Download, Plus, Pencil, Trash2, X, ShieldCheck, Home, Briefcase } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FilePreview } from "@/components/FilePreview";
 import InterviewWizard from "@/components/applications/InterviewWizard";
@@ -35,6 +35,8 @@ interface Application {
     religion: string | null;
     occupation: string | null;
     previous_address: string | null;
+    is_address_cimahi: boolean;
+    is_job_cimahi: boolean;
 }
 
 const EMPTY_FORM = {
@@ -350,6 +352,7 @@ export default function ApplicationsPage() {
                                     <th className="px-6 py-4">No. WA</th>
                                     <th className="px-6 py-4">Email</th>
                                     <th className="px-6 py-4">Target</th>
+                                    <th className="px-6 py-4 text-center">Prioritas</th>
                                     <th className="px-6 py-4 text-center">Berkas</th>
                                     <th className="px-6 py-4 text-right">Aksi</th>
                                     <th className="px-6 py-4 text-center min-w-[150px]">Status</th>
@@ -390,6 +393,22 @@ export default function ApplicationsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <div className="font-medium text-blue-600 dark:text-blue-400">{app.rusunawa_target}</div>
                                                 <div className="text-xs text-slate-500">{app.family_members_count} Anggota Keluarga</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex justify-center gap-1.5">
+                                                    <div 
+                                                        className={`p-1.5 rounded-lg border ${app.is_address_cimahi ? 'bg-blue-50 border-blue-200 text-blue-600 dark:bg-blue-900/20 dark:border-blue-800' : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700'}`}
+                                                        title={app.is_address_cimahi ? "Domisili Cimahi (Prioritas)" : "Luar Cimahi"}
+                                                    >
+                                                        <Home className="w-4 h-4" />
+                                                    </div>
+                                                    <div 
+                                                        className={`p-1.5 rounded-lg border ${app.is_job_cimahi ? 'bg-emerald-50 border-emerald-200 text-emerald-600 dark:bg-emerald-900/20 dark:border-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-400 dark:bg-slate-800 dark:border-slate-700'}`}
+                                                        title={app.is_job_cimahi ? "Pekerjaan Cimahi (Prioritas)" : "Luar Cimahi"}
+                                                    >
+                                                        <Briefcase className="w-4 h-4" />
+                                                    </div>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-center">
                                                 <div className="flex flex-col items-center gap-2">

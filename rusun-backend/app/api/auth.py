@@ -20,6 +20,14 @@ limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+@router.get("/csrf")
+def get_csrf_token(request: Request):
+    """
+    Explicitly fetch a CSRF token.
+    The CSRFMiddleware will automatically set the 'csrftoken' cookie.
+    """
+    return {"csrftoken": getattr(request.state, "csrftoken", None)}
+
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str):
     """Helper: set both access and refresh token cookies."""

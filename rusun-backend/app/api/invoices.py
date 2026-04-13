@@ -1484,6 +1484,20 @@ def pay_invoice_midtrans(
     # Tambahkan timestamp di order_id supaya unik untuk setiap percobaan generate
     order_id = f"INV-{invoice.id}-{int(datetime.utcnow().timestamp())}"
     
+    # SAFETY: Ensure total_amount is not None before sending to Midtrans
+    if not invoice.total_amount or invoice.total_amount <= 0:
+        invoice.total_amount = (
+            (invoice.base_rent or Decimal(0)) +
+            (invoice.water_charge or Decimal(0)) +
+            (invoice.electricity_charge or Decimal(0)) +
+            (invoice.parking_charge or Decimal(0)) +
+            (invoice.other_charge or Decimal(0)) +
+            (invoice.penalty_amount or Decimal(0))
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
     param = {
         "transaction_details": {
             "order_id": order_id,

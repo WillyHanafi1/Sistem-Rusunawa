@@ -68,6 +68,7 @@ export function Header() {
                 src="/images/logos/logo-cimahi.png"
                 alt="Logo Kota Cimahi"
                 fill
+                sizes="52px"
                 className="object-contain"
               />
             </div>
@@ -76,6 +77,7 @@ export function Header() {
                 src="/images/logos/logo-rusun.png"
                 alt="Logo Rusunawa"
                 fill
+                sizes="52px"
                 className="object-contain"
               />
             </div>

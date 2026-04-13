@@ -146,31 +146,31 @@ class DocumentService:
         kepala = next((s for s in active_staff if "kepala" in s.role.lower()), None)
         if kepala:
             context.update({
-                "nama_kepala_uptd": kepala.name,
-                "nip_kepala_uptd": kepala.nip,
-                "pangkat_kepala_uptd": kepala.pangkat,
-                "nama_pejabat": kepala.name,
-                "nip_pejabat": kepala.nip,
-                "pangkat_pejabat": kepala.pangkat
+                "nama_kepala_uptd": kepala.name or "-",
+                "nip_kepala_uptd": kepala.nip or "-",
+                "pangkat_kepala_uptd": kepala.pangkat or "-",
+                "nama_pejabat": kepala.name or "-",
+                "nip_pejabat": kepala.nip or "-",
+                "pangkat_pejabat": kepala.pangkat or "-"
             })
             
         # 2. Kasubag TU
         kasubag = next((s for s in active_staff if "kasubag" in s.role.lower()), None)
         if kasubag:
             context.update({
-                "nama_kasubag_tu": kasubag.name,
-                "nip_kasubag_tu": kasubag.nip,
-                "pangkat_kasubag_tu": kasubag.pangkat
+                "nama_kasubag_tu": kasubag.name or "-",
+                "nip_kasubag_tu": kasubag.nip or "-",
+                "pangkat_kasubag_tu": kasubag.pangkat or "-"
             })
             
         # 3. Bendahara
         bendahara = next((s for s in active_staff if "bendahara" in s.role.lower()), None)
         if bendahara:
             context.update({
-                "nama_bendahara": bendahara.name,
-                "nip_bendahara": bendahara.nip,
-                "pangkat_bendahara": bendahara.pangkat,
-                "bank_account_info": f"0083 0732 92001 / {bendahara.name}" # Fallback bank info
+                "nama_bendahara": bendahara.name or "-",
+                "nip_bendahara": bendahara.nip or "-",
+                "pangkat_bendahara": bendahara.pangkat or "-",
+                "bank_account_info": f"0083 0732 92001 / {bendahara.name or '-'}" # Fallback bank info
             })
 
         # 4. Koordinator (Filtered by site if possible, otherwise first one found)
@@ -186,12 +186,12 @@ class DocumentService:
             
         if koordinator:
             context.update({
-                "nama_koordinator": koordinator.name,
-                "nip_koordinator": koordinator.nip,
-                "pangkat_koordinator": koordinator.pangkat,
-                "nama_kordinator": koordinator.name,
-                "nip_kordinator": koordinator.nip,
-                "pangkat_kordinator": koordinator.pangkat
+                "nama_koordinator": koordinator.name or "-",
+                "nip_koordinator": koordinator.nip or "-",
+                "pangkat_koordinator": koordinator.pangkat or "-",
+                "nama_kordinator": koordinator.name or "-",
+                "nip_kordinator": koordinator.nip or "-",
+                "pangkat_kordinator": koordinator.pangkat or "-"
             })
                 
         return context

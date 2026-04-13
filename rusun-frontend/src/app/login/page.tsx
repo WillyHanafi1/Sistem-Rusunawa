@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { login, getRole, isLoggedIn } from "@/lib/auth";
+import { ensureCsrfToken } from "@/lib/api";
 import { Building2, Eye, EyeOff, Loader2 } from "lucide-react";
 
 export default function LoginPage() {
@@ -15,6 +16,9 @@ export default function LoginPage() {
 
     // Client-side: jika sudah login, redirect ke portal/admin
     useEffect(() => {
+        // Fetch CSRF token on mount
+        ensureCsrfToken();
+
         if (isLoggedIn()) {
             const role = getRole();
             if (role === "admin" || role === "sadmin") {

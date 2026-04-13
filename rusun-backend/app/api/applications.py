@@ -76,7 +76,7 @@ async def create_application(
     occupation: Optional[str] = Form(None),
     previous_address: Optional[str] = Form(None),
     family_members: Optional[str] = Form(None), # JSON string
-    ktp_file: UploadFile = File(...),
+    ktp_file: Optional[UploadFile] = File(None),
     kk_file: Optional[UploadFile] = File(None),
     marriage_cert_file: Optional[UploadFile] = File(None),
     sku_file: Optional[UploadFile] = File(None),
@@ -84,6 +84,8 @@ async def create_application(
     health_cert_file: Optional[UploadFile] = File(None),
     photo_file: Optional[UploadFile] = File(None),
     has_signed_statement: bool = Form(False),
+    is_address_cimahi: bool = Form(False),
+    is_job_cimahi: bool = Form(False),
     session: Session = Depends(get_session),
 ):
     # Cek apakah NIK ini sudah pernah daftar tapi masih pending
@@ -105,6 +107,9 @@ async def create_application(
 
     # Helper to save files (Sanitized)
     def save_file(file: UploadFile, prefix: str):
+        if not file or not file.filename:
+            return None
+            
         # 1. Validate File Extension (Strict whitelist)
         allowed_extensions = {"jpg", "jpeg", "png", "pdf"}
         filename = file.filename or ""
@@ -152,12 +157,13 @@ async def create_application(
         return path
 
     ktp_path = save_file(ktp_file, "ktp")
-    kk_path = save_file(kk_file, "kk") if kk_file else None
-    marriage_path = save_file(marriage_cert_file, "marriage") if marriage_cert_file else None
-    sku_path = save_file(sku_file, "sku") if sku_file else None
-    skck_path = save_file(skck_file, "skck") if skck_file else None
-    health_path = save_file(health_cert_file, "health") if health_cert_file else None
-    photo_path = save_file(photo_file, "photo") if photo_file else None
+    kk_path = save_file(kk_file, "kk")
+    marriage_path = save_file(marriage_cert_file, "marriage")
+    sku_path = save_file(sku_file, "sku")
+    skck_path = save_file(skck_file, "skck")
+    health_path = save_file(health_cert_file, "health")
+    photo_path = save_file(photo_file, "photo")
+
 
     application = Application(
         nik=nik,
@@ -180,6 +186,8 @@ async def create_application(
         health_cert_file_path=health_path,
         photo_file_path=photo_path,
         has_signed_statement=has_signed_statement,
+        is_address_cimahi=is_address_cimahi,
+        is_job_cimahi=is_job_cimahi,
         is_documents_verified=False
     )
     

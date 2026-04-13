@@ -21,7 +21,6 @@ def list_rooms(
     skip: int = 0,
     limit: int = 1000,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),
 ):
     query = select(Room)
     if rusunawa:

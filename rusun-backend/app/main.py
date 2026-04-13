@@ -188,6 +188,7 @@ csrf_exempt_urls = [
 app.add_middleware(
     CSRFMiddleware,
     secret=settings.CSRF_SECRET,
+    header_name="X-CSRF-Token",
     exempt_urls=csrf_exempt_urls
 )
 
