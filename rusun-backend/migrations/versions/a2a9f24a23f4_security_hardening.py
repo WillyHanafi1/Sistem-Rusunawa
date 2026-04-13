@@ -20,10 +20,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade():
     # 1. FK application_id di Tenant
-    op.add_column('tenants',
-        sa.Column('application_id', sa.Integer(),
-                  sa.ForeignKey('applications.id'), nullable=True)
-    )
+    with op.batch_alter_table('tenants', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('application_id', sa.Integer(), sa.ForeignKey('applications.id', name='fk_tenants_application'), nullable=True))
     
     # 2. Conditional unique index
     # Note: SQLite supports this from 3.9+ which is widespread.
@@ -35,4 +33,5 @@ def upgrade():
 
 def downgrade():
     op.execute("DROP INDEX IF EXISTS uq_application_nik_active")
-    op.drop_column('tenants', 'application_id')
+    with op.batch_alter_table('tenants', schema=None) as batch_op:
+        batch_op.drop_column('application_id')
