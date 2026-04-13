@@ -226,7 +226,8 @@ export default function ApplicationsPage() {
 
     const handleDownloadFile = async (filePath: string) => {
         const safePath = filePath.replace(/\\/g, '/');
-        await handleDownload(`/${safePath}`, undefined, true);
+        // Use protected endpoint /api/documents/ (api automatically prefixes /api)
+        await handleDownload(`/documents/${safePath}`, undefined, true);
     }
 
     const handleVerifyAll = async (appId: number) => {

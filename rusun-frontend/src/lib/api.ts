@@ -9,6 +9,18 @@ const api = axios.create({
   withCredentials: true, // WAJIB untuk mengirim HttpOnly Cookies secara otomatis
 });
 
+// CSRF Interceptor: Attach X-CSRF-Token to non-GET requests
+api.interceptors.request.use((config) => {
+  const method = config.method?.toUpperCase();
+  if (method && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+    const csrfToken = Cookies.get("csrftoken");
+    if (csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
+  }
+  return config;
+});
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value?: unknown) => void;

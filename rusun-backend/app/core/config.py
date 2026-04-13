@@ -5,6 +5,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://rusun_user:rusun_pass@localhost:5432/rusunawa"
     JWT_SECRET: str
+    CSRF_SECRET: str = "fallback-dev-only-secret"
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 30  # Access token: 30 minutes
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 10080  # Refresh token: 7 days

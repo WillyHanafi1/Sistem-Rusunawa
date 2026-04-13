@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Form, Request, status
 from sqlmodel import Session, select
 from typing import List, Optional
 from app.core.config import settings
 from app.core.db import get_session
 from app.core.security import require_admin, get_current_user
+from app.api.auth import limiter
 from app.models.application import Application, ApplicationCreate, ApplicationRead, ApplicationUpdate, ApplicationStatus
 from app.models.user import User, UserRole
 from app.models.tenant import Tenant
@@ -57,8 +58,10 @@ def list_applications(
     return applications
 
 
-@router.post("", response_model=ApplicationRead, status_code=201)
+@router.post("/", response_model=ApplicationRead)
+@limiter.limit("5/minute")
 async def create_application(
+    request: Request,
     nik: str = Form(...),
     full_name: str = Form(...),
     phone_number: str = Form(...),
@@ -96,8 +99,8 @@ async def create_application(
         )
 
     # Security: Validate NIK (Must be 16 digits)
-    if not re.match(r"^\d{10,16}$", nik):
-        raise HTTPException(status_code=400, detail="NIK tidak valid. Harus 16 digit angka.")
+    if not re.match(r"^\d{16}$", nik):
+        raise HTTPException(status_code=400, detail="NIK tidak valid. Harus tepat 16 digit angka.")
 
     # Helper to save files (Sanitized)
     def save_file(file: UploadFile, prefix: str):
@@ -179,9 +182,21 @@ async def create_application(
         is_documents_verified=False
     )
     
-    session.add(application)
-    session.commit()
-    session.refresh(application)
+    try:
+        session.add(application)
+        session.commit()
+        session.refresh(application)
+    except Exception as e:
+        session.rollback()
+        # Handle unique constraint violation
+        if "uq_application_nik_active" in str(e).lower() or "unique" in str(e).lower():
+            logger.warning(f"Registration attempt failed due to unique NIK: {nik}")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Pengajuan dengan NIK '{nik}' sudah terdaftar dan masih aktif."
+            )
+        logger.error(f"Error creating application: {e}")
+        raise HTTPException(status_code=500, detail="Gagal menyimpan pendaftaran.")
     
     # Process family members if provided
     if family_members:
@@ -350,19 +365,15 @@ def submit_interview(
         # tapi di sini kita berikan error 400 supaya Admin tahu ada aksi ganda.
         raise HTTPException(status_code=400, detail="Pengajuan ini sudah memproses kontrak (SIPA).")
 
-    # 0. GUARD: Cek apakah Tenant sudah ada (Berbasis ID yang sama)
-    existing_tenant = session.get(Tenant, app_id)
+    # 0. GUARD: Cek apakah Tenant sudah ada (Berbasis application_id)
+    from sqlmodel import select
+    existing_tenant = session.exec(
+        select(Tenant).where(Tenant.application_id == app_id)
+    ).first()
+    
     if existing_tenant:
-        # SMART LOGIC: Jika NIK berbeda, berarti ini adalah records "ghost/yatim" 
-        # dari instalasi/import sebelumnya yang tertinggal di DB (terutama di SQLite).
-        # Kita hapus record lama tersebut agar pendaftaran baru bisa masuk.
-        if existing_tenant.nik != application.nik:
-            logger.warning(f"Ghost Tenant record found at ID {app_id} (NIK: {existing_tenant.nik}) while processing NIK: {application.nik}. Deleting ghost record.")
-            session.delete(existing_tenant)
-            session.flush()
-        else:
-            logger.warning(f"Tenant already exists for App ID: {app_id} with matching NIK")
-            raise HTTPException(status_code=400, detail="Penyewa untuk pengajuan ini sudah terdaftar.")
+        logger.warning(f"Tenant already exists for App ID: {app_id}")
+        raise HTTPException(status_code=400, detail="Penyewa untuk pengajuan ini sudah terdaftar.")
 
     # Jika ditolak, langsung update status dan selesai
     if decision.status == ApplicationStatus.rejected:
@@ -503,6 +514,7 @@ def submit_interview(
                 nik=application.nik,
                 is_active=True,
                 contract_start=decision.contract_start,
+                application_id=application.id,
                 contract_end=decision.contract_end,
                 deposit_amount=decision.deposit_amount,
                 motor_count=decision.motor_count,
@@ -583,15 +595,16 @@ def submit_interview(
                 "unit": room.unit_number,
                 "lokasi_lengkap": f"{room.building} {ROMAN.get(room.floor, room.floor)} {room.unit_number} Rusunawa {application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
                 
-                "ps_number": decision.ps_number,
+                # --- Guard Mandatory Dates ---
                 "sk_number": decision.sk_number,
                 "sk_date_indo": fmt_indo(decision.sk_date),
-                "hari_sk": DAYS[decision.sk_date.weekday()],
-                "tanggal_sk": decision.sk_date.day,
-                "tanggal_sk_terbilang": terbilang_func(decision.sk_date.day),
-                "bulan_sk_indo": MONTHS[decision.sk_date.month - 1],
-                "tahun_sk": decision.sk_date.year,
-                "tahun_sk_terbilang": terbilang_func(decision.sk_date.year),
+                "hari_sk": DAYS[decision.sk_date.weekday()] if decision.sk_date else "-",
+                "tanggal_sk": decision.sk_date.day if decision.sk_date else "-",
+                "tanggal_sk_terbilang": terbilang_func(decision.sk_date.day) if decision.sk_date else "-",
+                "bulan_sk_indo": MONTHS[decision.sk_date.month - 1] if decision.sk_date else "-",
+                "tahun_sk": decision.sk_date.year if decision.sk_date else "-",
+                "tahun_sk_terbilang": terbilang_func(decision.sk_date.year) if decision.sk_date else "-",
+                
                 "sip_number": decision.sip_number,
                 "sip_date_indo": fmt_indo(decision.sip_date),
                 
@@ -640,7 +653,6 @@ def submit_interview(
                 "ps_nomor": decision.ps_number,
                 "sip_nomor": decision.sip_number,
                 "room_number": room.room_number,
-                "nama_rusunawa": f"{application.rusunawa_target.value if hasattr(application.rusunawa_target, 'value') else application.rusunawa_target}",
             }
             
             bundle = DocumentService.generate_bundle(doc_context, application.nik)
@@ -804,8 +816,8 @@ def direct_onboarding(
     Melewati upload dokumen dan verifikasi otomatis.
     """
     # Validate NIK
-    if not re.match(r"^\d{10,16}$", payload.nik):
-        raise HTTPException(status_code=400, detail="NIK tidak valid. Harus 10-16 digit angka.")
+    if not re.match(r"^\d{16}$", payload.nik):
+        raise HTTPException(status_code=400, detail="NIK tidak valid. Harus tepat 16 digit angka.")
     
     # Check duplicate non-rejected application or existing tenant
     existing = session.exec(

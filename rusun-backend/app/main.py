@@ -3,16 +3,17 @@ import os
 import secrets
 import string
 import asyncio
+import re
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette_csrf import CSRFMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from app.core.db import create_db_and_tables
 from app.core.config import settings
-from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applications, management, tasks, checkouts
+from app.api import auth, rooms, tenants, invoices, webhooks, tickets, applications, management, tasks, checkouts, documents
 from app.models.application import Application
 from app.models.staff import Staff
 from app.models.family_member import FamilyMember
@@ -29,36 +30,31 @@ import asyncio
 
 async def run_daily_overdue_processing():
     """Runs every 24 hours to transition documents and calculate penalties."""
-    from app.api.tasks import handle_overdue_processing
-    from app.core.db import get_session
-
     while True:
         try:
             # Wait 10 seconds after startup before first run
             await asyncio.sleep(10)
             
-            session_generator = get_session()
-            session = next(session_generator)
-            
-            # Create a mock internal admin for the process
-            mock_admin = User(role=UserRole.sadmin, name="System Automation")
-            
-            logger.info("Running automated daily and monthly tasks...")
-            
-            # 1. Handle Monthly Generation (Only runs on day 01)
-            from app.api.tasks import handle_monthly_generation
-            await asyncio.to_thread(handle_monthly_generation, session, mock_admin)
-            
-            # 2. Handle Overdue Processing (STRD & Warnings)
-            from app.api.tasks import handle_overdue_processing
-            await asyncio.to_thread(handle_overdue_processing, session, mock_admin)
+            # Fix: Use Context Manager to ensure session is closed
+            # This prevents connection leaks every 24 hours.
+            with Session(engine) as session:
+                # Create a mock internal admin for the process
+                mock_admin = User(role=UserRole.sadmin, name="System Automation")
+                
+                logger.info("Running automated daily and monthly tasks...")
+                
+                # 1. Handle Monthly Generation (Only runs on day 01)
+                from app.api.tasks import handle_monthly_generation
+                await asyncio.to_thread(handle_monthly_generation, session, mock_admin)
+                
+                # 2. Handle Overdue Processing (STRD & Warnings)
+                from app.api.tasks import handle_overdue_processing
+                await asyncio.to_thread(handle_overdue_processing, session, mock_admin)
             
             logger.info("Automated tasks completed.")
             
             # Wait 24 hours
             await asyncio.sleep(86400)
-        except StopIteration:
-            pass
         except Exception as e:
             logger.error(f"Error in automated overdue processing: {e}")
             await asyncio.sleep(60) # Wait a minute before retrying on error
@@ -178,6 +174,21 @@ app.add_middleware(
     allow_headers=_allowed_headers,
 )
 
+# CSRF Protection: CSRFMiddleware expects X-CSRF-Token header.
+# Exclude public/webhook endpoints.
+csrf_exempt_urls = [
+    re.compile(r"^/api/auth/login"), 
+    re.compile(r"^/api/applications/?$"), 
+    re.compile(r"^/api/webhooks/midtrans"),
+    re.compile(r"^/api/invoices/preview") # OTT Preview is safe (signed token)
+]
+
+app.add_middleware(
+    CSRFMiddleware,
+    secret=settings.CSRF_SECRET,
+    exempt_urls=csrf_exempt_urls
+)
+
 # Register routers
 app.include_router(auth.router, prefix="/api")
 app.include_router(rooms.router, prefix="/api")
@@ -189,10 +200,12 @@ app.include_router(applications.router, prefix="/api")
 app.include_router(management.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(checkouts.router, prefix="/api")
+app.include_router(documents.router, prefix="/api")
 
-# Mount folder uploads untuk membaca foto KTP / dokumen
+# Uploads folder is now protected via the /api/documents endpoint.
+# Do NOT mount as StaticFiles to prevent public PII leakage.
 os.makedirs("uploads", exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+# app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 @app.get("/", tags=["Health"])

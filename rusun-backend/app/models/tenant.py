@@ -14,6 +14,7 @@ class TenantBase(SQLModel):
     is_active: bool = True
     renewal_count: int = Field(default=0)
     nik: str = Field(max_length=16, min_length=1, index=True)
+    application_id: Optional[int] = Field(default=None, foreign_key="applications.id")
 
     # Profile / Bio Data
     place_of_birth: Optional[str] = None
