@@ -24,9 +24,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install only runtime dependencies (libpq for PostgreSQL)
+# Install only runtime dependencies (libpq for PostgreSQL, LibreOffice for PDF)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
+    libreoffice-writer \
+    libreoffice-java-common \
+    default-jre-headless \
+    fonts-liberation \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

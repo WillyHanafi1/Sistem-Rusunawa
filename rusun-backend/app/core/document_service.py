@@ -25,40 +25,8 @@ class DocumentService:
     OUTPUT_BASE_DIR = "uploads"
 
     @classmethod
-    def _perform_pdf_conversion(cls, docx_path: str, pdf_path: str, output_dir: str) -> bool:
-        """
-        Internal helper with lock and retry logic for PDF conversion.
-        Ensures thread-safety for COM calls on Windows and provides a fallback.
-        """
-        success = False
-        max_retries = 3
-        
-        # Method A: Try docx2pdf (Requires MS Word on Windows)
-        if HAS_PDF_CONVERTER:
-            for attempt in range(max_retries):
-                # Locking ensures only one thread talks to MS Word COM at a time
-                with PDF_CONVERSION_LOCK:
-                    try:
-                        import pythoncom
-                        pythoncom.CoInitialize()
-                        try:
-                            # docx2pdf.convert will perform the conversion
-                            convert(docx_path, pdf_path)
-                            if os.path.exists(pdf_path):
-                                success = True
-                                break
-                        finally:
-                            pythoncom.CoUninitialize()
-                    except Exception as e:
-                        print(f"docx2pdf attempt {attempt+1} failed: {e}")
-                        # If Word application is busy or Quitting, a small wait can help
-                        if attempt < max_retries - 1:
-                            time.sleep(1.5) 
-            
-        if success:
-            return True
-
-        # Method B: Try LibreOffice (soffice) if Method A failed or was unavailable
+    def _convert_with_libreoffice(cls, docx_path: str, pdf_path: str, output_dir: str) -> bool:
+        """Helper to convert DOCX to PDF using LibreOffice (soffice)."""
         try:
             import subprocess
             soffice_cmd = "soffice" 
@@ -74,22 +42,62 @@ class DocumentService:
                         break
             
             # Subprocess call to LibreOffice in headless mode
-            subprocess.run([
+            # On Linux, we use --convert-to pdf --outdir
+            result = subprocess.run([
                 soffice_cmd,
                 '--headless',
                 '--convert-to', 'pdf',
                 '--outdir', output_dir,
                 docx_path
-            ], check=True, capture_output=True)
+            ], check=True, capture_output=True, timeout=30)
             
             if os.path.exists(pdf_path):
                 return True
+            else:
+                print(f"LibreOffice conversion failed: PDF not found at {pdf_path}")
+                if result.stderr:
+                    print(f"LibreOffice stderr: {result.stderr.decode()}")
         except Exception as e:
-            # Don't throw here, just log so we can fallback to DOCX
             if "soffice" not in str(e).lower():
                  print(f"LibreOffice conversion error: {e}")
-        
         return False
+
+    @classmethod
+    def _perform_pdf_conversion(cls, docx_path: str, pdf_path: str, output_dir: str) -> bool:
+        """
+        Internal helper with lock and retry logic for PDF conversion.
+        Ensures thread-safety for COM calls on Windows and provides a fallback.
+        """
+        # 1. On Linux (Docker), always use LibreOffice
+        if os.name != 'nt':
+            return cls._convert_with_libreoffice(docx_path, pdf_path, output_dir)
+
+        # 2. On Windows, try Method A: docx2pdf (Requires MS Word)
+        success = False
+        if HAS_PDF_CONVERTER:
+            max_retries = 2
+            for attempt in range(max_retries):
+                with PDF_CONVERSION_LOCK:
+                    try:
+                        import pythoncom
+                        pythoncom.CoInitialize()
+                        try:
+                            convert(docx_path, pdf_path)
+                            if os.path.exists(pdf_path):
+                                success = True
+                                break
+                        finally:
+                            pythoncom.CoUninitialize()
+                    except Exception as e:
+                        print(f"docx2pdf attempt {attempt+1} failed: {e}")
+                        if attempt < max_retries - 1:
+                            time.sleep(1)
+
+        if success:
+            return True
+
+        # 3. Method B: Fallback to LibreOffice if available on Windows
+        return cls._convert_with_libreoffice(docx_path, pdf_path, output_dir)
 
     @classmethod
     def get_date_context(cls, date_obj: datetime = None) -> dict:
