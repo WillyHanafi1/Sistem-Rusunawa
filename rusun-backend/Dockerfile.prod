@@ -25,14 +25,22 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Install only runtime dependencies (libpq for PostgreSQL, LibreOffice for PDF)
+RUN sed -i 's/main/main contrib/g' /etc/apt/sources.list.d/debian.sources || sed -i 's/main/main contrib/g' /etc/apt/sources.list
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libreoffice-writer \
     libreoffice-java-common \
     default-jre-headless \
     fonts-liberation \
-    && apt-get clean \
+    ttf-mscorefonts-installer \
+    fontconfig \
+    && fc-cache -f -v \
     && rm -rf /var/lib/apt/lists/*
+
+# Add custom fonts
+COPY fonts/ /usr/share/fonts/truetype/custom/
+RUN fc-cache -f -v
 
 # Copy wheels from builder and install them
 COPY --from=builder /app/wheels /wheels
