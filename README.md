@@ -12,7 +12,8 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 | **Frontend**  | Next.js 16 · React 19 · Tailwind CSS v4 · Framer Motion |
 | **Database**  | PostgreSQL 15 (Docker)                                  |
 | **Auth**      | JWT — python-jose + passlib (bcrypt)                    |
-| **Payment**   | Midtrans (Snap/Webhook auto-update status)              |
+| **Security**  | slowapi (Rate Limiter) · starlette-csrf · Secure Headers|
+| **Payment**   | Midtrans (Aktif) & Bank BJB (Dalam proses migrasi)      |
 | **UI Library**| Lucide React · TanStack Table · next-themes             |
 | **DevOps**    | Docker Compose · Concurrently (monorepo runner)         |
 
@@ -26,12 +27,12 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 - ✅ **Manajemen Kamar** — CRUD kamar per-gedung/lantai/unit, status otomatis (kosong/isi/rusak)
 - ✅ **Denah Fasilitas** — visualisasi denah lantai interaktif (`/admin/rooms/facilities`)
 - ✅ **Manajemen Penghuni (Kontrak)** — CRUD kontrak, deposit, status bio-data, dan anggota keluarga
-- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak dengan tab riwayat
-- ✅ **Tagihan Bulanan** — generate tagihan dengan auto-kalkulasi (sewa + air + listrik + parkir motor)
-- ✅ **Otomatisasi Penagihan** — sistem denda 2% dan surat teguran (SP 1, 2, 3) otomatis via task
+- ✅ **Wawancara Calon Penghuni** — proses interview & pembuatan kontrak dengan logika terpusat di `ApplicationService`
+- ✅ **Tagihan Bulanan** — generate tagihan dengan rincian lengkap (sewa + air + listrik + parkir) & tampilan matrix interaktif
+- ✅ **Otomatisasi Penagihan** — sistem denda 2% dan surat teguran (SP 1, 2, 3) otomatis dengan penomoran deterministik (berbasis Site > Gedung > Unit)
 - ✅ **Manajemen Tarif** — konfigurasi tarif per-rusunawa (`/admin/tariffs`)
-- ✅ **Pengajuan Sewa** — review, approve/reject, konversi ke kontrak (`/admin/applications`)
-- ✅ **Manajemen Checkout** — monitoring pengajuan move-out & pengembalian uang jaminan (`/admin/checkouts`)
+- ✅ **Pengajuan Sewa** — review, approve/reject, konversi ke kontrak otomatis
+- ✅ **Manajemen Checkout** — monitoring pengajuan move-out & pengembalian uang jaminan
 - ✅ **Tiket Keluhan** — tracking keluhan penghuni (Lampu/Listrik, Air/Plumbing, Atap/Bangunan, Lainnya)
 - ✅ **Bulk Import** — upload data penghuni massal via Excel (`/admin/tenants/import`)
 - ✅ **RBAC** — Role-Based Access Control (Super Admin / Admin / Penghuni)
@@ -54,10 +55,10 @@ Sistem Manajemen **Rumah Susun Sederhana Sewa (Rusunawa)** full-stack — mencak
 
 ### Integrasi
 
-- ✅ **Midtrans Payment** — integrasi Snap untuk pembayaran online (VA, E-Wallet, Credit Card)
-- ✅ **Automated Tasks** — background task untuk pemrosesan status dokumen & denda
-- ✅ **Upload Dokumen** — simpan file KTP/KK/dokumen pendukung
-- ✅ **Document Service** — generate SIP & Kontrak otomatis dalam format PDF/Rich Text
+- ✅ **Payment Gateway** — Aktif: Midtrans Snap (VA, E-Wallet, CC). *Sedang dalam persiapan migrasi ke Bank BJB (QRIS MPM & Virtual Account).*
+- ✅ **Automated Tasks** — Background task murni berbasis `asyncio` untuk pemrosesan status dokumen tagihan bulanan & denda otomatis (berjalan tiap 24 jam).
+- ✅ **Secure Document Storage** — File privasi seperti KTP/KK/dokumen pendukung dilindungi di balik endpoint API terautentikasi (`/api/documents`) untuk mencegah kebocoran PII, tanpa mengekspos public static folder.
+- ✅ **Document Service** — Generate SIP & Kontrak otomatis dalam format PDF/Rich Text (menggunakan `docxtpl` & `pypdf`).
 
 ---
 
@@ -70,8 +71,9 @@ Sistem-Rusunawa/
 │
 ├── rusun-backend/            # ⚙️ FastAPI Backend
 │   ├── app/
-│   │   ├── main.py           # Entrypoint, CORS, router registration
+│   │   ├── main.py           # Entrypoint, CORS, router registration (Port 8100)
 │   │   ├── seeder.py         # Seed data (admin, rooms, staff pengurus)
+│   │   ├── services/         # 🧠 Arsitektur: Logic Business terpisah (ApplicationService, dll.)
 │   │   ├── api/              # API Routes
 │   │   │   ├── auth.py       #   POST /api/auth/login, /register
 │   │   │   ├── rooms.py      #   CRUD /api/rooms
@@ -238,8 +240,8 @@ docker compose up --build -d
 | `GET`    | `/api/tenants`                        | Admin          | Daftar kontrak penghuni            |
 | `POST`   | `/api/tenants`                        | Admin          | Buat kontrak baru                  |
 | `POST`   | `/api/tenants/import`                 | Admin          | Import massal via Excel            |
-| `GET`    | `/api/invoices`                       | Auth           | Daftar tagihan                     |
-| `POST`   | `/api/invoices`                       | Admin          | Generate tagihan bulanan           |
+| `GET`    | `/api/invoices/summary`               | Auth           | Data tagihan (rincian lengkap & status) untuk Billing Matrix |
+| `POST`   | `/api/invoices/mass-generate`         | Admin          | Generate tagihan bulanan massal dengan prasyarat nomor SKRD |
 | `GET`    | `/api/checkouts`                      | Admin          | Daftar pengajuan checkout          |
 | `POST`   | `/api/checkouts`                      | Penghuni       | Ajukan move-out & refund           |
 | `POST`   | `/api/checkouts/{id}/approve`         | Admin          | Setujui checkout & bebaskan kamar  |
@@ -251,7 +253,7 @@ docker compose up --build -d
 | `PUT`    | `/api/applications/{id}/interview`    | Admin          | Proses hasil wawancara             |
 | `GET`    | `/api/management/`                    | Public         | Daftar pengurus UPTD (landing page)|
 | `POST`   | `/api/webhooks/midtrans`              | Midtrans       | Webhook auto-update status invoice |
-| `GET`    | `/api/uploads/{path}`                 | Auth           | Akses file dokumen yang diupload   |
+| `GET`    | `/api/documents/...`                  | Auth           | Akses file dokumen terproteksi (PII Safe) |
 
 📄 **Swagger UI**: <http://localhost:8000/docs>
 
@@ -428,9 +430,10 @@ Sistem ini dikembangkan mengacu pada **Peraturan Walikota (Perwal) Cimahi Nomor 
 
 ## 🛠️ Feature Backlog (Prioritas Selanjutnya)
 
-Berdasarkan hasil analisis mandiri sistem (3 April 2026), berikut adalah fitur yang masih dalam tahap rencana (*Coming Soon*):
+Berdasarkan analisis arsitektur dan sistem terbaru (Mei 2026), berikut adalah fitur yang masih dalam tahap rencana (*Coming Soon* / *WIP*):
 
-1.  **Otomasi Unit Difabel**: Integrasi tarif khusus di Lantai 1 secara otomatis di logic `get_price`.
+1.  **Migrasi Payment Gateway ke Bank BJB**: Transisi dari Midtrans ke layanan Bank BJB (QRIS MPM & Virtual Account) untuk penerimaan daerah resmi. Dokumentasi integrasi BJB API sudah tahap *review* (`BJB Docs/`).
+2.  **Otomasi Unit Difabel**: Integrasi tarif khusus di Lantai 1 secara otomatis di logic `get_price`.
 2.  **Pemisahan Detil Retribusi**: Pecah `other_charge` menjadi field database mandiri: `Kebersihan`, `Air`, dan `Listrik` untuk transparansi laporan.
 3.  **Export Engine**: Fitur ekspor rekap harian/bulanan ke format PDF dan Excel untuk keperluan pelaporan internal UPTD.
 4.  **Integrasi Docker LibreOffice**: Menambahkan layer LibreOffice ke `Dockerfile.prod` agar konversi PDF (dari `.docx`) berjalan lancar di production.
@@ -514,11 +517,29 @@ Sistem menggunakan `docx2pdf` untuk konversi dokumen ke PDF.
 *   **Windows**: Membutuhkan Microsoft Word terinstall untuk hasil terbaik.
 *   **Linux/Docker**: Belum terintegrasi penuh (membutuhkan LibreOffice di environment Docker jika ingin otomatis). Saat ini fallback ke file `.docx` jika konverter tidak tersedia.
 
-### 15. Standardisasi API & Port Conflict (April 2026)
+### 15. Standardisasi API & Port Conflict
 
-*   **Port Conflict (8100)**: Port `8000` seringkali digunakan oleh proses sistem (seperti `com.docker.backend.exe`), menyebabkan backend gagal start secara diam-diam. Memindahkan port ke `8100` adalah solusi stabil untuk Windows.
-*   **Wajib `withCredentials`**: Penggunaan `fetch` mentah di Next.js (Client Component) tidak mengirimkan cookie `httpOnly`. Selalu gunakan instance `api` (Axios) yang dikonfigurasi dengan `withCredentials: true` agar session `access_token` terkirim dengan benar ke backend.
-*   **Trailing Slash (404)**: Next.js dev server seringkali memaksa redirect pada trailing slash. Pastikan FastAPI diinisialisasi dengan `redirect_slashes=True` agar request dari frontend tidak berakhir di error `404 Not Found`.
+*   **Port Conflict (8100)**: Port `8000` seringkali digunakan oleh proses sistem di Windows. Memindahkan port ke `8100` adalah solusi stabil agar backend tidak gagal start secara diam-diam.
+*   **Trailing Slash (404)**: Next.js sering memaksa redirect pada trailing slash. FastAPI diinisialisasi dengan `redirect_slashes=True` agar request dari frontend tidak 404.
+
+### 16. Hydration Mismatch & Late-Binding (localStorage)
+
+Dilarang membaca `localStorage` atau `Cookies` langsung di dalam initializer `useState` karena akan memicu perbedaan antara HTML Server (SSR) dan Client.
+**Solusi**:
+```typescript
+const [state, setState] = useState(DEFAULT); // Konsisten Server & Client
+useEffect(() => {
+    const saved = localStorage.getItem('key');
+    if (saved) setState(saved); // Update hanya di browser setelah mount
+}, []);
+```
+
+### 17. Security Hardening (CSRF, Rate Limit & Static Files)
+
+Untuk standar keamanan *production*, sistem ini menerapkan:
+*   **Proteksi PII via Route**: Dilarang me-mount folder `uploads/` sebagai *StaticFiles* publik. File identitas sekarang diakses eksklusif lewat router terautentikasi `/api/documents/`.
+*   **CSRF Protection**: Aplikasi menggunakan `starlette-csrf`. Frontend wajib menyisipkan header `X-CSRF-Token` pada request mutasi, kecuali endpoint public & webhook.
+*   **Rate Limiting**: Endpoint rawan eksploitasi (seperti Login) diproteksi dengan `slowapi` guna mencegah percobaan *brute-force*.
 
 ---
 
